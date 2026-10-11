@@ -1,0 +1,25 @@
+# Dependências locais (nunca vão para o GitHub)
+# external/rexglue-sdk-0.10  -> SDK ReXGlue (grande, com submódulos)
+# external/dbz3              -> projeto original + generated/ (derivado do .xex)
+/external/
+
+# Arquivos do jogo
+*.xex
+*.afs
+*.sfd
+*.iso
+
+# Android / Gradle
+.gradle/
+build/
+.cxx/
+.externalNativeBuild/
+local.properties
+*.apk
+*.aab
+captures/
+
+# Android Studio
+.idea/
+*.iml
+.DS_Store
