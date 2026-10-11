@@ -23,3 +23,6 @@ captures/
 .idea/
 *.iml
 .DS_Store
+
+# Perfis do simpleperf
+/perf/
