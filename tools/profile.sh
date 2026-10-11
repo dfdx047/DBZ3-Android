@@ -40,7 +40,10 @@ SYMDIR="$(dirname "$LIBMAIN")"
 
 mkdir -p "$OUT"
 echo "A gravar $DURATION s do processo $PID..."
-adb shell simpleperf record -p "$PID" --duration "$DURATION" -f 2000 \
+# cpu-clock (evento de software): muitos aparelhos bloqueiam os contadores de
+# hardware (cpu-cycles) a apps que nao sao do sistema. --app usa o modo
+# "profileable" do APK.
+adb shell simpleperf record --app "$PKG" -e cpu-clock --duration "$DURATION" -f 1000 \
   -o /data/local/tmp/dbz3.perf.data
 adb pull /data/local/tmp/dbz3.perf.data "$OUT/dbz3.perf.data" > /dev/null
 adb shell rm -f /data/local/tmp/dbz3.perf.data
