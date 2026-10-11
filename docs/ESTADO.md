@@ -33,6 +33,7 @@ Objetivo: o jogo arrancar no Android e chegar ao menu, com logs no logcat.
 | `src/core/CMakeLists.txt`, `memory_posix.cpp` | fontes/libs Android, `-fexperimental-library` |
 | `include/rex/chrono/chrono.h` (0002) | `clock_cast` próprio: o libc++ do NDK não o tem |
 | `src/core/threading_posix.cpp` (0003) | sem mutexes robustos (o bionic não os tem) |
+| `include/rex/ui/windowed_app.h` (0004) | uma só app, via `GetWindowedAppCreator()` como no Linux |
 
 ## Compilar (no PC, CachyOS)
 

@@ -84,9 +84,12 @@ set_source_files_properties(${GENERATED_SOURCES} PROPERTIES
 
 add_library(main SHARED ${DBZ3_SOURCES} ${GENERATED_SOURCES})
 
+# O imgui.h vem com o SDK instalado no PC; aqui apontamos para o submodulo.
+# (O codigo do ImGui em si ja esta dentro do librexruntime.so.)
 target_include_directories(main PRIVATE
     "${DBZ3_ROOT}"
     "${DBZ3_GENERATED}"
+    "${REXSDK_ROOT}/thirdparty/imgui"
 )
 
 target_compile_options(main PRIVATE
