@@ -15,3 +15,8 @@ DBZ3-Android/
 
 O `generated/` é produzido localmente a partir do `yae3_xenon.xex` da tua cópia
 e nunca vai para o repositório. Nenhum arquivo do jogo é distribuído.
+
+## Compilar
+
+Ver [docs/ESTADO.md](docs/ESTADO.md): passos de build, o que o patch Android
+muda no SDK e a lista de próximos passos.
