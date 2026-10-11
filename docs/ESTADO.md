@@ -16,6 +16,9 @@ Objetivo: o jogo arrancar no Android e chegar ao menu, com logs no logcat.
 - `app/src/main/cpp/CMakeLists.txt`: compila SDK + jogo em `libmain.so`.
 - `MainActivity.java` (SDLActivity) define `REX_APP_DIR`, `REX_NATIVE_LIB_DIR`
   e `REX_DBZ3_SKIP_LAUNCHER=true` e arranca o `SDL_main`.
+- `cvars.txt` na pasta da app (`nome = valor`) vira variáveis `REX_NOME`: testa
+  opções do runtime sem recompilar.
+- `tools/profile.sh`: perfil de CPU por thread/função com o simpleperf.
 
 ### O que o patch Android muda no SDK
 
