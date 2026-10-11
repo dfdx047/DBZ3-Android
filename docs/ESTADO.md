@@ -47,7 +47,8 @@ com `yae3_xenon.xex` e a pasta `us/`.
 
 ## Próximos passos
 
-- [ ] Fase 1: compilar, instalar, ver até onde arranca (logcat)
+- [x] Fase 1: compila, instala e joga (Snapdragon 8 Elite / Adreno 830, 2026-10-12): partida completa sem crash
+- [ ] Problemas vistos no 1.º teste: véu/blur na imagem; voz das cutscenes corta; travões ao criar pipelines (transformações, poderes); 120 Hz a apresentar o mesmo frame (pedido 60 Hz na MainActivity); aquecimento 70–80 °C
 - [ ] Ciclo de vida: app em segundo plano / superfície perdida
 - [ ] Controlos por toque
 - [ ] Fase 2: launcher em Jetpack Compose (escolha da pasta via SAF, verificação de hashes, opções gráficas)

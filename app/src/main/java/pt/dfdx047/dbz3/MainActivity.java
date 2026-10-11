@@ -4,6 +4,7 @@ import android.os.Bundle;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.util.Log;
+import android.view.WindowManager;
 
 import org.libsdl.app.SDLActivity;
 
@@ -36,6 +37,13 @@ public class MainActivity extends SDLActivity {
 
         Log.i(TAG, "Pasta do jogo: " + appDir.getAbsolutePath() + "/DBZ3");
         super.onCreate(savedInstanceState);
+
+        // O jogo corre a 60 FPS. Em ecras de 120 Hz o presenter (FIFO) estava a
+        // apresentar 120 vezes por segundo o mesmo frame: o dobro do trabalho e
+        // do calor para nada. Pedimos ao sistema o modo de 60 Hz.
+        WindowManager.LayoutParams params = getWindow().getAttributes();
+        params.preferredRefreshRate = 60.0f;
+        getWindow().setAttributes(params);
     }
 
     @Override
