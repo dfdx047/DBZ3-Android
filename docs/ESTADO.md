@@ -10,7 +10,7 @@ Objetivo: o jogo arrancar no Android e chegar ao menu, com logs no logcat.
 ## Como funciona
 
 - `external/rexglue-sdk-0.10`: SDK ReXGlue v0.10.0 + overlay do projeto original
-  (`external/dbz3/patches/rexglue-sdk/`) + `patches/rexglue-sdk-android.patch`.
+  (`external/dbz3/patches/rexglue-sdk/`) + `patches/NNNN-*.patch` (aplicados por ordem).
 - `external/dbz3`: projeto original (novapowers0) com `generated/` produzido
   pelo codegen a partir do `yae3_xenon.xex` USA. Nunca vai para o git.
 - `app/src/main/cpp/CMakeLists.txt`: compila SDK + jogo em `libmain.so`.
@@ -31,6 +31,7 @@ Objetivo: o jogo arrancar no Android e chegar ao menu, com logs no logcat.
 | `src/core/logging.cpp` | logs do runtime no logcat (tag `dbz3`) |
 | `include/rex/string/numeric.h` | parser de float portátil (libc++ do NDK) |
 | `src/core/CMakeLists.txt`, `memory_posix.cpp` | fontes/libs Android, `-fexperimental-library` |
+| `include/rex/chrono/chrono.h` (0002) | `clock_cast` próprio: o libc++ do NDK não o tem |
 
 ## Compilar (no PC, CachyOS)
 
