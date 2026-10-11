@@ -34,6 +34,7 @@ Objetivo: o jogo arrancar no Android e chegar ao menu, com logs no logcat.
 | `include/rex/chrono/chrono.h` (0002) | `clock_cast` próprio: o libc++ do NDK não o tem |
 | `src/core/threading_posix.cpp` (0003) | sem mutexes robustos (o bionic não os tem) |
 | `include/rex/ui/windowed_app.h` (0004) | uma só app, via `GetWindowedAppCreator()` como no Linux |
+| `src/audio/sdl/sdl_audio_driver.cpp` (0005) | áudio sempre em estéreo no Android (as vozes estão no canal central) |
 
 ## Compilar (no PC, CachyOS)
 
@@ -48,7 +49,7 @@ com `yae3_xenon.xex` e a pasta `us/`.
 ## Próximos passos
 
 - [x] Fase 1: compila, instala e joga (Snapdragon 8 Elite / Adreno 830, 2026-10-12): partida completa sem crash
-- [ ] Problemas vistos no 1.º teste: véu/blur na imagem; voz das cutscenes corta; travões ao criar pipelines (transformações, poderes); 120 Hz a apresentar o mesmo frame (pedido 60 Hz na MainActivity); aquecimento 70–80 °C
+- [ ] Problemas vistos no 1.º teste: véu/blur na imagem; voz sem som (canal central perdido no 5.1, corrigido em 0005, por confirmar); Main XThread a 100% de um núcleo e Audio Worker a ~54%; travões ao criar pipelines (transformações, poderes); 120 Hz a apresentar o mesmo frame (pedido 60 Hz na MainActivity); aquecimento 70–80 °C
 - [ ] Ciclo de vida: app em segundo plano / superfície perdida
 - [ ] Controlos por toque
 - [ ] Fase 2: launcher em Jetpack Compose (escolha da pasta via SAF, verificação de hashes, opções gráficas)

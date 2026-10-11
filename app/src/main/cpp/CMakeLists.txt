@@ -108,3 +108,9 @@ target_link_libraries(main PRIVATE
 # Acrescenta windowed_app_main_sdl.cpp (com o SDL_main do Android) e
 # rex_app.cpp, e as opcoes de plataforma do SDK.
 rexglue_configure_target(main GPU_PLUGINS xenos)
+
+# Alvo minimo: ARMv8.2-A (Snapdragon 865 / Cortex-A77 e A55 para cima, o que
+# inclui o Unisoc T820). Ganha atomicos LSE em linha (usados pelas reservas
+# lwarx/stwcx do PowerPC) e instrucoes que o armv8-a base nao tem. Fica depois
+# do rexglue_configure_target, que poe -march=armv8-a, para prevalecer.
+target_compile_options(main PRIVATE -march=armv8.2-a)

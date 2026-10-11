@@ -19,6 +19,9 @@
         android:appCategory="game"
         android:theme="@style/AppTheme">
 
+        <!-- Permite medir o desempenho com o simpleperf tambem no APK de release. -->
+        <profileable android:shell="true" />
+
         <activity
             android:name=".MainActivity"
             android:label="@string/app_name"
