@@ -338,4 +338,6 @@
     <string name="direct_resolve_on">Ligado</string>
     <string name="direct_resolve_off">Desligado (original)</string>
     <string name="direct_resolve_swapped">Ligado, cores trocadas (teste)</string>
+    <string name="settings_direct_resolve_fast">Atalho dos efeitos: modo rápido</string>
+    <string name="settings_direct_resolve_fast_sub">Também pula a cópia dos efeitos para a memória do jogo (só a textura é preenchida). Mais rápido; desligue se algum efeito ficar estranho.</string>
 </resources>

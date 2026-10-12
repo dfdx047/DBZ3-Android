@@ -45,6 +45,7 @@ data class GameConfig(
     val verboseLog: Boolean = false,          // log_level = "debug" (senao "info")
     val perfLogging: Boolean = false,         // dbz3_perf_logging + logs/gpu_stats.log
     val directResolve: Int = 1,               // dbz3_direct_resolve_texture 0/1/2 (atalho de efeitos)
+    val directResolveFast: Boolean = true,    // dbz3_direct_resolve_skip_memory (modo rapido)
 ) {
     fun toToml(): Map<String, Any> = linkedMapOf(
         // "manual": o preset "auto" do PC reescreveria estas opcoes no arranque.
@@ -74,6 +75,7 @@ data class GameConfig(
         "log_level" to if (verboseLog) "debug" else "info",
         "dbz3_perf_logging" to perfLogging,
         "dbz3_direct_resolve_texture" to directResolve.coerceIn(0, 2),
+        "dbz3_direct_resolve_skip_memory" to directResolveFast,
     )
 
     companion object {
@@ -126,6 +128,7 @@ data class GameConfig(
                 verboseLog = str("log_level", "info").let { it == "debug" || it == "trace" },
                 perfLogging = bool("dbz3_perf_logging", d.perfLogging),
                 directResolve = int("dbz3_direct_resolve_texture", d.directResolve).coerceIn(0, 2),
+                directResolveFast = bool("dbz3_direct_resolve_skip_memory", d.directResolveFast),
             )
         }
 

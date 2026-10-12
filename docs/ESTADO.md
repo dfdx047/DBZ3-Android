@@ -368,3 +368,16 @@ stubs; a interface Compose não foi compilada.
 - `dbz3_direct_resolve_texture`: 0 desligado, 1 ligado (o launcher põe 1), 2 ligado com R/B
   invertido (teste da ordem dos canais). A linha perf mostra `atalho=N/f`.
 - Carregar ki pelo lado da câmara: confirmado a funcionar (teste do utilizador).
+
+### Testes de 2026-10-13 00:18–00:31 (atalho 0020)
+- O atalho funciona: ~9 de ~10 resolves de ecrã inteiro por frame passam por ele e as
+  cargas de texturas caem de ~20 para ~12 por frame (texturas 3,7 -> 1,4 ms no Turnip).
+  Mas o atalho custa ~1,7 ms (compute + cópia buffer->imagem) e o resolve normal continua:
+  ganho líquido pequeno (Turnip 11,5 -> 11,0 ms por frame de luta).
+- Driver Qualcomm: desenho 6,4 ms contra 3,4 no Turnip (resolve/texturas mais baratos, mas
+  no total 12,3 ms). Turnip continua melhor.
+- Frames com GPU > 16,7 ms: ~2 a cada 5 s; frames do jogo > 25 ms: quase nenhum.
+- 0021: modo rápido (`dbz3_direct_resolve_skip_memory`, launcher liga por omissão): quando
+  a textura já existe, salta o dump e o resolve para a memória do guest e só preenche a
+  textura (a memória fica com o conteúdo antigo). A linha perf mostra `sem_memoria=N/f`.
+- Por confirmar: cores com o atalho em 1 (normal) vs 2 (R/B trocado).

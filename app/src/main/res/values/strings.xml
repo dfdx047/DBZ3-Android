@@ -339,4 +339,6 @@
     <string name="direct_resolve_on">On</string>
     <string name="direct_resolve_off">Off (original)</string>
     <string name="direct_resolve_swapped">On, swapped colors (test)</string>
+    <string name="settings_direct_resolve_fast">Effects shortcut: fast mode</string>
+    <string name="settings_direct_resolve_fast_sub">Also skips copying the effects into the game memory (only the texture is filled). Faster; turn it off if some effect looks wrong.</string>
 </resources>
