@@ -44,6 +44,33 @@ float LoadF32(const uint8_t* base, uint32_t addr) {
   return f;
 }
 
+// Luta a decorrer: a bandeira 0x823F39A0 nao serve (ficou a 0 durante lutas inteiras,
+// logs de 2026-10-12). O que e fiavel: o ponteiro da configuracao da batalha e as
+// posicoes dos lutadores. Nos menus o ponteiro e 0 ou as posicoes sao (0,0); entre
+// assaltos voltam a (0,0) e cada assalto recomeca com o P1 a esquerda (x = -15).
+struct FightPositions {
+  bool active = false;
+  float dx = 0.0f, dz = 0.0f;
+};
+
+FightPositions ReadFight(const uint8_t* base) {
+  FightPositions f;
+  const uint32_t cfg = LoadU32(base, kBattleCfgPtr);
+  if (cfg == 0 || cfg >= 0xF0000000u) return f;
+  const uint32_t p1 = cfg + 2096;
+  const uint32_t p2 = cfg + 2096 + 8240;
+  const float x1 = LoadF32(base, p1 + 64), z1 = LoadF32(base, p1 + 72);
+  const float x2 = LoadF32(base, p2 + 64), z2 = LoadF32(base, p2 + 72);
+  if (!std::isfinite(x1) || !std::isfinite(z1) || !std::isfinite(x2) || !std::isfinite(z2)) return f;
+  const bool all_zero = std::fabs(x1) < 0.01f && std::fabs(z1) < 0.01f && std::fabs(x2) < 0.01f &&
+                        std::fabs(z2) < 0.01f;
+  if (all_zero) return f;
+  f.active = true;
+  f.dx = x2 - x1;
+  f.dz = z2 - z1;
+  return f;
+}
+
 struct Tracker {
   std::mutex mu;
   bool fighting = false;
@@ -61,19 +88,15 @@ Java_com_dfdx047_dragonfury_game_NativeGameState_nativeP1Side(JNIEnv*, jclass) {
   if (!base) return 0;
   std::lock_guard<std::mutex> lock(g_tracker.mu);
 
-  const bool fighting = LoadU32(base, kFightFlag) != 0;
-  if (!fighting) {
+  const FightPositions fight = ReadFight(base);
+  if (!fight.active) {
+    // Fora da luta ou entre assaltos: o proximo assalto recomeca com o P1 a esquerda.
     g_tracker.fighting = false;
     g_tracker.has_ref = false;
     return 0;
   }
-  const uint32_t cfg = LoadU32(base, kBattleCfgPtr);
-  if (cfg == 0) return 0;
-  const uint32_t p1 = cfg + 2096;
-  const uint32_t p2 = cfg + 2096 + 8240;
-  const float dx = LoadF32(base, p2 + 64) - LoadF32(base, p1 + 64);
-  const float dz = LoadF32(base, p2 + 72) - LoadF32(base, p1 + 72);
-  if (!std::isfinite(dx) || !std::isfinite(dz)) return 0;
+  const float dx = fight.dx;
+  const float dz = fight.dz;
 
   if (!g_tracker.fighting) {
     // Inicio do assalto: o P1 esta a esquerda.
@@ -167,7 +190,7 @@ extern "C" JNIEXPORT jint JNICALL
 Java_com_dfdx047_dragonfury_game_NativeGameState_nativeFightFlag(JNIEnv*, jclass) {
   const uint8_t* base = g_dragonfury_guest_base.load(std::memory_order_acquire);
   if (!base) return -1;
-  return LoadU32(base, kFightFlag) != 0 ? 1 : 0;
+  return (LoadU32(base, kFightFlag) != 0 || ReadFight(base).active) ? 1 : 0;
 }
 
 // Diagnostico da troca luta/menus (logs/controles.log com "Diagnostico de desempenho"):

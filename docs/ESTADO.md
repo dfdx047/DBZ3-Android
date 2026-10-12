@@ -309,3 +309,18 @@ stubs; a interface Compose não foi compilada.
 - Troca luta/menus: a revanche às vezes fica com o layout de menus. Diagnóstico em
   `logs/controles.log` (bandeira 0x823F39A0, ponteiro 0x823D6CF4 e posições, só com o
   diagnóstico ligado) para ver o que a bandeira faz numa revanche.
+
+### Teste de 2026-10-12 22:55 (Turnip, 900 MHz, FSR 1x) — primeiro perfil por categoria
+- Luta (por frame, a 900 MHz): ~13 ms de GPU = desenho 3,9 ms (60 passes, ~400 draws)
+  + texturas 4,0 + resolves 3,0 + transferências de RT 1,6 + outros 0,3. Mais de metade
+  é cópia de emulação (EDRAM -> memória -> textura), não desenho. Na luta quase nenhum
+  frame passa de 16,7 ms com 900 MHz fixos.
+- Vídeo de abertura/menus (6–70 draws): 10–15 ms medidos com muitos frames > 16,7 ms, mas
+  o KGSL diz só ~36 % de carga. Por confirmar (espera dentro da submissão?).
+- A bandeira 0x823F39A0 ficou a 0 a sessão toda, lutas incluídas: era por isso que o
+  layout não trocava e o "carregar ki" não seguia o lado (o seguimento do lado só corria
+  com a bandeira a 1). Agora a luta é detetada pelo ponteiro 0x823D6CF4 + posições dos
+  lutadores ≠ (0,0); entre assaltos as posições voltam a (0,0) e cada assalto recomeça
+  com o P1 à esquerda (x = -15).
+- 0018: contagem de resolves e cargas de texturas por frame (tamanhos, formatos e cargas
+  repetidas da mesma textura no mesmo frame) na linha perf.
