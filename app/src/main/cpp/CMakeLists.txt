@@ -46,6 +46,26 @@ set(REXGLUE_ENABLE_TRACY OFF CACHE BOOL "" FORCE)
 set(REXGLUE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory("${REXSDK_ROOT}" rexglue-sdk)
 
+#-----------------------------------------------------------------------------
+# libadrenotools: permite carregar um driver Vulkan alternativo (Turnip/Mesa)
+# em vez do driver Qualcomm do sistema. So e usado se a app definir
+# REX_VULKAN_DRIVER_DIR/REX_VULKAN_DRIVER_NAME (ver MainActivity e o patch 0009).
+#-----------------------------------------------------------------------------
+include(FetchContent)
+if(NOT CMAKE_ANDROID_ARCH_ABI)
+    set(CMAKE_ANDROID_ARCH_ABI "${ANDROID_ABI}")
+endif()
+FetchContent_Declare(adrenotools
+    GIT_REPOSITORY https://github.com/bylaws/libadrenotools.git
+    GIT_TAG 8fae8ce254dfc1344527e05301e43f37dea2df80
+    GIT_SUBMODULES_RECURSE TRUE
+)
+FetchContent_MakeAvailable(adrenotools)
+# vulkan_instance.cpp (no rexui) usa a API; o rexruntime e quem liga a biblioteca.
+target_link_libraries(rexui PRIVATE adrenotools)
+target_compile_definitions(rexui PRIVATE REX_HAS_ADRENOTOOLS=1)
+target_link_libraries(rexruntime PRIVATE adrenotools)
+
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 

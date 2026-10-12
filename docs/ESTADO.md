@@ -19,6 +19,9 @@ Objetivo: o jogo arrancar no Android e chegar ao menu, com logs no logcat.
 - `cvars.txt` na pasta da app (`nome = valor`) vira variáveis `REX_NOME`: testa
   opções do runtime sem recompilar.
 - `tools/profile.sh`: perfil de CPU por thread/função com o simpleperf.
+- Driver Vulkan alternativo: pôr o `.so` (ex. `libvulkan_freedreno.so` do Turnip) em
+  `files/driver/` da pasta da app; a MainActivity copia-o para a pasta interna e o
+  runtime carrega-o com o libadrenotools. Apagar o `.so` volta ao driver Qualcomm.
 
 ### O que o patch Android muda no SDK
 
@@ -41,6 +44,7 @@ Objetivo: o jogo arrancar no Android e chegar ao menu, com logs no logcat.
 | `src/core/threading_posix.cpp` (0006) | `WaitMultiple` sem polling (Audio Worker estava a ~50% de um núcleo) |
 | `src/system/mmio_handler.cpp` (0007) | faltas de páginas vigiadas sem ler `/proc/self/maps` a cada vez |
 | `pipeline_cache.cpp`, `render_target_cache.cpp`, `device_1_0.inc` (0008) | `VkPipelineCache` do driver guardada em `cache/shaders/vulkan_driver_pipelines.bin` (o SDK não tinha nenhuma) |
+| `dynlib`, `vulkan_instance.cpp` (0009) | driver Vulkan alternativo (Turnip) via libadrenotools, se `REX_VULKAN_DRIVER_DIR/NAME` estiverem definidos |
 
 ## Compilar (no PC, CachyOS)
 
@@ -66,3 +70,10 @@ com `yae3_xenon.xex` e a pasta `us/`.
 - Main XThread ~40% das amostras do processo: `sub_82235918` 54% e `sub_82231110` 12% dessa thread. Confirmado: é a espera do D3D do 360 por espaço no ring buffer da GPU (`cctpl/db16cyc` viram nada ao recompilar). Hook em `app/src/main/cpp/android_hooks.cpp` (yield e depois sleep de 50 µs).
 - Audio Worker ~21%: polling em `WaitMultiple` (corrigido em 0006).
 - GPU Commands ~15%: `vkUpdateDescriptorSets` do driver Adreno é o maior custo.
+
+## Véu/verde na imagem (investigação)
+
+- Piora com a câmara longe, melhora perto: suspeita do efeito de profundidade de campo/bloom.
+- Sem efeito (2026-10-12): `depth_float24_convert_in_pixel_shader`, `readback_resolve=fast`,
+  `gamma_render_target_as_unorm16=false`, `half_pixel_offset=false`.
+- Próximo: comparar com Turnip (driver vs emulação).

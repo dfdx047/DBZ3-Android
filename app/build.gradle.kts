@@ -47,7 +47,11 @@ android {
                     "-DREXGLUE_ENABLE_TRACY=OFF",
                     "-DREXGLUE_BUILD_TESTS=OFF",
                 )
-                targets += listOf("main", "rexruntime", "rexgpu-xenos", "SDL3-shared")
+                targets += listOf(
+                    "main", "rexruntime", "rexgpu-xenos", "SDL3-shared",
+                    // Hooks do libadrenotools (driver Vulkan alternativo, ex. Turnip).
+                    "main_hook", "file_redirect_hook", "gsl_alloc_hook", "hook_impl",
+                )
             }
         }
     }

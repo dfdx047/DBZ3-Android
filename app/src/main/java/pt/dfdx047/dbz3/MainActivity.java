@@ -12,6 +12,8 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.Locale;
 
 /**
@@ -39,6 +41,7 @@ public class MainActivity extends SDLActivity {
         setEnv("REX_NATIVE_LIB_DIR", getApplicationInfo().nativeLibraryDir);
         setEnv("REX_DBZ3_SKIP_LAUNCHER", "true");
         applyCvarOverrides(new File(appDir, "cvars.txt"));
+        installCustomVulkanDriver(appDir);
 
         Log.i(TAG, "Pasta do jogo: " + appDir.getAbsolutePath() + "/DBZ3");
         super.onCreate(savedInstanceState);
@@ -89,6 +92,51 @@ public class MainActivity extends SDLActivity {
         } catch (IOException e) {
             Log.e(TAG, "Falha a ler " + file, e);
         }
+    }
+
+    /**
+     * Driver Vulkan alternativo (ex. Turnip): se a pasta "driver" da pasta da app
+     * tiver um .so, copia-o para a pasta interna (o Android nao deixa carregar
+     * bibliotecas a partir do armazenamento partilhado) e diz ao runtime para o
+     * usar via libadrenotools. Sem .so nessa pasta, usa-se o driver do sistema.
+     */
+    private void installCustomVulkanDriver(File appDir) {
+        File internalDir = new File(getFilesDir(), "driver");
+        File[] candidates = new File(appDir, "driver").listFiles(
+                (dir, name) -> name.endsWith(".so"));
+        if (candidates == null || candidates.length == 0) {
+            deleteRecursively(internalDir);
+            return;
+        }
+        File source = candidates[0];
+        File target = new File(internalDir, source.getName());
+        try {
+            if (!target.isFile() || target.length() != source.length()
+                    || target.lastModified() != source.lastModified()) {
+                deleteRecursively(internalDir);
+                //noinspection ResultOfMethodCallIgnored
+                internalDir.mkdirs();
+                Files.copy(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                //noinspection ResultOfMethodCallIgnored
+                target.setLastModified(source.lastModified());
+            }
+            setEnv("REX_VULKAN_DRIVER_DIR", internalDir.getAbsolutePath() + "/");
+            setEnv("REX_VULKAN_DRIVER_NAME", target.getName());
+            Log.i(TAG, "Driver Vulkan alternativo: " + target.getName());
+        } catch (IOException e) {
+            Log.e(TAG, "Falha a instalar o driver " + source, e);
+        }
+    }
+
+    private static void deleteRecursively(File file) {
+        File[] children = file.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                deleteRecursively(child);
+            }
+        }
+        //noinspection ResultOfMethodCallIgnored
+        file.delete();
     }
 
     private static void setEnv(String name, String value) {
