@@ -335,10 +335,7 @@
     <string name="ingame_exit">Exit to launcher</string>
     <string name="ingame_exit_confirm">Tap again to exit</string>
     <string name="settings_direct_resolve">Effects shortcut</string>
-    <string name="settings_direct_resolve_sub">Copies the full-screen effects straight to the texture, skipping two conversions. Less GPU load. Experimental: if colors look wrong, try the \"swapped colors\" option.</string>
-    <string name="direct_resolve_on">On</string>
-    <string name="direct_resolve_off">Off (original)</string>
-    <string name="direct_resolve_swapped">On, swapped colors (test)</string>
+    <string name="settings_direct_resolve_sub">Copies the full-screen effects straight to the texture, skipping two conversions. Less GPU load.</string>
     <string name="settings_direct_resolve_fast">Effects shortcut: fast mode</string>
     <string name="settings_direct_resolve_fast_sub">Also skips copying the effects into the game memory (only the texture is filled). Faster; turn it off if some effect looks wrong.</string>
 </resources>

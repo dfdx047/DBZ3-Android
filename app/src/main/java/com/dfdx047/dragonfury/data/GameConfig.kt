@@ -127,7 +127,8 @@ data class GameConfig(
                 unlockAllCharacters = bool("dbz3_unlock_all_characters", d.unlockAllCharacters),
                 verboseLog = str("log_level", "info").let { it == "debug" || it == "trace" },
                 perfLogging = bool("dbz3_perf_logging", d.perfLogging),
-                directResolve = int("dbz3_direct_resolve_texture", d.directResolve).coerceIn(0, 2),
+                // 2 (cores trocadas) era so um teste: confirmado que 1 e o certo.
+                directResolve = if (int("dbz3_direct_resolve_texture", d.directResolve) == 0) 0 else 1,
                 directResolveFast = bool("dbz3_direct_resolve_skip_memory", d.directResolveFast),
             )
         }

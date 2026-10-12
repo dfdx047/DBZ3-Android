@@ -334,10 +334,7 @@
     <string name="ingame_exit">Sair para o launcher</string>
     <string name="ingame_exit_confirm">Toque de novo para sair</string>
     <string name="settings_direct_resolve">Atalho dos efeitos</string>
-    <string name="settings_direct_resolve_sub">Copia os efeitos de tela inteira direto para a textura, sem duas conversões. Menos carga na GPU. Experimental: se as cores ficarem estranhas, teste a opção \"cores trocadas\".</string>
-    <string name="direct_resolve_on">Ligado</string>
-    <string name="direct_resolve_off">Desligado (original)</string>
-    <string name="direct_resolve_swapped">Ligado, cores trocadas (teste)</string>
+    <string name="settings_direct_resolve_sub">Copia os efeitos de tela inteira direto para a textura, sem duas conversões. Menos carga na GPU.</string>
     <string name="settings_direct_resolve_fast">Atalho dos efeitos: modo rápido</string>
     <string name="settings_direct_resolve_fast_sub">Também pula a cópia dos efeitos para a memória do jogo (só a textura é preenchida). Mais rápido; desligue se algum efeito ficar estranho.</string>
 </resources>

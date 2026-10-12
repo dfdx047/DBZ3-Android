@@ -144,17 +144,13 @@ fun SettingsScreen(vm: LauncherViewModel) {
             }
             StatusLine(stringResource(R.string.settings_fsr3_note), Level.INFO)
             HorizontalDivider()
-            SettingDropdown(
-                title = stringResource(R.string.settings_direct_resolve),
-                subtitle = stringResource(R.string.settings_direct_resolve_sub),
-                options = listOf(
-                    1 to stringResource(R.string.direct_resolve_on),
-                    0 to stringResource(R.string.direct_resolve_off),
-                    2 to stringResource(R.string.direct_resolve_swapped),
-                ),
-                selected = c.directResolve,
-                onSelect = { v -> vm.updateConfig { it.copy(directResolve = v) } },
-            )
+            // O valor 2 (R/B invertido) so serviu para confirmar a ordem dos canais:
+            // fica so na cvar, para testes.
+            SettingSwitch(
+                stringResource(R.string.settings_direct_resolve),
+                stringResource(R.string.settings_direct_resolve_sub),
+                checked = c.directResolve != 0,
+            ) { on -> vm.updateConfig { it.copy(directResolve = if (on) 1 else 0) } }
             if (c.directResolve != 0) {
                 SettingSwitch(
                     stringResource(R.string.settings_direct_resolve_fast),

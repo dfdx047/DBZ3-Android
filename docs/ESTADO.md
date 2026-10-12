@@ -381,3 +381,12 @@ stubs; a interface Compose não foi compilada.
   a textura já existe, salta o dump e o resolve para a memória do guest e só preenche a
   textura (a memória fica com o conteúdo antigo). A linha perf mostra `sem_memoria=N/f`.
 - Por confirmar: cores com o atalho em 1 (normal) vs 2 (R/B trocado).
+
+### 2026-10-13 00:45 — modo rápido no driver Qualcomm
+- Cores: o atalho em 1 está certo; 2 (R/B trocado) inverte as cores. O launcher passa a ter
+  só ligado/desligado (o 2 fica na cvar para testes).
+- Qualcomm com modo rápido: resolve 3,4 -> 2,3 ms, total 12,3 -> 11,5 ms por frame de luta;
+  `sem_memoria` ~9/f. O desenho continua 6,6 ms (Turnip 3,5). Falta o log do Turnip com o
+  modo rápido (o enviado era o antigo, 00:31).
+- Próximo ganho possível no atalho: escrever direto na textura (imageStore, textura com
+  STORAGE) em vez de buffer + cópia (~0,8 ms). Antes disso: medir 865 e Mali.
