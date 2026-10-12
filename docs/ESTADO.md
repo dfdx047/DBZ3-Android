@@ -45,6 +45,7 @@ Objetivo: o jogo arrancar no Android e chegar ao menu, com logs no logcat.
 | `src/system/mmio_handler.cpp` (0007) | faltas de páginas vigiadas sem ler `/proc/self/maps` a cada vez |
 | `pipeline_cache.cpp`, `render_target_cache.cpp`, `device_1_0.inc` (0008) | `VkPipelineCache` do driver guardada em `cache/shaders/vulkan_driver_pipelines.bin` (o SDK não tinha nenhuma) |
 | `dynlib`, `vulkan_instance.cpp` (0009) | driver Vulkan alternativo (Turnip) via libadrenotools, se `REX_VULKAN_DRIVER_DIR/NAME` estiverem definidos |
+| `dbz3_hitch.h`, `command_processor.cpp`, `pipeline_cache.cpp`, `texture_cache.cpp`, `render_target_cache.cpp` (0010) | diagnóstico de travões: cada `dbz3: tiron` (frame > 34 ms ou frames escondidos pela compilação async) diz quanto tempo foi em shaders, pipelines, pipelines provisórios, transferências de RT, texturas e espera da GPU |
 
 ## Compilar (no PC, CachyOS)
 
@@ -76,4 +77,13 @@ com `yae3_xenon.xex` e a pasta `us/`.
 - Piora com a câmara longe, melhora perto: suspeita do efeito de profundidade de campo/bloom.
 - Sem efeito (2026-10-12): `depth_float24_convert_in_pixel_shader`, `readback_resolve=fast`,
   `gamma_render_target_as_unorm16=false`, `half_pixel_offset=false`.
-- Próximo: comparar com Turnip (driver vs emulação).
+- Turnip (Gen8 V37, 2026-10-12): véu e bordas verdes **desaparecem**. É bug do driver Qualcomm.
+  O Turnip fica como opção; próximo passo: comparar o log do dispositivo Vulkan
+  (extensões/features) dos dois drivers para achar o que contornar no nativo.
+
+## Travões (investigação)
+
+- Persistem com o Turnip, nos mesmos sítios: transformação, carregar ki, close-up na
+  personagem, especial no máximo.
+- 0010 mede a causa de cada travão: `adb logcat -d -s dbz3 | grep tiron`.
+- Experiência barata: `async_shader_compilation = false` no `cvars.txt`.
