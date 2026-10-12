@@ -57,6 +57,11 @@ class HelperEngine {
      * assaltos, KO e apresentacao a bandeira tambem vai a 0).
      */
     var onBattleChanged: ((Boolean) -> Unit)? = null
+
+    /** Diagnostico (so com "Diagnostico de desempenho"): recebe linhas para logs/controles.log. */
+    @Volatile var diag: ((String) -> Unit)? = null
+    private var diagTicks = 0
+    private var diagLast = ""
     @Volatile var inBattle = false
         private set
     private var zeroTicks = 0
@@ -141,6 +146,16 @@ class HelperEngine {
         paused = NativeGameState.syncPause(menuOpen, pauseQuickMenu)
         side = NativeGameState.p1Side()
         if (!paused) trackBattle(NativeGameState.fightFlag())
+        diag?.let { d ->
+            if (++diagTicks >= 30) {
+                diagTicks = 0
+                val line = NativeGameState.battleDebug() ?: ""
+                if (line != diagLast) {
+                    diagLast = line
+                    d("$line layout=${if (inBattle) "luta" else "menus"}${if (paused) " (pausa)" else ""}")
+                }
+            }
+        }
         val wanted = HashSet<PadInput>()
         val lx: Float
         val ly: Float
@@ -182,6 +197,7 @@ class HelperEngine {
         if (next != inBattle) {
             inBattle = next
             android.util.Log.i("DragonFury", "controles: " + if (next) "luta" else "menus")
+            diag?.invoke("troca -> " + (if (next) "luta" else "menus") + " (bandeira=$flag)")
             mainHandler.post { onBattleChanged?.invoke(next) }
         }
     }

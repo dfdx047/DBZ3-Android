@@ -77,6 +77,15 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
             val f = java.io.File(AppPaths.logsDir, "gpu_stats.log")
             f.delete()
             gpuStats = GpuStatsSampler(f)
+            val ctl = java.io.File(AppPaths.logsDir, "controles.log")
+            ctl.delete()
+            val fmt = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.ROOT)
+            engine.diag = { line ->
+                try {
+                    ctl.appendText(fmt.format(java.util.Date()) + " " + line + "\n")
+                } catch (_: Exception) {
+                }
+            }
         }
         engine.pauseQuickMenu = prefs.pauseOnMenus
         engine.onBattleChanged = { battle ->
@@ -142,6 +151,7 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
         // automatica seguinte volta a mandar.
         val lb = roundButton(R.drawable.ic_btn_layout, R.string.ingame_switch_layout) {
             inBattle = !inBattle
+            engine.diag?.invoke("botao de troca -> " + if (inBattle) "luta" else "menus")
             view?.let {
                 it.releaseAll()
                 it.layout = currentLayout()

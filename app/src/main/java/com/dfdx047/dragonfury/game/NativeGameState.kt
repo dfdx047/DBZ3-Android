@@ -51,6 +51,16 @@ object NativeGameState {
         }
     }
 
+    /** Linha de diagnostico da deteccao luta/menus (bandeira, configuracao, posicoes). */
+    fun battleDebug(): String? {
+        if (!available) return null
+        return try {
+            nativeBattleDebug()
+        } catch (e: UnsatisfiedLinkError) {
+            null
+        }
+    }
+
     /** Muda opcoes do jogo ao vivo (como o menu rapido do PC) e grava o dbz3_user.toml. */
     fun setCvars(values: Map<String, String>): Boolean {
         if (!available || values.isEmpty()) return false
@@ -77,6 +87,7 @@ object NativeGameState {
 
     @JvmStatic
     private external fun nativeFightFlag(): Int
+    @JvmStatic private external fun nativeBattleDebug(): String
 
     @JvmStatic
     private external fun nativeSetCvars(names: Array<String>, values: Array<String>): Boolean

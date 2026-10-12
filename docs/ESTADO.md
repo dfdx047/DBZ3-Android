@@ -294,3 +294,18 @@ stubs; a interface Compose não foi compilada.
 - Back do Odin (KEYCODE_BACK) com o jogo a correr abre o menu da engrenagem.
 - `cvars.txt` aceita `env:NOME = valor` para variáveis do driver (ex. `env:TU_DEBUG = sysmem`).
 - As partes rodadas antigas do log (`dragonfury_last.N.log`) são apagadas ao abrir o jogo.
+
+### Testes de 2026-10-12 22:24–22:35 (Turnip e Qualcomm, FSR 1x, GPU a 900 MHz e livre)
+- `logs/gpu_stats.log` funciona (o SELinux regista avc denied mas as leituras passam).
+- A linha `dbz3: perf` nunca apareceu: a cvar `dbz3_perf_logging` só existia no presenter
+  D3D12 (Windows). 0017 define-a fora do Windows.
+- Carga da GPU a 900 MHz fixos, igual nos dois drivers: menus 36–39 %, lutas 75–93 %
+  (picos 97 %). Livre: o governador salta entre 900 e 1100 MHz (4–14 trocas a cada 5 s)
+  com ~77 %. Ou seja, uma luta a 720p gasta ~3/4 de uma Adreno 830: o custo é do
+  emulador (EDRAM, transferências, resolves), não do jogo. Os frames ficam perto dos
+  16,7 ms e qualquer descida de clock faz falhar o vsync (as travadinhas).
+- 0017: perfil da GPU por categoria (timestamps fora dos render passes): desenho,
+  transferências de RT, resolves, texturas, swap e outros, com passes e draws por frame.
+- Troca luta/menus: a revanche às vezes fica com o layout de menus. Diagnóstico em
+  `logs/controles.log` (bandeira 0x823F39A0, ponteiro 0x823D6CF4 e posições, só com o
+  diagnóstico ligado) para ver o que a bandeira faz numa revanche.

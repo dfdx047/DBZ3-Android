@@ -20,6 +20,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <mutex>
 
@@ -167,6 +168,28 @@ Java_com_dfdx047_dragonfury_game_NativeGameState_nativeFightFlag(JNIEnv*, jclass
   const uint8_t* base = g_dragonfury_guest_base.load(std::memory_order_acquire);
   if (!base) return -1;
   return LoadU32(base, kFightFlag) != 0 ? 1 : 0;
+}
+
+// Diagnostico da troca luta/menus (logs/controles.log com "Diagnostico de desempenho"):
+// a bandeira da luta, o ponteiro da configuracao da batalha e as posicoes dos dois
+// lutadores, para descobrir porque a revanche as vezes nao troca o layout.
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_dfdx047_dragonfury_game_NativeGameState_nativeBattleDebug(JNIEnv* env, jclass) {
+  const uint8_t* base = g_dragonfury_guest_base.load(std::memory_order_acquire);
+  if (!base) return env->NewStringUTF("sem jogo");
+  const uint32_t flag = LoadU32(base, kFightFlag);
+  const uint32_t cfg = LoadU32(base, kBattleCfgPtr);
+  char text[160];
+  if (cfg != 0 && cfg < 0xF0000000u) {
+    const uint32_t p1 = cfg + 2096;
+    const uint32_t p2 = cfg + 2096 + 8240;
+    snprintf(text, sizeof(text), "flag=%08X cfg=%08X p1=(%.1f,%.1f) p2=(%.1f,%.1f)", flag, cfg,
+             LoadF32(base, p1 + 64), LoadF32(base, p1 + 72), LoadF32(base, p2 + 64),
+             LoadF32(base, p2 + 72));
+  } else {
+    snprintf(text, sizeof(text), "flag=%08X cfg=%08X", flag, cfg);
+  }
+  return env->NewStringUTF(text);
 }
 
 // ---------------------------------------------------------------------------
