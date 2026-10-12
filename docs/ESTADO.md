@@ -103,5 +103,7 @@ com `yae3_xenon.xex` e a pasta `us/`.
   commit. Os workers ainda perdiam tempo em `XEvent::Set` (notify global do 0006).
   Corrigido em 0011. Compilação async desligada por omissão (MainActivity): sem ela não
   há frames escondidos e os pipelines síncronos custam < 1 ms.
+- Resultado do 0011 (2026-10-12, Turnip): travões de 150–420 ms desapareceram; o pior
+  frame na partida de teste foi 46 ms (primeira vez de um efeito: 7 shaders, 4 ms).
 - Atenção: o `dbz3_user.toml` (settings.cpp do projeto original) sobrepõe cvars do SDK.
   Para compilação síncrona usar `dbz3_async_shaders = false`, não `async_shader_compilation`.
