@@ -340,3 +340,16 @@ stubs; a interface Compose não foi compilada.
 - Carregar ki ainda falha quando a câmara troca de lado (não é só cruzar os lutadores).
   `logs/lutadores.bin` (diagnóstico) grava os blocos dos lutadores a cada 0,5 s e em cada
   botão de macro, para encontrar o campo de "lado"/espelho por diferença.
+
+### Teste de 2026-10-12 23:31 — lado do P1 e sair para o launcher
+- `lutadores.bin`: no bloco da batalha (ponteiro 0x823D6CF4) a câmara está em +400 (posição
+  vec4) e +416 (alvo vec4); +160/+176 e o campo s16 em lutador+6054/+6066 são o yaw de cada
+  lutador (0x4000 = 90°). No início: câmara (0,13,50) -> alvo (0,13,0), P1 em x=-15 à
+  esquerda. Lado no ecrã = sinal de dot(P2-P1, (-fz, fx)) com f = alvo - câmara. Bate com o
+  teste: 6 toques seguidos no "carregar ki" quando a câmara já tinha trocado (23:31:18) e o
+  app ainda mandava "trás = esquerda". `nativeP1Side` usa agora a câmara (margem de 0,15).
+- O jogo corre no processo ":game"; "Sair para o launcher" (dois toques) termina esse
+  processo e abre o launcher. LauncherPrefs com MODE_MULTI_PROCESS para não gravar por cima
+  do que se mudou no menu dentro do jogo.
+- 0019: descreve uma vez cada resolve grande (origem, destino, formato, endian, troca R/B) e
+  cada textura grande carregada, para escrever o atalho render target -> textura.

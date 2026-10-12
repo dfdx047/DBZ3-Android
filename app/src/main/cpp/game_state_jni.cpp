@@ -51,6 +51,9 @@ float LoadF32(const uint8_t* base, uint32_t addr) {
 struct FightPositions {
   bool active = false;
   float dx = 0.0f, dz = 0.0f;
+  // Camara (no inicio do bloco da batalha: posicao em +400, alvo em +416; vec4).
+  bool has_camera = false;
+  float fx = 0.0f, fz = 0.0f;  // direcao de vista no plano (alvo - posicao)
 };
 
 FightPositions ReadFight(const uint8_t* base) {
@@ -68,6 +71,13 @@ FightPositions ReadFight(const uint8_t* base) {
   f.active = true;
   f.dx = x2 - x1;
   f.dz = z2 - z1;
+  const float cx = LoadF32(base, cfg + 400), cz = LoadF32(base, cfg + 408);
+  const float tx = LoadF32(base, cfg + 416), tz = LoadF32(base, cfg + 424);
+  if (std::isfinite(cx) && std::isfinite(cz) && std::isfinite(tx) && std::isfinite(tz)) {
+    f.fx = tx - cx;
+    f.fz = tz - cz;
+    f.has_camera = f.fx * f.fx + f.fz * f.fz > 1.0f;
+  }
   return f;
 }
 
@@ -103,6 +113,21 @@ Java_com_dfdx047_dragonfury_game_NativeGameState_nativeP1Side(JNIEnv*, jclass) {
     g_tracker.fighting = true;
     g_tracker.p1_left = true;
     g_tracker.has_ref = false;
+  }
+  // Lado no ecra pela camara (logs de 2026-10-12: no inicio a camara esta em
+  // (0,13,50) a olhar para (0,13,0) e o P1 em x=-15 aparece a esquerda). O vetor
+  // "direita do ecra" no plano e (-fz, fx); o P1 esta a esquerda se o P2 estiver
+  // mais para a direita. So muda com uma margem, para nao oscilar quando a camara
+  // fica alinhada com os lutadores.
+  if (fight.has_camera) {
+    const float len_d = std::sqrt(dx * dx + dz * dz);
+    const float len_f = std::sqrt(fight.fx * fight.fx + fight.fz * fight.fz);
+    if (len_d > 1e-3f && len_f > 1e-3f) {
+      const float s = (dx * -fight.fz + dz * fight.fx) / (len_d * len_f);
+      if (s > 0.15f) g_tracker.p1_left = true;
+      if (s < -0.15f) g_tracker.p1_left = false;
+    }
+    return g_tracker.p1_left ? 1 : 2;
   }
   const float len2 = dx * dx + dz * dz;
   if (len2 > 1e-6f) {

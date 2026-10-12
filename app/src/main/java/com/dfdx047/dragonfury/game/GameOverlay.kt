@@ -283,6 +283,22 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
 
     override fun resume() = setScreen(InGameScreen.CLOSED)
 
+    /**
+     * Volta ao launcher. O jogo corre no seu proprio processo (":game"): o runtime
+     * recompilado nao se reinicia dentro do mesmo processo, por isso o processo do
+     * jogo termina e o proximo "Jogar" comeca do zero.
+     */
+    override fun exitToLauncher() {
+        setScreen(InGameScreen.CLOSED)
+        NativeGameState.forceResume()
+        activity.startActivity(
+            android.content.Intent(activity, com.dfdx047.dragonfury.LauncherActivity::class.java)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP),
+        )
+        activity.finishAndRemoveTask()
+        main.postDelayed({ android.os.Process.killProcess(android.os.Process.myPid()) }, 400)
+    }
+
     override fun openEditor() = setScreen(InGameScreen.EDITOR)
 
     override fun closeEditor() {

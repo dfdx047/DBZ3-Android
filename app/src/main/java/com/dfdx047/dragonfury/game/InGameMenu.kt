@@ -25,6 +25,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
@@ -97,6 +98,7 @@ interface InGameActions {
     fun openPortOptions()
     fun isInBattle(): Boolean
     fun applyAppearance()
+    fun exitToLauncher()
 }
 
 /** Painel de vidro fosco por cima do jogo pausado. */
@@ -256,6 +258,17 @@ private fun InGameMenuCard(prefs: LauncherPrefs, actions: InGameActions) {
             Icon(Icons.Filled.PlayArrow, null)
             Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.ingame_resume))
+        }
+        // Sair para o launcher: pede confirmacao com um segundo toque.
+        var confirmExit by remember { mutableStateOf(false) }
+        OutlinedButton(
+            onClick = { if (confirmExit) actions.exitToLauncher() else confirmExit = true },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                stringResource(if (confirmExit) R.string.ingame_exit_confirm else R.string.ingame_exit),
+                maxLines = 1,
+            )
         }
     }
 }

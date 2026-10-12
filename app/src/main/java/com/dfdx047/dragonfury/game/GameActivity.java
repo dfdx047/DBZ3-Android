@@ -204,7 +204,8 @@ public class GameActivity extends SDLActivity {
 
     /** Orientacao escolhida no launcher: paisagem, paisagem invertida ou automatica. */
     private void applyOrientation() {
-        SharedPreferences prefs = getSharedPreferences("dragonfury", MODE_PRIVATE);
+        @SuppressWarnings("deprecation")
+        SharedPreferences prefs = getSharedPreferences("dragonfury", MODE_MULTI_PROCESS);
         String mode = prefs.getString("game_orientation", "landscape");
         int orientation;
         if ("reverse".equals(mode)) {

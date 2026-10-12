@@ -33,8 +33,14 @@ inline fun <reified T : Enum<T>> enumByKey(value: String?, default: T, key: (T) 
  * O GameActivity le as mesmas chaves (PREFS_NAME, KEY_*).
  */
 class LauncherPrefs(context: Context) {
-    private val prefs: SharedPreferences =
-        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+
+    // O jogo corre noutro processo (":game"). MODE_MULTI_PROCESS (obsoleto mas ainda
+    // funcional) faz o Android reler o ficheiro quando o outro processo o mudou: sem
+    // isto, o launcher gravaria por cima do que se mudou no menu dentro do jogo.
+    @Suppress("DEPRECATION")
+    private val prefs: SharedPreferences
+        get() = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_MULTI_PROCESS)
 
     var themeMode: ThemeMode
         get() = enumByKey(prefs.getString(KEY_THEME, null), ThemeMode.DRAGON) { it.key }

@@ -331,4 +331,6 @@
     <string name="ingame_switch_layout">Trocar controles de luta / menu</string>
     <string name="settings_perf_log">Diagnóstico de desempenho</string>
     <string name="settings_perf_log_sub">A cada 5 s o log regista os FPS, o tempo de GPU por frame e o clock e a carga da GPU. Leve; use para reportar travadinhas.</string>
+    <string name="ingame_exit">Sair para o launcher</string>
+    <string name="ingame_exit_confirm">Toque de novo para sair</string>
 </resources>
