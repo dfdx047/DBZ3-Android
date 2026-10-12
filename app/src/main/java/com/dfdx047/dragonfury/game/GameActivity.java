@@ -6,8 +6,11 @@ import android.os.Bundle;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.util.Log;
+import android.view.Display;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.Surface;
+import android.view.SurfaceHolder;
 import android.view.WindowManager;
 
 import org.libsdl.app.SDLActivity;
@@ -63,12 +66,7 @@ public class GameActivity extends SDLActivity {
         Log.i(TAG, "Pasta do jogo: " + appDir.getAbsolutePath() + "/DBZ3");
         super.onCreate(savedInstanceState);
 
-        // O jogo corre a 60 FPS. Em ecras de 120 Hz o presenter (FIFO) estava a
-        // apresentar 120 vezes por segundo o mesmo frame: o dobro do trabalho e
-        // do calor para nada. Pedimos ao sistema o modo de 60 Hz.
-        WindowManager.LayoutParams params = getWindow().getAttributes();
-        params.preferredRefreshRate = 60.0f;
-        getWindow().setAttributes(params);
+        requestSixtyHz();
 
         // Controles por toque por cima do jogo (se nao foram desligados no launcher).
         mOverlay = new GameOverlay(this);
@@ -132,6 +130,72 @@ public class GameActivity extends SDLActivity {
             return true;
         }
         return super.dispatchTouchEvent(event);
+    }
+
+    /**
+     * O jogo gera 60 frames/s por um relogio proprio (o vblank do Xenos), que nao
+     * esta preso ao ecra. Num ecra de 120 Hz com FIFO cada frame fica 2 vblanks
+     * na tela, mas basta o relogio oscilar 1 ms para alguns ficarem 1 ou 3
+     * (8 ms / 25 ms): e o "stutter" que se ve mesmo com o contador nos 60. O
+     * preferredRefreshRate sozinho e so uma sugestao que varios fabricantes
+     * ignoram, por isso pedimos o modo de 60 Hz pelo id e, alem disso, marcamos
+     * a superficie do SDL como fonte fixa de 60 FPS (API 30).
+     */
+    private void requestSixtyHz() {
+        WindowManager.LayoutParams params = getWindow().getAttributes();
+        params.preferredRefreshRate = 60.0f;
+        StringBuilder modes = new StringBuilder();
+        try {
+            Display display = getWindowManager().getDefaultDisplay();
+            Display.Mode current = display.getMode();
+            Display.Mode best = null;
+            for (Display.Mode m : display.getSupportedModes()) {
+                modes.append(String.format(Locale.ROOT, " %d:%dx%d@%.2f", m.getModeId(),
+                        m.getPhysicalWidth(), m.getPhysicalHeight(), m.getRefreshRate()));
+                if (m.getPhysicalWidth() != current.getPhysicalWidth()
+                        || m.getPhysicalHeight() != current.getPhysicalHeight()) {
+                    continue;
+                }
+                if (Math.abs(m.getRefreshRate() - 60.0f) < 1.0f) {
+                    best = m;
+                }
+            }
+            if (best != null) {
+                params.preferredDisplayModeId = best.getModeId();
+            }
+            Log.i(TAG, String.format(Locale.ROOT, "Ecra: atual %.2f Hz, modo pedido %s, modos:%s",
+                    display.getRefreshRate(), best != null ? String.valueOf(best.getModeId()) : "nenhum de 60 Hz",
+                    modes));
+        } catch (RuntimeException e) {
+            Log.w(TAG, "Ecra: nao foi possivel escolher o modo de 60 Hz", e);
+        }
+        getWindow().setAttributes(params);
+
+        if (mSurface != null) {
+            mSurface.getHolder().addCallback(new SurfaceHolder.Callback() {
+                @Override
+                public void surfaceCreated(SurfaceHolder holder) {
+                }
+
+                @Override
+                public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+                    try {
+                        holder.getSurface().setFrameRate(60.0f, Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE);
+                    } catch (RuntimeException e) {
+                        Log.w(TAG, "Surface.setFrameRate falhou", e);
+                    }
+                    // O sistema muda o modo com algum atraso: regista o que ficou.
+                    mSurface.postDelayed(() -> {
+                        Display d = getWindowManager().getDefaultDisplay();
+                        Log.i(TAG, String.format(Locale.ROOT, "Ecra durante o jogo: %.2f Hz", d.getRefreshRate()));
+                    }, 3000);
+                }
+
+                @Override
+                public void surfaceDestroyed(SurfaceHolder holder) {
+                }
+            });
+        }
     }
 
     /** Orientacao escolhida no launcher: paisagem, paisagem invertida ou automatica. */

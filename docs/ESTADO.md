@@ -254,3 +254,20 @@ stubs; a interface Compose não foi compilada.
   frame na partida de teste foi 46 ms (primeira vez de um efeito: 7 shaders, 4 ms).
 - Atenção: o `dbz3_user.toml` (settings.cpp do projeto original) sobrepõe cvars do SDK.
   Para compilação síncrona usar `dbz3_async_shaders = false`, não `async_shader_compilation`.
+### Driver Qualcomm novo (8 Elite Gen 6, build 8a1dcb7e40, 0891.7.1x) — logs de 2026-10-12 21:15
+- Corrige o véu e o verde (o bug era mesmo do driver antigo). Mais travadinhas e picos de
+  clock do que o Turnip.
+- O log estava em `debug`: 222 mil linhas `XMA: Write to unknown register (0601)` e uma
+  `XELOG_GPU PRESENT` por frame em ~6 min (25 MB). Passaram a `trace` no 0013.
+  **Testes de desempenho sempre com o log detalhado desligado.**
+- O lado do jogo está estável: 18 393 frames, mediana 17 ms, só 41 acima de 20 ms e 3 acima
+  de 33 ms; `tiron` só 4 vezes (34–56 ms), uma delas um pipeline novo (51 ms). Ou seja, a
+  travadinha que se vê **não é** compilação de shaders nem o jogo atrasar.
+- Swapchain em FIFO (modo 2) a 60 FPS gerados por um relógio próprio, não preso ao ecrã.
+  Num ecrã a 120 Hz, 1 ms de oscilação faz frames ficarem 8 ou 25 ms na tela (judder).
+  O `preferredRefreshRate = 60` era só uma sugestão: agora o GameActivity pede o modo de
+  60 Hz pelo id, marca a superfície com `Surface.setFrameRate(60, FIXED_SOURCE)` e escreve no
+  logcat `Ecra: ...` e `Ecra durante o jogo: X Hz` para confirmar.
+- O que sobra no driver Qualcomm é o DCVS (governador de clock da GPU): o Turnip usa o
+  governador do kernel, o driver da Qualcomm o seu próprio. Próximo A/B: `dbz3_native_2x_msaa`
+  e `dbz3_present_dither` desligados, com o modo de 60 Hz confirmado.
