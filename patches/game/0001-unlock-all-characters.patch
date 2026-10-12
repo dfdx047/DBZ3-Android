@@ -1,0 +1,30 @@
+--- a/src/roster_ext.cpp
++++ b/src/roster_ext.cpp
+@@ -998,11 +998,26 @@
+ 
+ // Select: builds the per-mode availability state (r3); +56 = u64 mask of
+ // unlocked character IDs. Roster characters are always available.
++//
++// DBZ3-Android: cheat `dbz3_unlock_all_characters` (cvars.txt). Junta a mascara
++// todos os personagens de fabrica (IDs 0-43) menos os recortados sem modelos
++// (22-26 Forcas Ginyu/Zarbon/Dodoria e 31 Android 19), que crashariam. So muda
++// o que o select mostra: nao escreve no save.
++REXCVAR_DEFINE_BOOL(dbz3_unlock_all_characters, false, "DBZ3/Cheats",
++                    "Unlock every retail character in the select screen (save untouched)");
++namespace {
++constexpr uint64_t kRetailCharacters =
++    0xFFFFFFFFFFFull & ~((uint64_t(0x1F) << 22) | (uint64_t(1) << 31));
++}  // namespace
++
+ DBZ3_HOOK(sub_8217A1C0, dbz3eu_sub_8217A178) {
+   dbz3::roster::EnsureCapsules();
+   const uint32_t st = ctx.r3.u32;
+   orig(ctx, base);
+-  const uint64_t extra = dbz3::roster::ExtraUnlockMask();
++  uint64_t extra = dbz3::roster::ExtraUnlockMask();
++  if (REXCVAR_GET(dbz3_unlock_all_characters)) {
++    extra |= kRetailCharacters;
++  }
+   if (extra && st) {
+     REX_STORE_U64(st + 56, REX_LOAD_U64(st + 56) | extra);
+   }

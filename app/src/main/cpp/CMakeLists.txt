@@ -31,22 +31,25 @@ if(NOT EXISTS "${REXSDK_ROOT}/include/rex/main_android.h")
 endif()
 # Todos os patches de patches/ tem de estar aplicados (o script regista-os em
 # .dbz3-android-patches). Evita compilar um SDK desatualizado sem dar por isso.
-file(GLOB DBZ3_PATCH_FILES "${DBZ3_REPO_ROOT}/patches/[0-9][0-9][0-9][0-9]-*.patch")
-set(DBZ3_PATCH_STAMP "${REXSDK_ROOT}/.dbz3-android-patches")
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${DBZ3_PATCH_FILES} "${DBZ3_PATCH_STAMP}")
-if(EXISTS "${DBZ3_PATCH_STAMP}")
-    file(STRINGS "${DBZ3_PATCH_STAMP}" DBZ3_APPLIED_PATCHES)
-else()
-    set(DBZ3_APPLIED_PATCHES "")
-endif()
-foreach(DBZ3_PATCH ${DBZ3_PATCH_FILES})
-    get_filename_component(DBZ3_PATCH_NAME "${DBZ3_PATCH}" NAME)
-    if(NOT DBZ3_PATCH_NAME IN_LIST DBZ3_APPLIED_PATCHES)
-        message(FATAL_ERROR
-            "O patch ${DBZ3_PATCH_NAME} ainda nao foi aplicado ao SDK.\n"
-            "Corre na raiz do repositorio:  bash tools/apply-sdk-patches.sh")
+function(dbz3_check_patches PATCH_GLOB TARGET_DIR)
+    file(GLOB PATCH_FILES "${PATCH_GLOB}")
+    set(STAMP "${TARGET_DIR}/.dbz3-android-patches")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${PATCH_FILES} "${STAMP}")
+    set(APPLIED "")
+    if(EXISTS "${STAMP}")
+        file(STRINGS "${STAMP}" APPLIED)
     endif()
-endforeach()
+    foreach(PATCH ${PATCH_FILES})
+        get_filename_component(PATCH_NAME "${PATCH}" NAME)
+        if(NOT PATCH_NAME IN_LIST APPLIED)
+            message(FATAL_ERROR
+                "O patch ${PATCH_NAME} ainda nao foi aplicado em ${TARGET_DIR}.\n"
+                "Corre na raiz do repositorio:  bash tools/apply-sdk-patches.sh")
+        endif()
+    endforeach()
+endfunction()
+dbz3_check_patches("${DBZ3_REPO_ROOT}/patches/[0-9][0-9][0-9][0-9]-*.patch" "${REXSDK_ROOT}")
+dbz3_check_patches("${DBZ3_REPO_ROOT}/patches/game/[0-9][0-9][0-9][0-9]-*.patch" "${DBZ3_ROOT}")
 if(NOT EXISTS "${DBZ3_GENERATED}/sources.cmake")
     message(FATAL_ERROR
         "Falta ${DBZ3_GENERATED}/sources.cmake.\n"

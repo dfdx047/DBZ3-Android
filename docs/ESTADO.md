@@ -48,6 +48,12 @@ Objetivo: o jogo arrancar no Android e chegar ao menu, com logs no logcat.
 | `memory_posix.cpp`, `threading_posix.cpp` (0011) | commit de memória sem ler `/proc/self/maps` (era ~90% dos travões das transformações); `WaitMultiple` só acorda quem espera pelo objeto sinalizado |
 | `dbz3_hitch.h`, `command_processor.cpp`, `pipeline_cache.cpp`, `texture_cache.cpp`, `render_target_cache.cpp` (0010) | diagnóstico de travões: cada `dbz3: tiron` (frame > 34 ms ou frames escondidos pela compilação async) diz quanto tempo foi em shaders, pipelines, pipelines provisórios, transferências de RT, texturas e espera da GPU |
 
+### Patches no jogo (`patches/game/`, aplicados em external/dbz3)
+
+| Patch | Mudança |
+|---|---|
+| 0001-unlock-all-characters | cheat `dbz3_unlock_all_characters = true` (cvars.txt): todos os personagens de fábrica no select, sem mexer no save |
+
 ## Compilar (no PC, CachyOS)
 
 1. `bash tools/apply-sdk-patches.sh` (uma vez por SDK limpo)
