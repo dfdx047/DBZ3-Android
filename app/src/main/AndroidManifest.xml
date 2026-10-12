@@ -8,36 +8,89 @@
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Drivers, verificacao de atualizacoes e download do APK novo. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Instalar a atualizacao descarregada (o sistema pede confirmacao). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
+        android:name=".DragonFuryApp"
         android:label="@string/app_name"
-        android:icon="@drawable/ic_launcher"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:allowBackup="false"
         android:extractNativeLibs="true"
         android:hardwareAccelerated="true"
         android:isGame="true"
         android:appCategory="game"
-        android:theme="@style/AppTheme">
+        android:localeConfig="@xml/locales_config"
+        android:theme="@style/Theme.DragonFury">
 
         <!-- Permite medir o desempenho com o simpleperf tambem no APK de release. -->
         <profileable android:shell="true" />
 
+        <!-- Launcher (Jetpack Compose): retrato e paisagem. -->
         <activity
-            android:name=".MainActivity"
+            android:name=".LauncherActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Jogo (SDLActivity). Exportada para o atalho da tela inicial. A
+             orientacao final (paisagem, invertida ou automatica) e escolhida
+             no launcher e aplicada no onCreate. -->
+        <activity
+            android:name=".game.GameActivity"
             android:label="@string/app_name"
             android:exported="true"
             android:launchMode="singleInstance"
             android:alwaysRetainTaskState="true"
             android:screenOrientation="sensorLandscape"
             android:preferMinimalPostProcessing="true"
+            android:theme="@style/Theme.DragonFury.Game"
             android:configChanges="layoutDirection|locale|fontScale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+                <action android:name="com.dfdx047.dragonfury.PLAY" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
             </intent-filter>
         </activity>
+
+        <!-- Editor do layout dos controles por toque (sempre em paisagem, como o jogo). -->
+        <activity
+            android:name=".controls.ControlsEditorActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@style/Theme.DragonFury.Editor"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+
+        <!-- Partilha do APK descarregado com o instalador do sistema. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- Idioma por app em Android < 13 (AppCompat guarda a escolha). -->
+        <service
+            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
+            android:enabled="false"
+            android:exported="false">
+            <meta-data
+                android:name="autoStoreLocales"
+                android:value="true" />
+        </service>
     </application>
 </manifest>

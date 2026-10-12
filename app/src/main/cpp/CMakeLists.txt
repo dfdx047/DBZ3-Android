@@ -126,7 +126,11 @@ set_source_files_properties(${GENERATED_SOURCES} PROPERTIES
 add_library(main SHARED ${DBZ3_SOURCES} ${GENERATED_SOURCES})
 
 # Hooks especificos do port Android (desempenho). Ver android_hooks.cpp.
-target_sources(main PRIVATE "${CMAKE_CURRENT_LIST_DIR}/android_hooks.cpp")
+target_sources(main PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/android_hooks.cpp"
+    # Estado do combate para os controles por toque (JNI, ver NativeGameState.kt).
+    "${CMAKE_CURRENT_LIST_DIR}/game_state_jni.cpp"
+)
 
 # O imgui.h vem com o SDK instalado no PC; aqui apontamos para o submodulo.
 # (O codigo do ImGui em si ja esta dentro do librexruntime.so.)

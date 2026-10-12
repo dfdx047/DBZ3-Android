@@ -15,7 +15,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NDK="${NDK:-$HOME/Android/Sdk/ndk/28.2.13676358}"
 HOSTPERF="$NDK/simpleperf/bin/linux/x86_64/simpleperf"
-PKG="pt.dfdx047.dbz3"
+PKG="com.dfdx047.dragonfury"
 DURATION="${1:-20}"
 OUT="$ROOT/perf"
 

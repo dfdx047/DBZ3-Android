@@ -1,5 +1,7 @@
-package pt.dfdx047.dbz3;
+package com.dfdx047.dragonfury.game;
 
+import android.content.SharedPreferences;
+import android.content.pm.ActivityInfo;
 import android.os.Bundle;
 import android.system.ErrnoException;
 import android.system.Os;
@@ -20,16 +22,24 @@ import java.util.Locale;
  * Atividade do jogo. O SDLActivity carrega libSDL3.so e libmain.so e chama
  * SDL_main (windowed_app_main_sdl.cpp) numa thread propria.
  *
+ * Aberta pelo launcher (LauncherActivity) ou pelo atalho da tela inicial. As
+ * opcoes do jogo ja estao no dbz3_user.toml (escrito pelo launcher); aqui so se
+ * aplica a orientacao, o driver Vulkan e os controles por toque (GameOverlay).
+ *
  * Antes disso definimos as variaveis de ambiente que o runtime le no Android:
  *   REX_APP_DIR            pasta de dados (jogo, configuracoes, logs, cache)
  *   REX_NATIVE_LIB_DIR     pasta das .so extraidas (plugin da GPU)
  *   REX_DBZ3_SKIP_LAUNCHER salta o launcher ImGui do PC e arranca o jogo
  */
-public class MainActivity extends SDLActivity {
+public class GameActivity extends SDLActivity {
     private static final String TAG = "dbz3";
+
+    private GameOverlay mOverlay;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        applyOrientation();
+
         File appDir = getExternalFilesDir(null);
         if (appDir == null) {
             appDir = getFilesDir();
@@ -46,6 +56,7 @@ public class MainActivity extends SDLActivity {
         setEnv("REX_DBZ3_ASYNC_SHADERS", "false");
         applyCvarOverrides(new File(appDir, "cvars.txt"));
         installCustomVulkanDriver(appDir);
+        prepareLogFile(appDir);
 
         Log.i(TAG, "Pasta do jogo: " + appDir.getAbsolutePath() + "/DBZ3");
         super.onCreate(savedInstanceState);
@@ -56,6 +67,66 @@ public class MainActivity extends SDLActivity {
         WindowManager.LayoutParams params = getWindow().getAttributes();
         params.preferredRefreshRate = 60.0f;
         getWindow().setAttributes(params);
+
+        // Controles por toque por cima do jogo (se nao foram desligados no launcher).
+        mOverlay = new GameOverlay(this);
+        mOverlay.onCreate();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (mOverlay != null) {
+            mOverlay.onResume();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        if (mOverlay != null) {
+            mOverlay.onPause();
+        }
+        super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (mOverlay != null) {
+            mOverlay.onDestroy();
+            mOverlay = null;
+        }
+        super.onDestroy();
+    }
+
+    /** Orientacao escolhida no launcher: paisagem, paisagem invertida ou automatica. */
+    private void applyOrientation() {
+        SharedPreferences prefs = getSharedPreferences("dragonfury", MODE_PRIVATE);
+        String mode = prefs.getString("game_orientation", "landscape");
+        int orientation;
+        if ("reverse".equals(mode)) {
+            orientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE;
+        } else if ("auto".equals(mode)) {
+            orientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
+        } else {
+            orientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
+        }
+        setRequestedOrientation(orientation);
+    }
+
+    /**
+     * O log desta sessao vai para logs/dragonfury_last.log (a aba Texturas do
+     * launcher le-o para mostrar o estado dos packs). O cvars.txt pode mudar.
+     */
+    private static void prepareLogFile(File appDir) {
+        File logs = new File(appDir, "logs");
+        //noinspection ResultOfMethodCallIgnored
+        logs.mkdirs();
+        File log = new File(logs, "dragonfury_last.log");
+        //noinspection ResultOfMethodCallIgnored
+        log.delete();
+        if (Os.getenv("REX_LOG_FILE") == null) {
+            setEnv("REX_LOG_FILE", log.getAbsolutePath());
+        }
     }
 
     @Override

@@ -11,6 +11,7 @@
 // se a espera se prolongar, dorme 50 us por volta. A logica do jogo nao muda:
 // a funcao original corre sempre a seguir e decide se continua a esperar.
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <thread>
@@ -19,10 +20,19 @@
 
 REX_EXTERN(__imp__sub_82235918);
 
+// Base da memoria do jogo, para o game_state_jni.cpp (controles por toque) ler
+// o estado do combate fora das funcoes do jogo. Guardada aqui porque este hook
+// corre logo desde o arranque e muitas vezes por frame.
+extern std::atomic<uint8_t*> g_dragonfury_guest_base;
+
 REX_HOOK_RAW(sub_82235918) {
   using clock = std::chrono::steady_clock;
   thread_local clock::time_point last_call{};
   thread_local uint32_t spins = 0;
+
+  if (g_dragonfury_guest_base.load(std::memory_order_relaxed) != base) {
+    g_dragonfury_guest_base.store(base, std::memory_order_release);
+  }
 
   const auto now = clock::now();
   // Uma pausa grande desde a ultima chamada = nova espera: recomeca a contagem.

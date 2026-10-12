@@ -13,7 +13,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NDK="${NDK:-$HOME/Android/Sdk/ndk/28.2.13676358}"
 LLVM_BIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
-PKG="pt.dfdx047.dbz3"
+PKG="com.dfdx047.dragonfury"
 DURATION="${1:-30}"
 OUT="$ROOT/perf/hitch"
 

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icone de botao por toque (original, Dragon Fury). Branco: a cor e aplicada no desenho. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd"
+        android:pathData="M10,12 A5,5 0 1 1 20,12 A5,5 0 1 1 10,12 Z M12.6,12 A2.4,2.4 0 1 1 17.4,12 A2.4,2.4 0 1 1 12.6,12 Z M1.5,8.5 L10.6,10.6 L10.6,13.4 L1.5,15.5 L5.5,12 Z M19.5,3.5 L21,5 L19.5,6.5 L18,5 Z M21,17.5 L22.2,18.7 L21,19.9 L19.8,18.7 Z" />
+</vector>

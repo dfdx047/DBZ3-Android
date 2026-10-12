@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icone tematico (Android 13+): so a forma, o sistema aplica a cor. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:strokeColor="#000000" android:strokeWidth="3" android:fillColor="#00000000" android:pathData="M31.00,53.00a21.00,21.00 0,1 1,42.00,0a21.00,21.00 0,1 1,-42.00,0Z" />
+    <path android:fillColor="#000000" android:pathData="M52.00,38.30 L53.53,42.39 L57.90,42.58 L54.48,45.30 L55.64,49.52 L52.00,47.10 L48.36,49.52 L49.52,45.30 L46.10,42.58 L50.47,42.39Z" />
+    <path android:fillColor="#000000" android:pathData="M44.50,52.30 L46.03,56.39 L50.40,56.58 L46.98,59.30 L48.14,63.52 L44.50,61.10 L40.86,63.52 L42.02,59.30 L38.60,56.58 L42.97,56.39Z" />
+    <path android:fillColor="#000000" android:pathData="M59.50,52.30 L61.03,56.39 L65.40,56.58 L61.98,59.30 L63.14,63.52 L59.50,61.10 L55.86,63.52 L57.02,59.30 L53.60,56.58 L57.97,56.39Z" />
+    <path android:fillColor="#000000" android:pathData="M63.00,72.50a9.50,9.50 0,1 1,19.00,0a9.50,9.50 0,1 1,-19.00,0Z" />
+</vector>
