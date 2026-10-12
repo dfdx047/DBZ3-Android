@@ -335,6 +335,11 @@ fun SettingsScreen(vm: LauncherViewModel) {
                 stringResource(R.string.settings_verbose_log_sub),
                 checked = c.verboseLog,
             ) { on -> vm.updateConfig { it.copy(verboseLog = on) } }
+            SettingSwitch(
+                stringResource(R.string.settings_perf_log),
+                stringResource(R.string.settings_perf_log_sub),
+                checked = c.perfLogging,
+            ) { on -> vm.updateConfig { it.copy(perfLogging = on) } }
             OutlinedButton(onClick = { vm.exportLogs(context) }, enabled = vm.busy == null) {
                 Text(stringResource(R.string.export_logs))
             }

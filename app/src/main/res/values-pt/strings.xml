@@ -329,4 +329,6 @@
     <string name="settings_verbose_log">Log detalhado (depuração)</string>
     <string name="settings_verbose_log_sub">O jogo escreve muito mais no log. Use para reportar um problema; pode custar um pouco de desempenho.</string>
     <string name="ingame_switch_layout">Trocar controles de luta / menu</string>
+    <string name="settings_perf_log">Diagnóstico de desempenho</string>
+    <string name="settings_perf_log_sub">A cada 5 s o log regista os FPS, o tempo de GPU por frame e o clock e a carga da GPU. Leve; use para reportar travadinhas.</string>
 </resources>

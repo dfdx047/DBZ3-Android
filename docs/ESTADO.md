@@ -271,3 +271,26 @@ stubs; a interface Compose não foi compilada.
 - O que sobra no driver Qualcomm é o DCVS (governador de clock da GPU): o Turnip usa o
   governador do kernel, o driver da Qualcomm o seu próprio. Próximo A/B: `dbz3_native_2x_msaa`
   e `dbz3_present_dither` desligados, com o modo de 60 Hz confirmado.
+
+### Testes de 2026-10-12 21:43–21:59 (Odin 3, Turnip vs Qualcomm novo, 0.2.0 com 0013)
+- Ecrã confirmado: `Ecra: atual 120.00 Hz ... Ecra durante o jogo: 60.00 Hz`.
+- Pipelines novos: o driver Qualcomm compila ~2x mais devagar que o Turnip no mesmo
+  momento (10 pipelines 155 ms vs 322 ms; 16 pipelines 101 vs 222 ms). Na sessão seguinte
+  os mesmos 16 custaram 3,7 ms: a cache do driver resolve depois da primeira vez (é por
+  driver; trocar de driver recomeça).
+- `tiron` de 1,5–20 s na terceira sessão = jogo pausado no menu, não travões.
+- **FSR/CAS nunca foram aplicados no Android**: sem o SDK da AMD o runtime só aceitava
+  `present_effect = bilinear` ("not in allowed values"). 0015 liga o FSR 1/CAS (shaders
+  próprios). O "modo FSR" só muda a resolução interna com escala 2x ou mais.
+- A carga da GPU (%) não desce com opções mais leves porque o governador baixa o clock
+  para a manter alta. Travar a GPU a 900 MHz (abaixo do máximo de 1100) suaviza: indica
+  o governador a oscilar, não falta de GPU. O app não controla o clock sem root.
+- 0016: `gpu_ms` por frame (timestamps Vulkan) na linha `dbz3: perf` e
+  `logs/gpu_stats.log` (clock/carga/temperatura do KGSL a cada 5 s), com
+  "Diagnóstico de desempenho" ligado nas Configurações.
+- Controles na tela com comando físico ligado não funcionavam: o comando virtual era o
+  jogador 2 (`SlotAssignment`). 0014 marca-o como sintético (sempre jogador 1, junto com
+  o físico; a vibração também chega aos dois).
+- Back do Odin (KEYCODE_BACK) com o jogo a correr abre o menu da engrenagem.
+- `cvars.txt` aceita `env:NOME = valor` para variáveis do driver (ex. `env:TU_DEBUG = sysmem`).
+- As partes rodadas antigas do log (`dragonfury_last.N.log`) são apagadas ao abrir o jogo.

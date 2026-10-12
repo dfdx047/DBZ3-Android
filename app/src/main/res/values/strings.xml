@@ -330,4 +330,6 @@
     <string name="settings_verbose_log">Detailed log (debugging)</string>
     <string name="settings_verbose_log_sub">The game writes much more to the log. Use it to report a problem; it can cost a little performance.</string>
     <string name="ingame_switch_layout">Switch battle / menu controls</string>
+    <string name="settings_perf_log">Performance diagnostics</string>
+    <string name="settings_perf_log_sub">Every 5 s the log records FPS, GPU time per frame and the GPU clock and load. Light; use it to report stutter.</string>
 </resources>

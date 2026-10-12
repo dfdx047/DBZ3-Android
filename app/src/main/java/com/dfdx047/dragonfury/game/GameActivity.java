@@ -104,13 +104,17 @@ public class GameActivity extends SDLActivity {
         if (mOverlay != null) {
             mOverlay.onPhysicalInput(event);
         }
-        if (mOverlay != null && mOverlay.isMenuOpen()) {
-            if (event.getKeyCode() == KeyEvent.KEYCODE_BACK) {
-                if (event.getAction() == KeyEvent.ACTION_UP) {
+        // Back (o botao Back do Odin e de outros portateis, ou o gesto de voltar):
+        // com um menu aberto volta um nivel; com o jogo a correr abre o menu.
+        if (mOverlay != null && event.getKeyCode() == KeyEvent.KEYCODE_BACK) {
+            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
+                if (mOverlay.isMenuOpen()) {
                     mOverlay.onBackPressed();
+                } else {
+                    mOverlay.openMenu();
                 }
-                return true;
             }
+            return true;
         }
         return super.dispatchKeyEvent(event);
     }
@@ -224,6 +228,18 @@ public class GameActivity extends SDLActivity {
         File log = new File(logs, "dragonfury_last.log");
         //noinspection ResultOfMethodCallIgnored
         log.delete();
+        // As partes rodadas (.1.log ...) sao de sessoes antigas: so confundiam a
+        // exportacao de logs (20 MB de uma sessao com o log detalhado).
+        File[] old = logs.listFiles();
+        if (old != null) {
+            for (File f : old) {
+                String n = f.getName();
+                if (n.startsWith("dragonfury_last.") && !n.equals("dragonfury_last.log")) {
+                    //noinspection ResultOfMethodCallIgnored
+                    f.delete();
+                }
+            }
+        }
         if (Os.getenv("REX_LOG_FILE") == null) {
             setEnv("REX_LOG_FILE", log.getAbsolutePath());
         }
@@ -260,6 +276,14 @@ public class GameActivity extends SDLActivity {
                 String value = line.substring(eq + 1).trim();
                 if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
                     value = value.substring(1, value.length() - 1);
+                }
+                if (name.startsWith("env:")) {
+                    // "env:TU_DEBUG = sysmem": variavel crua para o driver (testes A/B
+                    // do Turnip, MESA_*, etc.), sem o prefixo REX_.
+                    String env = name.substring(4).trim();
+                    setEnv(env, value);
+                    Log.i(TAG, "env " + env + " = " + value);
+                    continue;
                 }
                 setEnv("REX_" + name.toUpperCase(Locale.ROOT), value);
                 Log.i(TAG, "cvar " + name + " = " + value);

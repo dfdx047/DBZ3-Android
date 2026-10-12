@@ -11,6 +11,7 @@ import android.os.SystemClock
 import android.view.Gravity
 import android.view.InputDevice
 import android.view.InputEvent
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -30,6 +31,7 @@ import com.dfdx047.dragonfury.controls.MacroStep
 import com.dfdx047.dragonfury.controls.PadInput
 import com.dfdx047.dragonfury.data.AppPaths
 import com.dfdx047.dragonfury.data.DarkMode
+import com.dfdx047.dragonfury.data.GameConfig
 import com.dfdx047.dragonfury.data.LauncherPrefs
 import com.dfdx047.dragonfury.data.ThemeMode
 import com.dfdx047.dragonfury.data.TouchMode
@@ -67,9 +69,15 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
     private var inBattle = false
 
     private val attachRunnable = Runnable { attachPad() }
+    private var gpuStats: GpuStatsSampler? = null
 
     fun onCreate() {
         AppPaths.init(activity)
+        if (GameConfig.load().perfLogging) {
+            val f = java.io.File(AppPaths.logsDir, "gpu_stats.log")
+            f.delete()
+            gpuStats = GpuStatsSampler(f)
+        }
         engine.pauseQuickMenu = prefs.pauseOnMenus
         engine.onBattleChanged = { battle ->
             inBattle = battle
@@ -226,6 +234,10 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
             s and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK ||
             s and InputDevice.SOURCE_DPAD == InputDevice.SOURCE_DPAD
         if (!pad) return
+        // Eixos: so um movimento a serio conta (sticks com drift e gatilhos com ruido
+        // mandam eventos sem parar e escondiam os controles logo apos aparecerem).
+        if (event is MotionEvent && STICK_AXES.none { kotlin.math.abs(event.getAxisValue(it)) > 0.5f }) return
+        if (event is KeyEvent && (event.action != KeyEvent.ACTION_DOWN || event.keyCode == KeyEvent.KEYCODE_BACK)) return
         autoShown = false
         view?.releaseAll()
         updateVisibility()
@@ -234,6 +246,9 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
     // ---------------------------------------------------------------- menus
 
     fun isMenuOpen(): Boolean = screen.value != InGameScreen.CLOSED
+
+    /** Botao Back com o jogo a correr: abre o menu (engrenagem). */
+    fun openMenu() = setScreen(InGameScreen.MENU)
 
     private fun setScreen(s: InGameScreen) {
         screen.value = s
@@ -291,14 +306,17 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
         engine.pauseQuickMenu = prefs.pauseOnMenus
         applyAppearance()
         if (DragonFuryPad.isAttached()) engine.start()
+        gpuStats?.start()
     }
 
     fun onPause() {
+        gpuStats?.stop()
         view?.releaseAll()
         engine.stop()
     }
 
     fun onDestroy() {
+        gpuStats?.stop()
         NativeGameState.forceResume()
         main.removeCallbacks(attachRunnable)
         inputManager.unregisterInputDeviceListener(this)
@@ -358,4 +376,12 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
     }
 
     override fun onInputDeviceChanged(deviceId: Int) = updateVisibility()
+
+    private companion object {
+        val STICK_AXES = intArrayOf(
+            MotionEvent.AXIS_X, MotionEvent.AXIS_Y, MotionEvent.AXIS_Z, MotionEvent.AXIS_RZ,
+            MotionEvent.AXIS_HAT_X, MotionEvent.AXIS_HAT_Y, MotionEvent.AXIS_LTRIGGER,
+            MotionEvent.AXIS_RTRIGGER, MotionEvent.AXIS_GAS, MotionEvent.AXIS_BRAKE,
+        )
+    }
 }

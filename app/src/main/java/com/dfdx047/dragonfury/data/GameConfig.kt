@@ -43,6 +43,7 @@ data class GameConfig(
     val unlockAllCharacters: Boolean = false, // dbz3_unlock_all_characters (patch 0001)
     // Depuracao
     val verboseLog: Boolean = false,          // log_level = "debug" (senao "info")
+    val perfLogging: Boolean = false,         // dbz3_perf_logging + logs/gpu_stats.log
 ) {
     fun toToml(): Map<String, Any> = linkedMapOf(
         // "manual": o preset "auto" do PC reescreveria estas opcoes no arranque.
@@ -70,6 +71,7 @@ data class GameConfig(
         "dbz3_rumble" to rumble,
         "dbz3_unlock_all_characters" to unlockAllCharacters,
         "log_level" to if (verboseLog) "debug" else "info",
+        "dbz3_perf_logging" to perfLogging,
     )
 
     companion object {
@@ -120,6 +122,7 @@ data class GameConfig(
                 rumble = bool("dbz3_rumble", d.rumble),
                 unlockAllCharacters = bool("dbz3_unlock_all_characters", d.unlockAllCharacters),
                 verboseLog = str("log_level", "info").let { it == "debug" || it == "trace" },
+                perfLogging = bool("dbz3_perf_logging", d.perfLogging),
             )
         }
 
