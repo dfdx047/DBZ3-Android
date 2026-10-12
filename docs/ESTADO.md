@@ -70,7 +70,14 @@ com `yae3_xenon.xex` e a pasta `us/`.
 - [ ] Problemas vistos no 1.º teste: véu/blur na imagem; voz sem som (canal central perdido no 5.1, corrigido em 0005, por confirmar); Main XThread a 100% de um núcleo e Audio Worker a ~54%; travões ao criar pipelines (transformações, poderes); 120 Hz a apresentar o mesmo frame (pedido 60 Hz na MainActivity); aquecimento 70–80 °C
 - [ ] Ciclo de vida: app em segundo plano / superfície perdida
 - [ ] Controlos por toque
+- [x] Travões das transformações (0011) e travadinhas de pipelines (compilação síncrona): frame time reto, ~4–5 W (antes 15–16 W, 80–90 °C), 2026-10-12, Turnip
+- [ ] Driver nativo Qualcomm: tentar contornar o véu/bordas verdes (bónus). Se não der, Turnip por omissão
 - [ ] Fase 2: launcher em Jetpack Compose (escolha da pasta via SAF, verificação de hashes, opções gráficas)
+  - Aba Adreno Tools: escolher/importar driver e descarregar direto dos repositórios
+    (MrPurple666/purple-turnip, StevenMXZ, K11MCH1/AdrenoToolsDrivers); Turnip por omissão em Adreno
+  - Aba Cheats (opcionais): todos os personagens (já existe: `dbz3_unlock_all_characters`),
+    todas as cápsulas/transformações, zeni no máximo, fases. Os que faltam pedem RE
+    (máscara de cápsulas do save/#SKC, zeni, fases) ou o save 100% (native_mods.cpp)
 - [ ] Fase 3: otimização por GPU (Adreno/Mali), Turnip, cache de shaders
 
 ## Perfil (8 Elite, 2026-10-12, `tools/profile.sh`)
