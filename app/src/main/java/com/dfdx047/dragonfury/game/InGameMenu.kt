@@ -53,10 +53,13 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import com.dfdx047.dragonfury.R
 import com.dfdx047.dragonfury.controls.ControlsEditor
+import com.dfdx047.dragonfury.controls.LayoutKind
 import com.dfdx047.dragonfury.data.ButtonBadge
 import com.dfdx047.dragonfury.data.ControlStyle
 import com.dfdx047.dragonfury.data.Directional
+import com.dfdx047.dragonfury.data.GameConfig
 import com.dfdx047.dragonfury.data.LauncherPrefs
+import com.dfdx047.dragonfury.data.TouchMode
 import com.dfdx047.dragonfury.ui.theme.DfColors
 import kotlin.math.roundToInt
 
@@ -83,7 +86,7 @@ class OverlayOwner : LifecycleOwner, SavedStateRegistryOwner {
     }
 }
 
-enum class InGameScreen { CLOSED, MENU, EDITOR }
+enum class InGameScreen { CLOSED, MENU, EDITOR, PORT }
 
 /** Ações do menu, implementadas pelo GameOverlay. */
 interface InGameActions {
@@ -91,6 +94,8 @@ interface InGameActions {
     fun openEditor()
     fun closeEditor()
     fun openPortMenu()
+    fun openPortOptions()
+    fun isInBattle(): Boolean
     fun applyAppearance()
 }
 
@@ -99,7 +104,11 @@ interface InGameActions {
 fun InGameOverlay(screen: InGameScreen, prefs: LauncherPrefs, actions: InGameActions) {
     when (screen) {
         InGameScreen.CLOSED -> Unit
-        InGameScreen.EDITOR -> ControlsEditor(prefs, overGame = true) { actions.closeEditor() }
+        InGameScreen.EDITOR -> ControlsEditor(
+            prefs,
+            overGame = true,
+            initialKind = if (actions.isInBattle()) LayoutKind.GAMEPLAY else LayoutKind.MENU,
+        ) { actions.closeEditor() }
         InGameScreen.MENU -> Box(
             Modifier
                 .fillMaxSize()
@@ -107,6 +116,14 @@ fun InGameOverlay(screen: InGameScreen, prefs: LauncherPrefs, actions: InGameAct
             contentAlignment = Alignment.Center,
         ) {
             InGameMenuCard(prefs, actions)
+        }
+        InGameScreen.PORT -> Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.45f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            PortOptionsCard(actions)
         }
     }
 }
@@ -126,6 +143,7 @@ private fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect:
 
 @Composable
 private fun InGameMenuCard(prefs: LauncherPrefs, actions: InGameActions) {
+    var touchMode by remember { mutableStateOf(prefs.touchMode) }
     var directional by remember { mutableStateOf(prefs.directional) }
     var style by remember { mutableStateOf(prefs.controlStyle) }
     var badge by remember { mutableStateOf(prefs.buttonBadge) }
@@ -149,6 +167,20 @@ private fun InGameMenuCard(prefs: LauncherPrefs, actions: InGameActions) {
                 Text(stringResource(R.string.ingame_title), style = MaterialTheme.typography.titleLarge, color = Color.White)
                 Text(stringResource(R.string.ingame_paused), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f))
             }
+        }
+
+        Text(stringResource(R.string.settings_touch), color = Color.White, style = MaterialTheme.typography.labelLarge)
+        Segmented(
+            listOf(
+                TouchMode.AUTO to stringResource(R.string.touch_mode_auto),
+                TouchMode.ON to stringResource(R.string.touch_mode_on),
+                TouchMode.OFF to stringResource(R.string.touch_mode_off),
+            ),
+            touchMode,
+        ) {
+            touchMode = it
+            prefs.touchMode = it
+            actions.applyAppearance()
         }
 
         Text(stringResource(R.string.ingame_directional), color = Color.White, style = MaterialTheme.typography.labelLarge)
@@ -212,8 +244,8 @@ private fun InGameMenuCard(prefs: LauncherPrefs, actions: InGameActions) {
                 Spacer(Modifier.width(6.dp))
                 Text(stringResource(R.string.settings_touch_edit), maxLines = 1)
             }
-            FilledTonalButton(onClick = { actions.openPortMenu() }, modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.ingame_port_menu), maxLines = 1)
+            FilledTonalButton(onClick = { actions.openPortOptions() }, modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.port_menu_title), maxLines = 1)
             }
         }
         Button(
@@ -226,4 +258,125 @@ private fun InGameMenuCard(prefs: LauncherPrefs, actions: InGameActions) {
             Text(stringResource(R.string.ingame_resume))
         }
     }
+}
+
+
+/** Linha com titulo e um slider que so aplica ao soltar. */
+@Composable
+private fun SliderRow(title: String, value: Float, range: ClosedFloatingPointRange<Float>, label: (Float) -> String, onDone: (Float) -> Unit) {
+    var v by remember(value) { mutableFloatStateOf(value) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(title, color = Color.White, modifier = Modifier.width(120.dp))
+        Slider(value = v, onValueChange = { v = it }, onValueChangeFinished = { onDone(v) }, valueRange = range, modifier = Modifier.weight(1f))
+        Text(label(v), color = Color.White, modifier = Modifier.width(52.dp).padding(start = 6.dp))
+    }
+}
+
+@Composable
+private fun SwitchRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(title, color = Color.White, modifier = Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+/**
+ * Opcoes do jogo por toque (o que o menu rapido do PC, Back+Start, mostra e que
+ * muda ao vivo). Cada mudanca vai logo para o runtime (NativeGameState.setCvars).
+ * As opcoes que so valem ao reiniciar ficam no launcher.
+ */
+@Composable
+private fun PortOptionsCard(actions: InGameActions) {
+    var c by remember { mutableStateOf(GameConfig.load()) }
+    fun set(next: GameConfig, cvars: Map<String, String>) {
+        c = next
+        NativeGameState.setCvars(cvars)
+    }
+    fun pct(x: Float) = "${(x * 100).roundToInt()}%"
+
+    Column(
+        Modifier
+            .padding(12.dp)
+            .widthIn(max = 600.dp)
+            .background(Color(0xE6120C1E), RoundedCornerShape(24.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(24.dp))
+            .verticalScroll(rememberScrollState())
+            .padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Tune, null, tint = DfColors.Yellow)
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.port_menu_title), style = MaterialTheme.typography.titleLarge, color = Color.White)
+                Text(stringResource(R.string.ingame_paused), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f))
+            }
+        }
+
+        Text(stringResource(R.string.settings_image), color = DfColors.Yellow, style = MaterialTheme.typography.titleSmall)
+        Segmented(
+            listOf("bilinear" to "Bilinear", "cas" to "AMD CAS", "fsr" to "AMD FSR 1"),
+            c.presentEffect,
+        ) { set(c.copy(presentEffect = it), mapOf("dbz3_present_effect" to it)) }
+        if (c.presentEffect == "fsr") {
+            SliderRow(stringResource(R.string.settings_fsr_sharpness), (2.0 - c.fsrSharpness).toFloat(), 0f..2f, { "${(it / 2f * 100).roundToInt()}%" }) {
+                val red = (2.0 - it).coerceIn(0.0, 2.0)
+                set(c.copy(fsrSharpness = red), mapOf("dbz3_fsr_sharpness" to TomlNum.d(red)))
+            }
+        }
+        if (c.presentEffect == "cas") {
+            SliderRow(stringResource(R.string.settings_cas_sharpness), c.casSharpness.toFloat(), 0f..1f, ::pct) {
+                set(c.copy(casSharpness = it.toDouble()), mapOf("dbz3_cas_sharpness" to TomlNum.d(it.toDouble())))
+            }
+        }
+        Segmented(
+            listOf("none" to stringResource(R.string.off), "fxaa" to "FXAA", "fxaa_extreme" to "FXAA+"),
+            c.fxaa,
+        ) { set(c.copy(fxaa = it), mapOf("dbz3_fxaa" to it)) }
+        SliderRow(stringResource(R.string.settings_rim_light), c.rimLight.toFloat(), 0f..1f, ::pct) {
+            set(c.copy(rimLight = it.toDouble()), mapOf("dbz3_hd_rim_light" to TomlNum.d(it.toDouble())))
+        }
+        SwitchRow(stringResource(R.string.textures_enabled), c.texturePacksOn) {
+            set(c.copy(texturePacksOn = it), mapOf("dbz3_texture_packs_on" to it.toString()))
+        }
+        SwitchRow(stringResource(R.string.settings_show_fps), c.showFps) {
+            set(c.copy(showFps = it), mapOf("dbz3_show_fps" to it.toString()))
+        }
+
+        Text(stringResource(R.string.settings_audio), color = DfColors.Yellow, style = MaterialTheme.typography.titleSmall)
+        SliderRow(stringResource(R.string.settings_volume), c.masterVolume.toFloat(), 0f..1f, ::pct) {
+            set(c.copy(masterVolume = it.toDouble()), mapOf("dbz3_master_volume" to TomlNum.d(it.toDouble())))
+        }
+        SwitchRow(stringResource(R.string.settings_mute), c.mute) {
+            set(c.copy(mute = it), mapOf("dbz3_mute" to it.toString()))
+        }
+        SwitchRow(stringResource(R.string.settings_rumble), c.rumble) {
+            set(c.copy(rumble = it), mapOf("dbz3_rumble" to it.toString()))
+        }
+        Text(
+            stringResource(R.string.port_menu_restart_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.White.copy(alpha = 0.7f),
+        )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            FilledTonalButton(onClick = { actions.openPortMenu() }, modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.port_menu_classic), maxLines = 1)
+            }
+            Button(
+                onClick = { actions.resume() },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = DfColors.Orange, contentColor = Color(0xFF2B1000)),
+            ) {
+                Icon(Icons.Filled.PlayArrow, null)
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.ingame_resume))
+            }
+        }
+    }
+}
+
+/** Numeros para cvars (ponto decimal, sem notacao cientifica). */
+private object TomlNum {
+    fun d(x: Double): String = String.format(java.util.Locale.ROOT, "%.4f", x)
 }

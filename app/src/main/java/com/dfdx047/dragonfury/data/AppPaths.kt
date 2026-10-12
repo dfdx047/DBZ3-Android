@@ -39,5 +39,6 @@ object AppPaths {
     val driversDir: File get() = File(appDir, "drivers")
     val activeDriverDir: File get() = File(appDir, "driver")
     val controlsFile: File get() = File(internalDir, "controls/layout.json")
+    val controlsMenuFile: File get() = File(internalDir, "controls/layout_menu.json")
     val updatesDir: File get() = File(cacheDir, "updates")
 }

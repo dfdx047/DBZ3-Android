@@ -313,4 +313,14 @@
     <string name="settings_pause_menus">Pause in menus</string>
     <string name="settings_pause_menus_sub">The game stops while the controls menu (gear in game) or the port menu (Back + Start) is open.</string>
     <string name="file_different">different version from the reference list (other dump: OK if the game runs)</string>
+    <string name="port_menu_title">Game options</string>
+    <string name="port_menu_classic">Classic PC menu</string>
+    <string name="port_menu_restart_note">Resolution, MSAA, anisotropic filtering and game language are in the launcher settings (they apply when the game opens).</string>
+    <string name="touch_mode_auto">Automatic</string>
+    <string name="touch_mode_on">On</string>
+    <string name="touch_mode_off">Off</string>
+    <string name="settings_touch_mode_sub">Automatic: they show up when you touch the screen and hide when you use a controller.</string>
+    <string name="settings_touch_layout_menu">Menus</string>
+    <string name="settings_touch_layout_battle">Battle</string>
+    <string name="editor_layout">Layout</string>
 </resources>

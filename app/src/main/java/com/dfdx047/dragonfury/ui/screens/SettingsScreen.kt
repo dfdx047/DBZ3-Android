@@ -49,6 +49,7 @@ import com.dfdx047.dragonfury.data.ControlStyle
 import com.dfdx047.dragonfury.data.DarkMode
 import com.dfdx047.dragonfury.data.Directional
 import com.dfdx047.dragonfury.data.ThemeMode
+import com.dfdx047.dragonfury.data.TouchMode
 import com.dfdx047.dragonfury.ui.LauncherViewModel
 import com.dfdx047.dragonfury.ui.components.Level
 import com.dfdx047.dragonfury.ui.components.SectionCard
@@ -216,11 +217,16 @@ fun SettingsScreen(vm: LauncherViewModel) {
 
         // -------------------------------------------------------------- controles
         SectionCard(stringResource(R.string.settings_controls), Icons.Filled.Gamepad) {
-            SettingSwitch(
-                stringResource(R.string.settings_touch),
-                stringResource(R.string.settings_touch_sub),
-                checked = vm.touchEnabled,
-                onChange = vm::setTouchEnabled,
+            SettingSegmented(
+                title = stringResource(R.string.settings_touch),
+                subtitle = stringResource(R.string.settings_touch_mode_sub),
+                options = listOf(
+                    TouchMode.AUTO to stringResource(R.string.touch_mode_auto),
+                    TouchMode.ON to stringResource(R.string.touch_mode_on),
+                    TouchMode.OFF to stringResource(R.string.touch_mode_off),
+                ),
+                selected = vm.touchMode,
+                onSelect = vm::setTouchMode,
             )
             SettingSegmented(
                 title = stringResource(R.string.ingame_directional),
@@ -266,12 +272,6 @@ fun SettingsScreen(vm: LauncherViewModel) {
                 stringResource(R.string.settings_pause_menus_sub),
                 checked = vm.pauseOnMenus,
                 onChange = vm::setPauseOnMenus,
-            )
-            SettingSwitch(
-                stringResource(R.string.settings_touch_hide_pad),
-                stringResource(R.string.settings_touch_hide_pad_sub),
-                checked = vm.touchHideWithPad,
-                onChange = vm::setTouchHideWithPad,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilledTonalButton(onClick = { context.startActivity(Intent(context, ControlsEditorActivity::class.java)) }) {

@@ -7,6 +7,7 @@ import android.system.ErrnoException;
 import android.system.Os;
 import android.util.Log;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.WindowManager;
 
 import org.libsdl.app.SDLActivity;
@@ -102,6 +103,9 @@ public class GameActivity extends SDLActivity {
     /** Com o menu dos controles aberto, o Back do Android fecha o menu (nao vai para o jogo). */
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        if (mOverlay != null) {
+            mOverlay.onPhysicalInput(event);
+        }
         if (mOverlay != null && mOverlay.isMenuOpen()) {
             if (event.getKeyCode() == KeyEvent.KEYCODE_BACK) {
                 if (event.getAction() == KeyEvent.ACTION_UP) {
@@ -111,6 +115,23 @@ public class GameActivity extends SDLActivity {
             }
         }
         return super.dispatchKeyEvent(event);
+    }
+
+    @Override
+    public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        if (mOverlay != null) {
+            mOverlay.onPhysicalInput(event);
+        }
+        return super.dispatchGenericMotionEvent(event);
+    }
+
+    /** Controles no modo automatico: o primeiro toque na tela fa-los aparecer. */
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (mOverlay != null && mOverlay.onScreenTouch(event)) {
+            return true;
+        }
+        return super.dispatchTouchEvent(event);
     }
 
     /** Orientacao escolhida no launcher: paisagem, paisagem invertida ou automatica. */

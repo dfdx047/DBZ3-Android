@@ -50,6 +50,18 @@ class HelperEngine {
     /** Pausar tambem enquanto o menu rapido do port (Back+Start) estiver aberto. */
     @Volatile var pauseQuickMenu = true
 
+    /**
+     * Luta ou menus (para trocar o layout dos controles). Chamado na thread principal
+     * so quando muda. Com histerese: entra na luta logo que a bandeira do jogo vai a
+     * 1 e so volta aos menus depois de [MENU_DELAY_TICKS] ticks seguidos a 0 (entre
+     * assaltos, KO e apresentacao a bandeira tambem vai a 0).
+     */
+    var onBattleChanged: ((Boolean) -> Unit)? = null
+    @Volatile var inBattle = false
+        private set
+    private var zeroTicks = 0
+    private val mainHandler = Handler(android.os.Looper.getMainLooper())
+
     /** Se o jogo esta pausado agora (pelo menu dos controles ou pelo menu rapido). */
     @Volatile var paused = false
         private set
@@ -128,6 +140,7 @@ class HelperEngine {
     private fun step() {
         paused = NativeGameState.syncPause(menuOpen, pauseQuickMenu)
         side = NativeGameState.p1Side()
+        if (!paused) trackBattle(NativeGameState.fightFlag())
         val wanted = HashSet<PadInput>()
         val lx: Float
         val ly: Float
@@ -154,6 +167,23 @@ class HelperEngine {
             ly = stickY
         }
         flush(resolveRelative(wanted), lx, ly)
+    }
+
+    private fun trackBattle(flag: Int) {
+        if (flag < 0) return
+        val next = when {
+            flag == 1 -> {
+                zeroTicks = 0
+                true
+            }
+            inBattle && ++zeroTicks < MENU_DELAY_TICKS -> true
+            else -> false
+        }
+        if (next != inBattle) {
+            inBattle = next
+            android.util.Log.i("DragonFury", "controles: " + if (next) "luta" else "menus")
+            mainHandler.post { onBattleChanged?.invoke(next) }
+        }
     }
 
     /** FORWARD/BACKWARD -> RIGHT/LEFT conforme o lado do P1 (esquerda se desconhecido). */
@@ -189,6 +219,11 @@ class HelperEngine {
             DragonFuryPad.axis(1, ly)
             sentLy = ly
         }
+    }
+
+    companion object {
+        /** ~6 s a 60 Hz: entre assaltos o layout de luta fica. */
+        const val MENU_DELAY_TICKS = 360
     }
 
     private fun keyFor(i: PadInput): Int? = when (i) {

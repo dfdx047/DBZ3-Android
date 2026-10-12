@@ -89,8 +89,14 @@ class ControlsEditorActivity : AppCompatActivity() {
  * jogo pausado ([overGame] = fundo transparente, ve-se o jogo atras).
  */
 @Composable
-fun ControlsEditor(prefs: LauncherPrefs, overGame: Boolean = false, close: () -> Unit) {
-    var layout by remember { mutableStateOf(ControlLayoutStore.load()) }
+fun ControlsEditor(
+    prefs: LauncherPrefs,
+    overGame: Boolean = false,
+    initialKind: LayoutKind = LayoutKind.GAMEPLAY,
+    close: () -> Unit,
+) {
+    var kind by remember { mutableStateOf(initialKind) }
+    var layout by remember { mutableStateOf(ControlLayoutStore.load(initialKind)) }
     var selected by remember { mutableStateOf<String?>(null) }
     var addMenu by remember { mutableStateOf(false) }
     var dirty by remember { mutableStateOf(false) }
@@ -151,7 +157,28 @@ fun ControlsEditor(prefs: LauncherPrefs, overGame: Boolean = false, close: () ->
             Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = close) { Icon(Icons.Filled.Close, stringResource(R.string.cancel), tint = Color.White) }
                 Text(stringResource(R.string.editor_title), color = Color.White, style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(8.dp))
+                // Layout da luta ou dos menus (o jogo troca sozinho entre os dois).
+                listOf(
+                    LayoutKind.GAMEPLAY to stringResource(R.string.settings_touch_layout_battle),
+                    LayoutKind.MENU to stringResource(R.string.settings_touch_layout_menu),
+                ).forEach { (k, label) ->
+                    FilterChip(
+                        selected = kind == k,
+                        onClick = {
+                            if (kind != k) {
+                                if (dirty) ControlLayoutStore.save(layout)
+                                kind = k
+                                layout = ControlLayoutStore.load(k)
+                                selected = null
+                                dirty = false
+                            }
+                        },
+                        label = { Text(label) },
+                        modifier = Modifier.padding(end = 4.dp),
+                    )
+                }
+                Spacer(Modifier.width(4.dp))
                 Box {
                     TextButton(onClick = { addMenu = true }) {
                         Icon(Icons.Filled.Add, null)
@@ -164,7 +191,7 @@ fun ControlsEditor(prefs: LauncherPrefs, overGame: Boolean = false, close: () ->
                     }
                 }
                 TextButton(onClick = {
-                    layout = GameActions.defaultLayout()
+                    layout = GameActions.defaultLayout(kind)
                     selected = null
                     dirty = true
                 }) {

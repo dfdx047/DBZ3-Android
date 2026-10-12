@@ -195,12 +195,20 @@ class TouchControlsView(context: Context) : View(context) {
         val y = cy(e)
         val r = radius(e)
         val down = e.id in pressed
-        val classic = style != ControlStyle.DRAGON && isFaceButton(e)
+        // Nos menus os A/B/X/Y mostram sempre o simbolo do comando (no estilo Dragon
+        // Fury, o da indicacao escolhida).
+        val classic = (style != ControlStyle.DRAGON || layout.menu) && isFaceButton(e)
+        val psGlyph = style == ControlStyle.PLAYSTATION || (style == ControlStyle.DRAGON && badge == ButtonBadge.PLAYSTATION)
 
         drawGlass(c, e, x, y, r, down)
 
         if (classic) {
-            drawClassicGlyph(c, mainInput(e)!!, style == ControlStyle.PLAYSTATION, x, y, r * 0.95f, alphaOf(e, 1f))
+            drawClassicGlyph(c, mainInput(e)!!, psGlyph, x, y, r * 0.95f, alphaOf(e, 1f))
+        } else if (layout.menu && e.icon == ControlIcon.MACRO && mainInput(e) != null) {
+            text.color = if (down) Color.WHITE else gold
+            text.alpha = alphaOf(e, 1f)
+            text.textSize = r * 0.5f
+            c.drawText(GameActions.classicLabel(mainInput(e)!!, psGlyph), x, y + text.textSize / 3, text)
         } else if (e.icon == ControlIcon.MACRO && e.label.isNotBlank()) {
             text.color = if (down) Color.WHITE else gold
             text.alpha = alphaOf(e, 1f)
@@ -220,7 +228,7 @@ class TouchControlsView(context: Context) : View(context) {
             style == ControlStyle.PLAYSTATION -> ButtonBadge.PLAYSTATION
             else -> badge
         }
-        if (badgeStyle != ButtonBadge.NONE && !classic) drawBadge(c, e, badgeStyle == ButtonBadge.PLAYSTATION, x, y, r)
+        if (badgeStyle != ButtonBadge.NONE && !classic && !layout.menu) drawBadge(c, e, badgeStyle == ButtonBadge.PLAYSTATION, x, y, r)
     }
 
     /** O que o botao faz no comando: um botao, uma combinacao ou "defesa + tras tras". */

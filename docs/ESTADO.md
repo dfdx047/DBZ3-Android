@@ -151,6 +151,30 @@ stubs; a interface Compose não foi compilada.
   o menu rápido do port (Back+Start) também pausa, verificado a 60 Hz com
   `QuickMenuDialog::IsOpen()`. Opção "Pausar nos menus" nas Configurações.
 
+### Teste de 2026-10-12 (8 Elite / Odin 3)
+
+- Funciona: launcher, importação, atalho, drivers (download), controles por toque, menu da
+  engrenagem. O usuário gostou do visual (vidro fosco + selos).
+- O dump USA do usuário (Redump) tem `data_usi.afs` em vez de `data_eng.afs` e outros tamanhos
+  de `.afs/.sfd`: a verificação passou a aceitar (aviso amarelo, não bloqueia).
+- Pedidos implementados a seguir:
+  - controles na tela **Automático / Ligado / Desligado** (automático: tocar na tela mostra,
+    usar o comando físico esconde; o Odin tem comando embutido);
+  - **dois layouts, luta e menus**, trocados sozinhos pela bandeira de luta `0x823F39A0`
+    (histerese de ~6 s a 0 antes de voltar aos menus); editor com os dois;
+  - **botão de pause** em cima ao centro: "Opções do jogo" por toque (o que o menu rápido do
+    PC muda ao vivo: filtro, nitidez, FXAA, brilho HD, packs, FPS, volume, mudo, vibração),
+    aplicado com `nativeSetCvars` → `ApplyRuntimeSettingsToSdk(true)` + `SaveUserSettings()`;
+    o menu clássico do PC continua acessível por um botão.
+- Próximo (planeado com o usuário):
+  - travadinhas de compilação de shaders (mais lisura) — logs no SD865 (Retroid Pocket 5)
+    com Turnip e com o driver Qualcomm; depois 8 Elite de novo, 8 Gen 2 e 8 Gen 3;
+  - corrigir o véu/verde do driver Qualcomm (pelo menos no 8 Elite);
+  - abrir e otimizar no Mali (Unisoc T820 / Mali-G57);
+  - ideia: **build Legacy** (APK separado) para GPUs fracas (ex. Mali-G52), com hacks e
+    talvez 32-bit, sem estragar a build principal;
+  - cheats que faltam (RE do save); testar mods e packs de texturas.
+
 ### Por testar no aparelho
 
 - [ ] Compila (Kotlin 2.2.10, Compose BOM 2025.09.00, AGP 8.13.0) — corrigir o que falhar

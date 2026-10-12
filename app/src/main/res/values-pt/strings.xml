@@ -312,4 +312,14 @@
     <string name="settings_pause_menus">Pausar nos menus</string>
     <string name="settings_pause_menus_sub">O jogo para enquanto o menu dos controles (engrenagem no jogo) ou o menu do port (Back + Start) está aberto.</string>
     <string name="file_different">versão diferente da lista de referência (outro dump: tudo bem se o jogo roda)</string>
+    <string name="port_menu_title">Opções do jogo</string>
+    <string name="port_menu_classic">Menu clássico do PC</string>
+    <string name="port_menu_restart_note">Resolução, MSAA, filtro anisotrópico e idioma do jogo ficam nas configurações do launcher (valem quando o jogo abre).</string>
+    <string name="touch_mode_auto">Automático</string>
+    <string name="touch_mode_on">Ligado</string>
+    <string name="touch_mode_off">Desligado</string>
+    <string name="settings_touch_mode_sub">Automático: aparecem quando você toca na tela e somem quando usa um comando.</string>
+    <string name="settings_touch_layout_menu">Menus</string>
+    <string name="settings_touch_layout_battle">Luta</string>
+    <string name="editor_layout">Layout</string>
 </resources>

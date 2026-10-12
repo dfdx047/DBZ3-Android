@@ -114,6 +114,11 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     @JvmName("changePauseOnMenus")
     fun setPauseOnMenus(v: Boolean) { pauseOnMenus = v; prefs.pauseOnMenus = v }
 
+    var touchMode by mutableStateOf(prefs.touchMode)
+        private set
+    @JvmName("changeTouchMode")
+    fun setTouchMode(v: com.dfdx047.dragonfury.data.TouchMode) { touchMode = v; prefs.touchMode = v }
+
     var touchEnabled by mutableStateOf(prefs.touchEnabled)
         private set
     // JvmName: evita o conflito com o setter privado da propriedade (mesma assinatura JVM).

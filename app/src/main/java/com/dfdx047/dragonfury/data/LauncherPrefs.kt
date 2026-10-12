@@ -16,6 +16,12 @@ enum class ControlStyle(val key: String) { DRAGON("dragon"), XBOX("xbox"), PLAYS
 /** Direcional na tela: D-pad de 8 direcoes (padrao, melhor para os dash do jogo 2D) ou analogico. */
 enum class Directional(val key: String) { DPAD("dpad"), STICK("stick") }
 
+/**
+ * Controles na tela. AUTO: aparecem ao tocar na tela e somem quando se usa um
+ * comando fisico; ON: sempre; OFF: nunca (a engrenagem e o pause continuam).
+ */
+enum class TouchMode(val key: String) { AUTO("auto"), ON("on"), OFF("off") }
+
 /** Indicacao do botao do comando no canto de cada botao (estilo Dragon Fury). */
 enum class ButtonBadge(val key: String) { XBOX("xbox"), PLAYSTATION("playstation"), NONE("none") }
 
@@ -59,6 +65,14 @@ class LauncherPrefs(context: Context) {
         get() = prefs.getBoolean(KEY_PAUSE_MENUS, true)
         set(v) = prefs.edit().putBoolean(KEY_PAUSE_MENUS, v).apply()
 
+    var touchMode: TouchMode
+        get() {
+            val v = prefs.getString(KEY_TOUCH_MODE, null)
+            if (v == null && !prefs.getBoolean(KEY_TOUCH_ENABLED, true)) return TouchMode.OFF
+            return enumByKey(v, TouchMode.AUTO) { it.key }
+        }
+        set(v) = prefs.edit().putString(KEY_TOUCH_MODE, v.key).apply()
+
     var touchEnabled: Boolean
         get() = prefs.getBoolean(KEY_TOUCH_ENABLED, true)
         set(v) = prefs.edit().putBoolean(KEY_TOUCH_ENABLED, v).apply()
@@ -98,6 +112,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_DIRECTIONAL = "touch_directional"
         const val KEY_BADGE = "touch_badge"
         const val KEY_PAUSE_MENUS = "pause_on_menus"
+        const val KEY_TOUCH_MODE = "touch_mode"
         const val KEY_TOUCH_ENABLED = "touch_enabled"
         const val KEY_TOUCH_HIDE_WITH_PAD = "touch_hide_with_pad"
         const val KEY_TOUCH_HAPTICS = "touch_haptics"

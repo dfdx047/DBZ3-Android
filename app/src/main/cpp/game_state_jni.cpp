@@ -141,3 +141,49 @@ Java_com_dfdx047_dragonfury_game_NativeGameState_nativeSyncPause(JNIEnv*, jclass
   g_paused = want;
   return g_paused ? JNI_TRUE : JNI_FALSE;
 }
+
+// ---------------------------------------------------------------------------
+// Luta ou menus: os controles por toque trocam de layout. 0x823F39A0 (US) vale 1
+// entre o FIGHT! e o fim do assalto (tagteam.cpp do projeto original). O Kotlin
+// junta histerese (fica no layout de luta uns segundos depois de ir a 0, para
+// nao trocar entre assaltos). -1 = ainda nao ha memoria do jogo.
+// ---------------------------------------------------------------------------
+extern "C" JNIEXPORT jint JNICALL
+Java_com_dfdx047_dragonfury_game_NativeGameState_nativeFightFlag(JNIEnv*, jclass) {
+  const uint8_t* base = g_dragonfury_guest_base.load(std::memory_order_acquire);
+  if (!base) return -1;
+  return LoadU32(base, kFightFlag) != 0 ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+// Menu de opcoes do port por toque (Compose, InGameMenu.kt): muda cvars ao vivo
+// como o menu rapido do PC (quick_settings.cpp ApplyAndSave): define os cvars,
+// passa-os ao SDK e grava o dbz3_user.toml.
+// ---------------------------------------------------------------------------
+#include <string>
+
+#include <rex/cvar.h>
+
+#include "src/launcher/settings.h"
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_dfdx047_dragonfury_game_NativeGameState_nativeSetCvars(JNIEnv* env, jclass, jobjectArray names,
+                                                               jobjectArray values) {
+  if (!rex::Runtime::instance()) return JNI_FALSE;
+  const jsize n = env->GetArrayLength(names);
+  bool ok = true;
+  for (jsize i = 0; i < n; ++i) {
+    auto jn = static_cast<jstring>(env->GetObjectArrayElement(names, i));
+    auto jv = static_cast<jstring>(env->GetObjectArrayElement(values, i));
+    const char* cn = env->GetStringUTFChars(jn, nullptr);
+    const char* cv = env->GetStringUTFChars(jv, nullptr);
+    ok = rex::cvar::SetFlagByName(cn, cv) && ok;
+    env->ReleaseStringUTFChars(jn, cn);
+    env->ReleaseStringUTFChars(jv, cv);
+    env->DeleteLocalRef(jn);
+    env->DeleteLocalRef(jv);
+  }
+  dbz3::settings::ApplyRuntimeSettingsToSdk(true);
+  dbz3::settings::SaveUserSettings();
+  return ok ? JNI_TRUE : JNI_FALSE;
+}

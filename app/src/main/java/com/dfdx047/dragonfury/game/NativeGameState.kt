@@ -40,6 +40,34 @@ object NativeGameState {
         }
     }
 
+    /** 1 = luta a decorrer, 0 = fora da luta, -1 = desconhecido (jogo ainda a arrancar). */
+    fun fightFlag(): Int {
+        if (!available) return -1
+        return try {
+            nativeFightFlag()
+        } catch (e: UnsatisfiedLinkError) {
+            available = false
+            -1
+        }
+    }
+
+    /** Muda opcoes do jogo ao vivo (como o menu rapido do PC) e grava o dbz3_user.toml. */
+    fun setCvars(values: Map<String, String>): Boolean {
+        if (!available || values.isEmpty()) return false
+        return try {
+            nativeSetCvars(values.keys.toTypedArray(), values.values.toTypedArray())
+        } catch (e: UnsatisfiedLinkError) {
+            available = false
+            false
+        }
+    }
+
+    @JvmStatic
+    private external fun nativeFightFlag(): Int
+
+    @JvmStatic
+    private external fun nativeSetCvars(names: Array<String>, values: Array<String>): Boolean
+
     @JvmStatic
     private external fun nativeP1Side(): Int
 

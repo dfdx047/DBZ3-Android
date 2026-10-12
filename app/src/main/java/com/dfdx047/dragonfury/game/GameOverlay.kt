@@ -10,6 +10,8 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.Gravity
 import android.view.InputDevice
+import android.view.InputEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -23,21 +25,28 @@ import com.dfdx047.dragonfury.R
 import com.dfdx047.dragonfury.controls.ControlAction
 import com.dfdx047.dragonfury.controls.ControlElement
 import com.dfdx047.dragonfury.controls.ControlLayoutStore
+import com.dfdx047.dragonfury.controls.LayoutKind
 import com.dfdx047.dragonfury.controls.MacroStep
 import com.dfdx047.dragonfury.controls.PadInput
 import com.dfdx047.dragonfury.data.AppPaths
 import com.dfdx047.dragonfury.data.DarkMode
 import com.dfdx047.dragonfury.data.LauncherPrefs
 import com.dfdx047.dragonfury.data.ThemeMode
+import com.dfdx047.dragonfury.data.TouchMode
 import com.dfdx047.dragonfury.ui.theme.DragonFuryTheme
 import org.libsdl.app.DragonFuryPad
 
 /**
- * Controles por toque dentro do jogo: o TouchControlsView por cima da
- * superficie do SDL, o comando virtual, a engrenagem que abre o menu dos
- * controles (com o jogo pausado) e o editor de layout por cima do jogo.
+ * Controles por toque dentro do jogo:
+ *  - TouchControlsView por cima da superficie do SDL, com dois layouts (luta e
+ *    menus) trocados sozinhos conforme o jogo esta numa luta ou nos menus;
+ *  - modo Automatico / Ligado / Desligado (no automatico aparecem ao tocar na
+ *    tela e somem quando se usa um comando fisico);
+ *  - engrenagem (canto de cima a esquerda): menu dos controles e editor;
+ *  - pause (em cima, ao centro): opcoes do jogo por toque (ex-menu rapido do PC);
+ *  - com qualquer menu aberto o jogo fica pausado.
  *
- * Chamado pelo GameActivity (Java) nos eventos do ciclo de vida.
+ * Chamado pelo GameActivity (Java) nos eventos do ciclo de vida e de input.
  */
 class GameOverlay(private val activity: Activity) : InputManager.InputDeviceListener, InGameActions {
     private val prefs = LauncherPrefs(activity)
@@ -46,22 +55,32 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
     private val startedAt = SystemClock.uptimeMillis()
     private var view: TouchControlsView? = null
     private var gear: ImageView? = null
+    private var pauseButton: ImageView? = null
     private var compose: ComposeView? = null
     private val owner = OverlayOwner()
     private val screen = mutableStateOf(InGameScreen.CLOSED)
     private val inputManager = activity.getSystemService(Context.INPUT_SERVICE) as InputManager
+
+    /** Modo automatico: os controles estao a mostra (ultimo input foi toque). */
+    private var autoShown = true
+    private var inBattle = false
 
     private val attachRunnable = Runnable { attachPad() }
 
     fun onCreate() {
         AppPaths.init(activity)
         engine.pauseQuickMenu = prefs.pauseOnMenus
-        // O motor corre sempre (tambem pausa o jogo com o menu rapido do port),
-        // mesmo com os controles por toque desligados.
+        engine.onBattleChanged = { battle ->
+            inBattle = battle
+            view?.let {
+                it.releaseAll()
+                it.layout = currentLayout()
+            }
+        }
+        // O motor corre sempre (pausa, luta/menus), mesmo com os controles desligados.
         main.postDelayed(attachRunnable, 2500)
-        if (!prefs.touchEnabled) return
-
         val density = activity.resources.displayMetrics.density
+
         val v = TouchControlsView(activity).apply {
             listener = object : TouchControlsView.Listener {
                 override fun onPress(element: ControlElement) {
@@ -83,38 +102,34 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
             }
         }
         view = v
+        autoShown = !physicalPadConnected()
         applyAppearance()
         activity.addContentView(
             v,
             ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
         )
 
-        // Engrenagem (canto de cima a esquerda): abre o menu dos controles.
-        val size = (40 * density).toInt()
-        val g = ImageView(activity).apply {
-            setImageResource(R.drawable.ic_btn_menu)
-            setColorFilter(Color.parseColor("#FFD27A"))
-            val pad = (9 * density).toInt()
-            setPadding(pad, pad, pad, pad)
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.argb(60, 255, 255, 255))
-                setStroke((1.5f * density).toInt(), Color.argb(140, 255, 243, 222))
-            }
-            alpha = prefs.touchOpacity.coerceAtLeast(0.4f)
-            contentDescription = activity.getString(R.string.ingame_title)
-            setOnClickListener { openMenu() }
-        }
+        // Engrenagem (canto de cima a esquerda): menu dos controles.
+        val g = roundButton(R.drawable.ic_btn_menu, R.string.ingame_title) { setScreen(InGameScreen.MENU) }
+        gear = g
         activity.addContentView(
             g,
-            FrameLayout.LayoutParams(size, size, Gravity.TOP or Gravity.START).apply {
+            FrameLayout.LayoutParams((40 * density).toInt(), (40 * density).toInt(), Gravity.TOP or Gravity.START).apply {
                 leftMargin = (14 * density).toInt()
                 topMargin = (10 * density).toInt()
             },
         )
-        gear = g
+        // Pause (em cima, ao centro): opcoes do jogo.
+        val pb = roundButton(R.drawable.ic_btn_pause, R.string.port_menu_title) { setScreen(InGameScreen.PORT) }
+        pauseButton = pb
+        activity.addContentView(
+            pb,
+            FrameLayout.LayoutParams((40 * density).toInt(), (40 * density).toInt(), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
+                topMargin = (10 * density).toInt()
+            },
+        )
 
-        // Menu e editor (Compose), escondidos ate a engrenagem ser tocada.
+        // Menus (Compose), escondidos ate um dos botoes ser tocado.
         val c = ComposeView(activity).apply {
             setViewTreeLifecycleOwner(owner)
             setViewTreeSavedStateRegistryOwner(owner)
@@ -136,16 +151,66 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
         updateVisibility()
     }
 
+    private fun roundButton(icon: Int, description: Int, onClick: () -> Unit): ImageView {
+        val density = activity.resources.displayMetrics.density
+        return ImageView(activity).apply {
+            setImageResource(icon)
+            setColorFilter(Color.parseColor("#FFD27A"))
+            val pad = (9 * density).toInt()
+            setPadding(pad, pad, pad, pad)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.argb(60, 255, 255, 255))
+                setStroke((1.5f * density).toInt(), Color.argb(140, 255, 243, 222))
+            }
+            alpha = prefs.touchOpacity.coerceAtLeast(0.4f)
+            contentDescription = activity.getString(description)
+            setOnClickListener { onClick() }
+        }
+    }
+
+    private fun currentLayout() = ControlLayoutStore.load(if (inBattle) LayoutKind.GAMEPLAY else LayoutKind.MENU)
+
     private fun ensurePad() {
         if (!DragonFuryPad.isAttached() && SystemClock.uptimeMillis() - startedAt > 1500) attachPad()
     }
 
     private fun attachPad() {
-        if (view != null) DragonFuryPad.attach()
+        if (prefs.touchMode != TouchMode.OFF) DragonFuryPad.attach()
         engine.start()
     }
 
-    // ---------------------------------------------------------------- menu
+    // ---------------------------------------------------- input (GameActivity)
+
+    /**
+     * Toque na tela com os controles escondidos no modo automatico: mostra-os e
+     * consome esse toque (devolve true).
+     */
+    fun onScreenTouch(ev: MotionEvent): Boolean {
+        if (ev.actionMasked != MotionEvent.ACTION_DOWN) return false
+        if (prefs.touchMode != TouchMode.AUTO || isMenuOpen() || autoShown) return false
+        autoShown = true
+        ensurePad()
+        updateVisibility()
+        return true
+    }
+
+    /** Botao ou eixo de um comando fisico: no modo automatico esconde os controles da tela. */
+    fun onPhysicalInput(event: InputEvent) {
+        if (prefs.touchMode != TouchMode.AUTO || !autoShown) return
+        val dev = event.device ?: return
+        if (dev.isVirtual) return
+        val s = event.source
+        val pad = s and InputDevice.SOURCE_GAMEPAD == InputDevice.SOURCE_GAMEPAD ||
+            s and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK ||
+            s and InputDevice.SOURCE_DPAD == InputDevice.SOURCE_DPAD
+        if (!pad) return
+        autoShown = false
+        view?.releaseAll()
+        updateVisibility()
+    }
+
+    // ---------------------------------------------------------------- menus
 
     fun isMenuOpen(): Boolean = screen.value != InGameScreen.CLOSED
 
@@ -153,33 +218,31 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
         screen.value = s
         compose?.visibility = if (s == InGameScreen.CLOSED) View.GONE else View.VISIBLE
         if (s != InGameScreen.CLOSED) {
-            // Os controles do jogo saem de cena enquanto o menu/editor esta aberto.
             view?.releaseAll()
-            view?.visibility = View.GONE
-            gear?.visibility = View.GONE
-        } else {
-            updateVisibility()
         }
+        updateVisibility()
         // Com o menu aberto o jogo fica pausado (GPU + audio), se o usuario quiser.
         engine.menuOpen = s != InGameScreen.CLOSED && prefs.pauseOnMenus
-        if (!DragonFuryPad.isAttached()) engine.start()
+        engine.start()
     }
-
-    private fun openMenu() = setScreen(InGameScreen.MENU)
 
     override fun resume() = setScreen(InGameScreen.CLOSED)
 
     override fun openEditor() = setScreen(InGameScreen.EDITOR)
 
     override fun closeEditor() {
-        view?.layout = ControlLayoutStore.load()
+        view?.layout = currentLayout()
         setScreen(InGameScreen.MENU)
     }
 
-    /** Fecha o menu e carrega Back + Start: abre o menu rapido do port (que tambem pausa). */
+    override fun openPortOptions() = setScreen(InGameScreen.PORT)
+
+    override fun isInBattle(): Boolean = inBattle
+
+    /** Menu rapido classico do PC: fecha o nosso e carrega Back + Start. */
     override fun openPortMenu() {
         setScreen(InGameScreen.CLOSED)
-        ensurePad()
+        if (!DragonFuryPad.isAttached()) DragonFuryPad.attach()
         engine.press(
             "__port_menu",
             ControlAction.Sequence(listOf(MacroStep(setOf(PadInput.BACK, PadInput.START), 8)), holdLast = false),
@@ -188,24 +251,24 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
 
     override fun applyAppearance() {
         val v = view ?: return
-        v.layout = ControlLayoutStore.load()
+        v.layout = currentLayout()
         v.style = prefs.controlStyle
         v.directional = prefs.directional
         v.badge = prefs.buttonBadge
         v.globalOpacity = prefs.touchOpacity
         v.haptics = prefs.touchHaptics
-        gear?.alpha = prefs.touchOpacity.coerceAtLeast(0.4f)
+        val a = prefs.touchOpacity.coerceAtLeast(0.4f)
+        gear?.alpha = a
+        pauseButton?.alpha = a
+        updateVisibility()
     }
 
     // ------------------------------------------------------------ ciclo de vida
 
     fun onResume() {
         engine.pauseQuickMenu = prefs.pauseOnMenus
-        if (view != null) {
-            applyAppearance()
-            updateVisibility()
-        }
-        if (DragonFuryPad.isAttached() || view == null) engine.start()
+        applyAppearance()
+        if (DragonFuryPad.isAttached() || prefs.touchMode == TouchMode.OFF) engine.start()
     }
 
     fun onPause() {
@@ -215,20 +278,20 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
 
     fun onDestroy() {
         main.removeCallbacks(attachRunnable)
-        if (view != null) inputManager.unregisterInputDeviceListener(this)
+        inputManager.unregisterInputDeviceListener(this)
         engine.release()
         DragonFuryPad.detach()
         owner.destroy()
         view = null
     }
 
-    /** Back do Android com o menu aberto: volta um nivel. Devolve true se tratou. */
+    /** Back do Android com um menu aberto: volta um nivel. Devolve true se tratou. */
     fun onBackPressed(): Boolean = when (screen.value) {
         InGameScreen.EDITOR -> {
             closeEditor()
             true
         }
-        InGameScreen.MENU -> {
+        InGameScreen.MENU, InGameScreen.PORT -> {
             resume()
             true
         }
@@ -244,13 +307,30 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
 
     private fun updateVisibility() {
         val v = view ?: return
-        val hide = prefs.touchHideWithPad && physicalPadConnected()
-        if (hide) v.releaseAll()
-        v.visibility = if (hide) View.GONE else View.VISIBLE
-        gear?.visibility = if (screen.value == InGameScreen.CLOSED) View.VISIBLE else View.GONE
+        val menuOpen = isMenuOpen()
+        val show = !menuOpen && when (prefs.touchMode) {
+            TouchMode.ON -> true
+            TouchMode.OFF -> false
+            TouchMode.AUTO -> autoShown
+        }
+        if (!show) v.releaseAll()
+        v.visibility = if (show) View.VISIBLE else View.GONE
+        // Engrenagem e pause ficam sempre (menos com um menu aberto).
+        val buttons = if (menuOpen) View.GONE else View.VISIBLE
+        gear?.visibility = buttons
+        pauseButton?.visibility = buttons
     }
 
-    override fun onInputDeviceAdded(deviceId: Int) = updateVisibility()
-    override fun onInputDeviceRemoved(deviceId: Int) = updateVisibility()
+    override fun onInputDeviceAdded(deviceId: Int) {
+        // Comando ligado agora: no automatico os controles da tela saem.
+        if (prefs.touchMode == TouchMode.AUTO && physicalPadConnected()) autoShown = false
+        updateVisibility()
+    }
+
+    override fun onInputDeviceRemoved(deviceId: Int) {
+        if (prefs.touchMode == TouchMode.AUTO && !physicalPadConnected()) autoShown = true
+        updateVisibility()
+    }
+
     override fun onInputDeviceChanged(deviceId: Int) = updateVisibility()
 }
