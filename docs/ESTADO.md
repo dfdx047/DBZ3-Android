@@ -48,6 +48,7 @@ texturas, drivers, controles por toque e atualizador. Fase 1 (jogo a arrancar e 
 | `pipeline_cache.cpp`, `render_target_cache.cpp`, `device_1_0.inc` (0008) | `VkPipelineCache` do driver guardada em `cache/shaders/vulkan_driver_pipelines.bin` (o SDK não tinha nenhuma) |
 | `dynlib`, `vulkan_instance.cpp` (0009) | driver Vulkan alternativo (Turnip) via libadrenotools, se `REX_VULKAN_DRIVER_DIR/NAME` estiverem definidos |
 | `memory_posix.cpp`, `threading_posix.cpp` (0011) | commit de memória sem ler `/proc/self/maps` (era ~90% dos travões das transformações); `WaitMultiple` só acorda quem espera pelo objeto sinalizado |
+| `interfaces/graphics.h`, `graphics_system.h` (0012) | `Pause()`/`Resume()` virtuais no `IGraphicsSystem`: o libmain pausa a GPU (menus no jogo) sem precisar dos símbolos escondidos do plugin |
 | `dbz3_hitch.h`, `command_processor.cpp`, `pipeline_cache.cpp`, `texture_cache.cpp`, `render_target_cache.cpp` (0010) | diagnóstico de travões: cada `dbz3: tiron` (frame > 34 ms ou frames escondidos pela compilação async) diz quanto tempo foi em shaders, pipelines, pipelines provisórios, transferências de RT, texturas e espera da GPU |
 
 ### Patches no jogo (`patches/game/`, aplicados em external/dbz3)

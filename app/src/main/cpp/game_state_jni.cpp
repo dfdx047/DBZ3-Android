@@ -97,7 +97,9 @@ Java_com_dfdx047_dragonfury_game_NativeGameState_nativeP1Side(JNIEnv*, jclass) {
 // Pausa do jogo enquanto um menu esta aberto (menu dos controles por toque do
 // launcher ou o menu rapido do port, Back+Start / F1).
 //
-// Usa o mesmo mecanismo de suspensao do Xenia: GraphicsSystem::Pause() suspende
+// Usa o mesmo mecanismo de suspensao do Xenia: IGraphicsSystem::Pause() (virtual,
+// patch 0012: o plugin da GPU esconde os simbolos, por isso chama-se pela vtable)
+// chega a GraphicsSystem::Pause(), que suspende
 // a thread do command processor da GPU e AudioSystem::Pause() para o audio.
 // Sem GPU a consumir comandos, a thread principal do jogo fica parada na espera
 // do ring buffer (sub_82235918, ver android_hooks.cpp) e o jogo congela no
@@ -108,7 +110,6 @@ Java_com_dfdx047_dragonfury_game_NativeGameState_nativeP1Side(JNIEnv*, jclass) {
 // ---------------------------------------------------------------------------
 
 #include <rex/audio/audio_system.h>
-#include <rex/graphics/graphics_system.h>
 #include <rex/runtime.h>
 #include <rex/ui/overlay/quick_menu.h>
 
@@ -126,10 +127,9 @@ Java_com_dfdx047_dragonfury_game_NativeGameState_nativeSyncPause(JNIEnv*, jclass
   const bool want = overlay_open || (pause_quick_menu && rex::ui::QuickMenuDialog::IsOpen());
   if (want == g_paused) return g_paused ? JNI_TRUE : JNI_FALSE;
 
-  // IGraphicsSystem/IAudioSystem sao as interfaces; as implementacoes do runtime
-  // sao sempre rex::graphics::GraphicsSystem (Vulkan deriva dela) e
-  // rex::audio::AudioSystem (SDL deriva dela).
-  auto* gpu = static_cast<rex::graphics::GraphicsSystem*>(rt->graphics_system());
+  // A GPU pausa pela interface (patch 0012). O audio do runtime e sempre
+  // rex::audio::AudioSystem (o SDL deriva dela), que esta no librexruntime.
+  auto* gpu = rt->graphics_system();
   auto* audio = static_cast<rex::audio::AudioSystem*>(rt->audio_system());
   if (want) {
     if (audio) audio->Pause();
