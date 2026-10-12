@@ -3,7 +3,7 @@
 Documento de continuidade: o que existe, como compilar e o que falta.
 Atualizado no fim de cada fase.
 
-## Fase atual: 1 — primeiro APK (núcleo nativo, sem Compose)
+## Fase atual: 1 concluída (2026-10-12). Próxima: 2 — launcher em Jetpack Compose
 
 Objetivo: o jogo arrancar no Android e chegar ao menu, com logs no logcat.
 
@@ -71,7 +71,7 @@ com `yae3_xenon.xex` e a pasta `us/`.
 - [ ] Ciclo de vida: app em segundo plano / superfície perdida
 - [ ] Controlos por toque
 - [x] Travões das transformações (0011) e travadinhas de pipelines (compilação síncrona): frame time reto, ~4–5 W (antes 15–16 W, 80–90 °C), 2026-10-12, Turnip
-- [ ] Driver nativo Qualcomm: tentar contornar o véu/bordas verdes (bónus). Se não der, Turnip por omissão
+- [x] Driver nativo Qualcomm: decidido usar **Turnip por omissão** (ver secção do véu)
 - [ ] Fase 2: launcher em Jetpack Compose (escolha da pasta via SAF, verificação de hashes, opções gráficas)
   - Aba Adreno Tools: escolher/importar driver e descarregar direto dos repositórios
     (MrPurple666/purple-turnip, StevenMXZ, K11MCH1/AdrenoToolsDrivers); Turnip por omissão em Adreno
@@ -92,8 +92,13 @@ com `yae3_xenon.xex` e a pasta `us/`.
 - Sem efeito (2026-10-12): `depth_float24_convert_in_pixel_shader`, `readback_resolve=fast`,
   `gamma_render_target_as_unorm16=false`, `half_pixel_offset=false`.
 - Turnip (Gen8 V37, 2026-10-12): véu e bordas verdes **desaparecem**. É bug do driver Qualcomm.
-  O Turnip fica como opção; próximo passo: comparar o log do dispositivo Vulkan
-  (extensões/features) dos dois drivers para achar o que contornar no nativo.
+  Comparação dos logs do dispositivo: as mesmas features; o nativo só não tem
+  `VK_EXT_non_seamless_cube_map`/`memory_budget`. Testes A/B no nativo (2026-10-12):
+  `snorm16_render_target_full_range=false` melhora um pouco mas não resolve;
+  `direct_host_resolve=false`, `vulkan_dynamic_rendering=false`, `gpu_3d_to_2d_texture=false`
+  pioram. O nativo também tem frame time irregular, GPU no clock máximo e consumo a saltar
+  para 9–10 W. **Decisão: Turnip por omissão em Adreno.** Retomar o nativo só com captura
+  RenderDoc do efeito de profundidade de campo.
 
 ## Travões (investigação)
 
