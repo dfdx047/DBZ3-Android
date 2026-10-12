@@ -44,6 +44,7 @@ data class GameConfig(
     // Depuracao
     val verboseLog: Boolean = false,          // log_level = "debug" (senao "info")
     val perfLogging: Boolean = false,         // dbz3_perf_logging + logs/gpu_stats.log
+    val directResolve: Int = 1,               // dbz3_direct_resolve_texture 0/1/2 (atalho de efeitos)
 ) {
     fun toToml(): Map<String, Any> = linkedMapOf(
         // "manual": o preset "auto" do PC reescreveria estas opcoes no arranque.
@@ -72,6 +73,7 @@ data class GameConfig(
         "dbz3_unlock_all_characters" to unlockAllCharacters,
         "log_level" to if (verboseLog) "debug" else "info",
         "dbz3_perf_logging" to perfLogging,
+        "dbz3_direct_resolve_texture" to directResolve.coerceIn(0, 2),
     )
 
     companion object {
@@ -123,6 +125,7 @@ data class GameConfig(
                 unlockAllCharacters = bool("dbz3_unlock_all_characters", d.unlockAllCharacters),
                 verboseLog = str("log_level", "info").let { it == "debug" || it == "trace" },
                 perfLogging = bool("dbz3_perf_logging", d.perfLogging),
+                directResolve = int("dbz3_direct_resolve_texture", d.directResolve).coerceIn(0, 2),
             )
         }
 

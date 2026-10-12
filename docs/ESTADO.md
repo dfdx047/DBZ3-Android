@@ -353,3 +353,18 @@ stubs; a interface Compose não foi compilada.
   do que se mudou no menu dentro do jogo.
 - 0019: descreve uma vez cada resolve grande (origem, destino, formato, endian, troca R/B) e
   cada textura grande carregada, para escrever o atalho render target -> textura.
+
+### 2026-10-13 — atalho render target -> textura (0020)
+- Log de 23:59 (0019): os resolves de ecrã inteiro são cor k_8_8_8_8 do RT na base 0
+  (pitch 16 tiles), sem MSAA, destino k_8_8_8_8 tiled pitch 1280, endian 2 (às vezes 0),
+  `copy_dest_swap=1`; a textura carregada a seguir tem a mesma base, 1280x720 f6, tiled,
+  pitch 40, mesmo endian, sem mips. Também há resolves de profundidade (src_select=4,
+  dest_fmt 22) que ficam no caminho normal.
+- 0020: depois do resolve normal (a memória do guest continua certa), se a textura desse
+  destino já existir, um compute lê o RT (vista de transferência, uint ou unorm), troca R/B
+  se o resolve pede, escreve num buffer linear e copia para a imagem; a textura fica
+  marcada como carregada e a carga (untile) seguinte não acontece. Só com um único RT 8888
+  1x na base certa, retângulo em (0,0), destino linear = pitch e escala 1x.
+- `dbz3_direct_resolve_texture`: 0 desligado, 1 ligado (o launcher põe 1), 2 ligado com R/B
+  invertido (teste da ordem dos canais). A linha perf mostra `atalho=N/f`.
+- Carregar ki pelo lado da câmara: confirmado a funcionar (teste do utilizador).

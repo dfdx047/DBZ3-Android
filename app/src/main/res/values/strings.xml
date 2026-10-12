@@ -334,4 +334,9 @@
     <string name="settings_perf_log_sub">Every 5 s the log records FPS, GPU time per frame and the GPU clock and load. Light; use it to report stutter.</string>
     <string name="ingame_exit">Exit to launcher</string>
     <string name="ingame_exit_confirm">Tap again to exit</string>
+    <string name="settings_direct_resolve">Effects shortcut</string>
+    <string name="settings_direct_resolve_sub">Copies the full-screen effects straight to the texture, skipping two conversions. Less GPU load. Experimental: if colors look wrong, try the \"swapped colors\" option.</string>
+    <string name="direct_resolve_on">On</string>
+    <string name="direct_resolve_off">Off (original)</string>
+    <string name="direct_resolve_swapped">On, swapped colors (test)</string>
 </resources>
