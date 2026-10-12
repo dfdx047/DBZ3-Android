@@ -32,18 +32,38 @@ if [ ! -f "$SDK/include/rex/dbz3_build.h" ]; then
 fi
 
 cd "$SDK"
+# Registo dos patches ja aplicados. Necessario porque um patch posterior pode
+# mexer nas mesmas linhas de um anterior e o teste "--reverse" deixa de o
+# reconhecer como aplicado (foi o que aconteceu com o 0008 depois do 0010).
+STAMP="$SDK/.dbz3-android-patches"
+touch "$STAMP"
 for PATCH in "$ROOT"/patches/[0-9][0-9][0-9][0-9]-*.patch; do
   NAME="$(basename "$PATCH")"
-  if patch -p1 --dry-run --reverse --force --silent < "$PATCH" > /dev/null 2>&1; then
+  if grep -qxF "$NAME" "$STAMP"; then
     echo "ja aplicado: $NAME"
     continue
   fi
+  if patch -p1 --dry-run --reverse --force --silent < "$PATCH" > /dev/null 2>&1; then
+    echo "$NAME" >> "$STAMP"
+    echo "ja aplicado: $NAME"
+    continue
+  fi
+  TEST="$(patch -p1 --dry-run --forward < "$PATCH" 2>&1 || true)"
   if ! patch -p1 --dry-run --forward --silent < "$PATCH" > /dev/null 2>&1; then
+    # Todos os ficheiros dizem "previously applied": ja estava aplicado.
+    FILES="$(grep -c '^checking file' <<< "$TEST" || true)"
+    APPLIED="$(grep -c 'previously applied' <<< "$TEST" || true)"
+    if [ "$FILES" -gt 0 ] && [ "$FILES" = "$APPLIED" ]; then
+      echo "$NAME" >> "$STAMP"
+      echo "ja aplicado: $NAME"
+      continue
+    fi
     echo "ERRO: $NAME nao aplica de forma limpa. Saida do teste:" >&2
-    patch -p1 --dry-run --forward < "$PATCH" >&2 || true
+    echo "$TEST" >&2
     exit 1
   fi
   patch -p1 --forward --silent < "$PATCH"
+  echo "$NAME" >> "$STAMP"
   echo "aplicado:    $NAME"
 done
 echo "SDK pronto."

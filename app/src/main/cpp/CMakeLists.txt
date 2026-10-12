@@ -29,6 +29,24 @@ if(NOT EXISTS "${REXSDK_ROOT}/include/rex/main_android.h")
         "Os patches Android ainda nao foram aplicados ao SDK.\n"
         "Corre na raiz do repositorio:  bash tools/apply-sdk-patches.sh")
 endif()
+# Todos os patches de patches/ tem de estar aplicados (o script regista-os em
+# .dbz3-android-patches). Evita compilar um SDK desatualizado sem dar por isso.
+file(GLOB DBZ3_PATCH_FILES "${DBZ3_REPO_ROOT}/patches/[0-9][0-9][0-9][0-9]-*.patch")
+set(DBZ3_PATCH_STAMP "${REXSDK_ROOT}/.dbz3-android-patches")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${DBZ3_PATCH_FILES} "${DBZ3_PATCH_STAMP}")
+if(EXISTS "${DBZ3_PATCH_STAMP}")
+    file(STRINGS "${DBZ3_PATCH_STAMP}" DBZ3_APPLIED_PATCHES)
+else()
+    set(DBZ3_APPLIED_PATCHES "")
+endif()
+foreach(DBZ3_PATCH ${DBZ3_PATCH_FILES})
+    get_filename_component(DBZ3_PATCH_NAME "${DBZ3_PATCH}" NAME)
+    if(NOT DBZ3_PATCH_NAME IN_LIST DBZ3_APPLIED_PATCHES)
+        message(FATAL_ERROR
+            "O patch ${DBZ3_PATCH_NAME} ainda nao foi aplicado ao SDK.\n"
+            "Corre na raiz do repositorio:  bash tools/apply-sdk-patches.sh")
+    endif()
+endforeach()
 if(NOT EXISTS "${DBZ3_GENERATED}/sources.cmake")
     message(FATAL_ERROR
         "Falta ${DBZ3_GENERATED}/sources.cmake.\n"
