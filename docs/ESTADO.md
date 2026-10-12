@@ -324,3 +324,19 @@ stubs; a interface Compose não foi compilada.
   com o P1 à esquerda (x = -15).
 - 0018: contagem de resolves e cargas de texturas por frame (tamanhos, formatos e cargas
   repetidas da mesma textura no mesmo frame) na linha perf.
+
+### Teste de 2026-10-12 23:15 (Turnip + TU_DEBUG=sysmem, clock livre) — resolves e texturas
+- Troca luta/menus pelas posições: funciona (log `troca -> luta/menus` nos sítios certos).
+- Por frame numa luta: ~20 resolves (10 de 1280x720, 5 de 320x184, 2 de 80x48, 2 de 512x512
+  ou 160x96) e ~20 cargas de texturas, quase todas k_8_8_8_8 (f6) dos mesmos tamanhos, com
+  ~6 recargas da mesma textura no mesmo frame. O jogo copia o ecrã inteiro ~10 vezes por
+  frame para os efeitos.
+- No Vulkan cada resolve é: dump do render target para o buffer EDRAM + cópia EDRAM ->
+  memória do guest (o "direct resolve" é um stub: `TryResolveCopyDirectly` acaba sempre em
+  `DumpRenderTargets`) e depois a carga da textura volta a ler a memória e a desfazer o
+  tiling. ~6,6 ms de ~11,5 ms. Alvo seguinte: atalho render target -> textura para os
+  resolves de ecrã inteiro (e/ou o direct resolve real), atrás de uma cvar para A/B.
+- TU_DEBUG=sysmem: sem ganho (desenho 3,4 ms a ~1050 MHz ≈ 3,9 ms a 900 MHz).
+- Carregar ki ainda falha quando a câmara troca de lado (não é só cruzar os lutadores).
+  `logs/lutadores.bin` (diagnóstico) grava os blocos dos lutadores a cada 0,5 s e em cada
+  botão de macro, para encontrar o campo de "lado"/espelho por diferença.

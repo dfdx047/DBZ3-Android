@@ -193,6 +193,34 @@ Java_com_dfdx047_dragonfury_game_NativeGameState_nativeFightFlag(JNIEnv*, jclass
   return (LoadU32(base, kFightFlag) != 0 || ReadFight(base).active) ? 1 : 0;
 }
 
+// Diagnostico do lado do P1: grava os blocos dos dois lutadores (e o inicio da
+// configuracao da batalha) em logs/lutadores.bin, para encontrar offline o campo que
+// o jogo usa para "para tras" quando a camara troca de lado. Registo:
+// "DFFD" | u32 tipo (0 periodico, 1 botao de macro) | u64 ms | u32 cfg | u32 len | bytes.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_dfdx047_dragonfury_game_NativeGameState_nativeDumpFight(JNIEnv* env, jclass, jstring jpath,
+                                                                 jint kind, jlong ms) {
+  const uint8_t* base = g_dragonfury_guest_base.load(std::memory_order_acquire);
+  if (!base || !ReadFight(base).active) return JNI_FALSE;
+  const uint32_t cfg = LoadU32(base, kBattleCfgPtr);
+  const uint32_t len = 2096 + 2 * 8240;
+  const char* path = env->GetStringUTFChars(jpath, nullptr);
+  FILE* f = fopen(path, "ab");
+  env->ReleaseStringUTFChars(jpath, path);
+  if (!f) return JNI_FALSE;
+  const uint32_t magic = 0x44464644;  // "DFFD" em little endian
+  const uint32_t k = uint32_t(kind);
+  const uint64_t t = uint64_t(ms);
+  fwrite(&magic, 4, 1, f);
+  fwrite(&k, 4, 1, f);
+  fwrite(&t, 8, 1, f);
+  fwrite(&cfg, 4, 1, f);
+  fwrite(&len, 4, 1, f);
+  fwrite(base + cfg, 1, len, f);  // bytes crus do guest (big endian)
+  fclose(f);
+  return JNI_TRUE;
+}
+
 // Diagnostico da troca luta/menus (logs/controles.log com "Diagnostico de desempenho"):
 // a bandeira da luta, o ponteiro da configuracao da batalha e as posicoes dos dois
 // lutadores, para descobrir porque a revanche as vezes nao troca o layout.

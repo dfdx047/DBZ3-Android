@@ -60,6 +60,8 @@ class HelperEngine {
 
     /** Diagnostico (so com "Diagnostico de desempenho"): recebe linhas para logs/controles.log. */
     @Volatile var diag: ((String) -> Unit)? = null
+    /** Ficheiro para os blocos dos lutadores (diagnostico do lado), ou null. */
+    @Volatile var fightDumpPath: String? = null
     private var diagTicks = 0
     private var diagLast = ""
     @Volatile var inBattle = false
@@ -149,6 +151,7 @@ class HelperEngine {
         diag?.let { d ->
             if (++diagTicks >= 30) {
                 diagTicks = 0
+                fightDumpPath?.let { NativeGameState.dumpFight(it, 0) }
                 val line = NativeGameState.battleDebug() ?: ""
                 if (line != diagLast) {
                     diagLast = line

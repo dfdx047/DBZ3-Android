@@ -61,6 +61,15 @@ object NativeGameState {
         }
     }
 
+    /** Grava os blocos dos lutadores em [path] (diagnostico do lado do P1). */
+    fun dumpFight(path: String, kind: Int) {
+        if (!available) return
+        try {
+            nativeDumpFight(path, kind, System.currentTimeMillis())
+        } catch (_: UnsatisfiedLinkError) {
+        }
+    }
+
     /** Muda opcoes do jogo ao vivo (como o menu rapido do PC) e grava o dbz3_user.toml. */
     fun setCvars(values: Map<String, String>): Boolean {
         if (!available || values.isEmpty()) return false
@@ -88,6 +97,7 @@ object NativeGameState {
     @JvmStatic
     private external fun nativeFightFlag(): Int
     @JvmStatic private external fun nativeBattleDebug(): String
+    @JvmStatic private external fun nativeDumpFight(path: String, kind: Int, ms: Long): Boolean
 
     @JvmStatic
     private external fun nativeSetCvars(names: Array<String>, values: Array<String>): Boolean

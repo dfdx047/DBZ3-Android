@@ -79,6 +79,9 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
             gpuStats = GpuStatsSampler(f)
             val ctl = java.io.File(AppPaths.logsDir, "controles.log")
             ctl.delete()
+            val dump = java.io.File(AppPaths.logsDir, "lutadores.bin")
+            dump.delete()
+            engine.fightDumpPath = dump.absolutePath
             val fmt = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.ROOT)
             engine.diag = { line ->
                 try {
@@ -104,6 +107,12 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
                 override fun onPress(element: ControlElement) {
                     ensurePad()
                     engine.press(element.id, element.action)
+                    // Diagnostico: cada botao de ajuda (macro) fica marcado no log, com o
+                    // lado que o app julga e uma copia dos lutadores nesse instante.
+                    if (element.action is ControlAction.Sequence) {
+                        engine.diag?.invoke("macro ${element.id} lado=${NativeGameState.p1Side()}")
+                        engine.fightDumpPath?.let { NativeGameState.dumpFight(it, 1) }
+                    }
                 }
 
                 override fun onRelease(element: ControlElement) = engine.releaseElement(element.id)
