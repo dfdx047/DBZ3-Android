@@ -38,6 +38,8 @@ Objetivo: o jogo arrancar no Android e chegar ao menu, com logs no logcat.
 | `src/core/threading_posix.cpp` (0003) | sem mutexes robustos (o bionic não os tem) |
 | `include/rex/ui/windowed_app.h` (0004) | uma só app, via `GetWindowedAppCreator()` como no Linux |
 | `src/audio/sdl/sdl_audio_driver.cpp` (0005) | áudio sempre em estéreo no Android (as vozes estão no canal central) |
+| `src/core/threading_posix.cpp` (0006) | `WaitMultiple` sem polling (Audio Worker estava a ~50% de um núcleo) |
+| `src/system/mmio_handler.cpp` (0007) | faltas de páginas vigiadas sem ler `/proc/self/maps` a cada vez |
 
 ## Compilar (no PC, CachyOS)
 
@@ -57,3 +59,9 @@ com `yae3_xenon.xex` e a pasta `us/`.
 - [ ] Controlos por toque
 - [ ] Fase 2: launcher em Jetpack Compose (escolha da pasta via SAF, verificação de hashes, opções gráficas)
 - [ ] Fase 3: otimização por GPU (Adreno/Mali), Turnip, cache de shaders
+
+## Perfil (8 Elite, 2026-10-12, `tools/profile.sh`)
+
+- Main XThread ~40% das amostras do processo: `sub_82235918` 54% e `sub_82231110` 12% dessa thread (código do jogo; a investigar se é espera ativa).
+- Audio Worker ~21%: polling em `WaitMultiple` (corrigido em 0006).
+- GPU Commands ~15%: `vkUpdateDescriptorSets` do driver Adreno é o maior custo.
