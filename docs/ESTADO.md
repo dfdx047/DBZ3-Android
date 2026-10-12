@@ -45,6 +45,7 @@ Objetivo: o jogo arrancar no Android e chegar ao menu, com logs no logcat.
 | `src/system/mmio_handler.cpp` (0007) | faltas de páginas vigiadas sem ler `/proc/self/maps` a cada vez |
 | `pipeline_cache.cpp`, `render_target_cache.cpp`, `device_1_0.inc` (0008) | `VkPipelineCache` do driver guardada em `cache/shaders/vulkan_driver_pipelines.bin` (o SDK não tinha nenhuma) |
 | `dynlib`, `vulkan_instance.cpp` (0009) | driver Vulkan alternativo (Turnip) via libadrenotools, se `REX_VULKAN_DRIVER_DIR/NAME` estiverem definidos |
+| `memory_posix.cpp`, `threading_posix.cpp` (0011) | commit de memória sem ler `/proc/self/maps` (era ~90% dos travões das transformações); `WaitMultiple` só acorda quem espera pelo objeto sinalizado |
 | `dbz3_hitch.h`, `command_processor.cpp`, `pipeline_cache.cpp`, `texture_cache.cpp`, `render_target_cache.cpp` (0010) | diagnóstico de travões: cada `dbz3: tiron` (frame > 34 ms ou frames escondidos pela compilação async) diz quanto tempo foi em shaders, pipelines, pipelines provisórios, transferências de RT, texturas e espera da GPU |
 
 ## Compilar (no PC, CachyOS)
@@ -91,5 +92,10 @@ com `yae3_xenon.xex` e a pasta `us/`.
   um par: Main XThread a 100% ~180 ms e logo a seguir os 6 XThreads de trabalho do jogo
   ~240 ms, ambos com metade ou mais do tempo dentro do kernel. Próximo: perfil com pilha
   (`tools/profile-hitch.sh`) para saber que syscalls/faltas são.
+- 2026-10-12 (perfil com pilha): a causa é `MmAllocatePhysicalMemoryEx` →
+  `memory::AllocFixed` → `IsRangeFullyMapped`, que lia `/proc/self/maps` inteiro em cada
+  commit. Os workers ainda perdiam tempo em `XEvent::Set` (notify global do 0006).
+  Corrigido em 0011. Compilação async desligada por omissão (MainActivity): sem ela não
+  há frames escondidos e os pipelines síncronos custam < 1 ms.
 - Atenção: o `dbz3_user.toml` (settings.cpp do projeto original) sobrepõe cvars do SDK.
   Para compilação síncrona usar `dbz3_async_shaders = false`, não `async_shader_compilation`.

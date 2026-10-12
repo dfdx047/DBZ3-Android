@@ -40,6 +40,10 @@ public class MainActivity extends SDLActivity {
         setEnv("REX_APP_DIR", appDir.getAbsolutePath());
         setEnv("REX_NATIVE_LIB_DIR", getApplicationInfo().nativeLibraryDir);
         setEnv("REX_DBZ3_SKIP_LAUNCHER", "true");
+        // Compilacao de pipelines sincrona: no Android a async escondia 1 frame
+        // de cada vez que um pipeline faltava (travadinhas), e a sincrona custa
+        // menos de 1 ms por frame com a cache do driver. O cvars.txt pode mudar.
+        setEnv("REX_DBZ3_ASYNC_SHADERS", "false");
         applyCvarOverrides(new File(appDir, "cvars.txt"));
         installCustomVulkanDriver(appDir);
 
