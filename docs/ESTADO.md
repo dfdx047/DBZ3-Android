@@ -86,4 +86,10 @@ com `yae3_xenon.xex` e a pasta `us/`.
 - Persistem com o Turnip, nos mesmos sítios: transformação, carregar ki, close-up na
   personagem, especial no máximo.
 - 0010 mede a causa de cada travão: `adb logcat -d -s dbz3 | grep tiron`.
-- Experiência barata: `async_shader_compilation = false` no `cvars.txt`.
+- 2026-10-12 (Turnip): os travões grandes (150–400 ms, em pares) não são da GPU nem
+  do disco (`dbz3_io_logging`: nenhuma leitura lenta, máximo 0,5 ms). No perfil, durante
+  um par: Main XThread a 100% ~180 ms e logo a seguir os 6 XThreads de trabalho do jogo
+  ~240 ms, ambos com metade ou mais do tempo dentro do kernel. Próximo: perfil com pilha
+  (`tools/profile-hitch.sh`) para saber que syscalls/faltas são.
+- Atenção: o `dbz3_user.toml` (settings.cpp do projeto original) sobrepõe cvars do SDK.
+  Para compilação síncrona usar `dbz3_async_shaders = false`, não `async_shader_compilation`.
