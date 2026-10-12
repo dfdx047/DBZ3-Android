@@ -149,6 +149,7 @@ fun HomeScreen(vm: LauncherViewModel, goTo: (LauncherTab) -> Unit) {
                             FileStatus.OK -> stringResource(R.string.file_ok) to Level.OK
                             FileStatus.MISSING -> stringResource(if (c.required) R.string.file_missing_required else R.string.file_missing_optional) to
                                 (if (c.required) Level.ERROR else Level.INFO)
+                            FileStatus.DIFFERENT -> stringResource(R.string.file_different) to Level.WARN
                             FileStatus.WRONG_SIZE -> stringResource(R.string.file_wrong_size) to Level.ERROR
                             FileStatus.WRONG_HASH -> stringResource(R.string.file_wrong_hash) to Level.ERROR
                             FileStatus.EU_REGION -> stringResource(R.string.file_eu) to Level.ERROR

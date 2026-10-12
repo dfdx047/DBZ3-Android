@@ -66,7 +66,7 @@
     <string name="busy_installing_driver">Installing driver</string>
     <string name="busy_downloading_update">Downloading update</string>
     <string name="msg_import_ok">Game imported. Ready to play!</string>
-    <string name="msg_verify_ok">All files match the original copy.</string>
+    <string name="msg_verify_ok">The game files are complete.</string>
     <string name="msg_verify_problems">Some files are missing or don\'t match. See the list.</string>
     <string name="msg_not_installed">Import the game first (Home tab).</string>
     <string name="msg_shortcut_requested">Shortcut requested: confirm it on the home screen.</string>
@@ -312,4 +312,5 @@
     <string name="settings_directional_sub">D-pad is better for this 2D fighter: double taps for dashes and diagonals for flying.</string>
     <string name="settings_pause_menus">Pause in menus</string>
     <string name="settings_pause_menus_sub">The game stops while the controls menu (gear in game) or the port menu (Back + Start) is open.</string>
+    <string name="file_different">different version from the reference list (other dump: OK if the game runs)</string>
 </resources>

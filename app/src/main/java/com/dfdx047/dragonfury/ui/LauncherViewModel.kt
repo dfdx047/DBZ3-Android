@@ -187,7 +187,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
             }
             install = result
             if (fullHash) {
-                if (result.playable && result.checks.none { it.status == FileStatus.WRONG_HASH }) say(R.string.msg_verify_ok)
+                if (result.playable) say(R.string.msg_verify_ok)
                 else say(R.string.msg_verify_problems)
             }
         }

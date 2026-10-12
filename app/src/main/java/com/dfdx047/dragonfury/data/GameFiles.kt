@@ -17,7 +17,7 @@ object BaseRom {
 
     val US = listOf(
         Entry("data_cmn.afs", 293_423_104, "FC73A1DC9FBF1B13953C0347A121C65FCB2DEECA4A7C823F138177E60FF8C0DF", true),
-        Entry("data_eng.afs", 64_284_672, "AC51F1D273EB7A2A50F685282723651AAFDD54159F4BF2237BECD5E484EA8958", true),
+        Entry("data_eng.afs", 64_284_672, "AC51F1D273EB7A2A50F685282723651AAFDD54159F4BF2237BECD5E484EA8958", false),
         Entry("data_fra.afs", 64_727_040, "0136FFA2C62CE0ED82AD22C07058566A081AED3EF4EC6915D35786752A2C5983", false),
         Entry("data_ger.afs", 66_117_632, "83C51CB4D6DB408868AF6487C0AA0CDDEAC20C32BB28324F08E6215E0B32A328", false),
         Entry("data_ita.afs", 64_315_392, "EFECE6723C2D7859FCB773E446CEA9489394837E632BC68C79A9066B2FFC7E4A", false),
@@ -32,17 +32,36 @@ object BaseRom {
         Entry("Ending00.sfd", 88_363_008, "65180E8C4E9D3C16095447A285018A0E5492D1966DB009E6092585CCB995786B", false),
         Entry("Ending01.sfd", 169_752_576, "C243C28EAE615F161DAC2CC67709507AD60CE0CEF7BCB4F372A413EA837ED4F2", false),
     )
+
+    /**
+     * Textos em ingles: o baserom.md lista o data_eng.afs, mas ha copias USA (ex. o
+     * dump Redump) que trazem o data_usi.afs no lugar dele e jogam bem. Basta um.
+     */
+    val TEXT_ANY_OF = listOf("data_eng.afs", "data_usi.afs")
 }
 
-enum class FileStatus { OK, MISSING, WRONG_SIZE, WRONG_HASH, EU_REGION }
+/**
+ * DIFFERENT = tamanho ou hash diferente da tabela do baserom.md. Ha dumps USA com
+ * .afs/.sfd de tamanhos diferentes que funcionam (testado na Fase 1), por isso e
+ * so um aviso, nao bloqueia o jogo.
+ */
+enum class FileStatus { OK, MISSING, DIFFERENT, WRONG_SIZE, WRONG_HASH, EU_REGION }
 
 data class FileCheck(val name: String, val required: Boolean, val status: FileStatus)
 
 /** Estado da instalacao do jogo na pasta da app. */
 data class GameInstall(val checks: List<FileCheck>) {
     val xex: FileCheck? get() = checks.firstOrNull { it.name == "yae3_xenon.xex" }
+    /** Bloqueia o JOGAR: obrigatorio em falta, executavel EU ou executavel com tamanho errado. */
     val playable: Boolean
-        get() = checks.none { it.required && it.status != FileStatus.OK }
+        get() = checks.none { c ->
+            c.status == FileStatus.EU_REGION ||
+                (c.required && c.status == FileStatus.MISSING) ||
+                (c.name == "yae3_xenon.xex" && c.status == FileStatus.WRONG_SIZE)
+        } && textsPresent
+    /** Pelo menos um dos arquivos de texto em ingles (data_eng.afs ou data_usi.afs). */
+    val textsPresent: Boolean
+        get() = checks.any { it.name in BaseRom.TEXT_ANY_OF && it.status != FileStatus.MISSING }
     val installed: Boolean get() = xex?.status != FileStatus.MISSING
 }
 
@@ -97,7 +116,9 @@ object GameFiles {
                     when (hash) {
                         BaseRom.XEX_SHA_US -> FileStatus.OK
                         BaseRom.XEX_SHA_EU -> FileStatus.EU_REGION
-                        else -> FileStatus.WRONG_HASH
+                        // Outro dump do executavel USA: o APK foi gerado a partir do
+                        // executavel de quem o compilou, por isso so avisa.
+                        else -> FileStatus.DIFFERENT
                     }
                 }
             },
@@ -106,13 +127,13 @@ object GameFiles {
             val f = File(AppPaths.usDir, e.name)
             val status = when {
                 !f.isFile -> FileStatus.MISSING
-                f.length() != e.size -> FileStatus.WRONG_SIZE
+                f.length() != e.size -> FileStatus.DIFFERENT
                 !fullHash -> FileStatus.OK
                 else -> {
                     val hash = sha256(f.inputStream(), f.length()) { d, t ->
                         onProgress(ImportProgress.Hashing(e.name, d, t))
                     }
-                    if (hash == e.sha256) FileStatus.OK else FileStatus.WRONG_HASH
+                    if (hash == e.sha256) FileStatus.OK else FileStatus.DIFFERENT
                 }
             }
             list += FileCheck(e.name, e.required, status)
@@ -145,16 +166,17 @@ object GameFiles {
         val hash = sha256(resolver.openInputStream(xexDoc.uri)!!, xexDoc.length()) { d, t ->
             onProgress(ImportProgress.Hashing(xexDoc.name ?: "xex", d, t))
         }
-        when (hash) {
-            BaseRom.XEX_SHA_US -> Unit
-            BaseRom.XEX_SHA_EU -> throw ImportException(ImportException.Reason.EU_XEX)
-            else -> throw ImportException(ImportException.Reason.BAD_XEX, xexDoc.name ?: "")
-        }
+        // Hash desconhecido com o tamanho certo: outro dump USA, aceita (a verificacao avisa).
+        if (hash == BaseRom.XEX_SHA_EU) throw ImportException(ImportException.Reason.EU_XEX)
 
         val usFiles = usDoc.listFiles().filter { it.isFile }
         val missing = BaseRom.US.filter { e -> e.required && usFiles.none { it.name.equals(e.name, true) } }
+            .map { it.name }.toMutableList()
+        if (BaseRom.TEXT_ANY_OF.none { t -> usFiles.any { it.name.equals(t, true) } }) {
+            missing += BaseRom.TEXT_ANY_OF.joinToString(" / ")
+        }
         if (missing.isNotEmpty()) {
-            throw ImportException(ImportException.Reason.MISSING_REQUIRED, missing.joinToString { it.name })
+            throw ImportException(ImportException.Reason.MISSING_REQUIRED, missing.joinToString())
         }
 
         AppPaths.usDir.mkdirs()

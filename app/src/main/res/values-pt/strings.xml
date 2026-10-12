@@ -65,7 +65,7 @@
     <string name="busy_installing_driver">Instalando driver</string>
     <string name="busy_downloading_update">Baixando atualização</string>
     <string name="msg_import_ok">Jogo importado. Pronto para jogar!</string>
-    <string name="msg_verify_ok">Todos os arquivos conferem com a cópia original.</string>
+    <string name="msg_verify_ok">Os arquivos do jogo estão completos.</string>
     <string name="msg_verify_problems">Alguns arquivos faltam ou não conferem. Veja a lista.</string>
     <string name="msg_not_installed">Importe o jogo primeiro (aba Início).</string>
     <string name="msg_shortcut_requested">Atalho pedido: confirme na tela inicial.</string>
@@ -311,4 +311,5 @@
     <string name="settings_directional_sub">O D-pad é melhor para este jogo 2D: toques duplos para dash e diagonais para voar.</string>
     <string name="settings_pause_menus">Pausar nos menus</string>
     <string name="settings_pause_menus_sub">O jogo para enquanto o menu dos controles (engrenagem no jogo) ou o menu do port (Back + Start) está aberto.</string>
+    <string name="file_different">versão diferente da lista de referência (outro dump: tudo bem se o jogo roda)</string>
 </resources>
