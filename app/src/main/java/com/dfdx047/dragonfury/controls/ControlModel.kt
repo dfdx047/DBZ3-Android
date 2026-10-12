@@ -106,7 +106,7 @@ object GameActions {
         return ControlLayout(
             listOf(
                 ControlElement("stick", ElementKind.STICK, ControlAction.Press(emptySet()), ControlIcon.MACRO, "", 0.15f, 0.66f, 150f),
-                ControlElement("dpad", ElementKind.DPAD, ControlAction.Press(emptySet()), ControlIcon.MACRO, "", 0.15f, 0.66f, 150f, visible = false),
+                ControlElement("dpad", ElementKind.DPAD, ControlAction.Press(emptySet()), ControlIcon.MACRO, "", 0.15f, 0.66f, 150f),
                 ControlElement("punch", ElementKind.BUTTON, ControlAction.Press(PUNCH), ControlIcon.PUNCH, "X", cx - 0.075f, cy, 62f),
                 ControlElement("kick", ElementKind.BUTTON, ControlAction.Press(KICK), ControlIcon.KICK, "Y", cx, cy - 0.18f, 62f),
                 ControlElement("ki", ElementKind.BUTTON, ControlAction.Press(KI), ControlIcon.KI, "B", cx + 0.075f, cy, 62f),

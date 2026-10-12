@@ -23,7 +23,9 @@ import com.dfdx047.dragonfury.controls.ControlLayout
 import com.dfdx047.dragonfury.controls.ElementKind
 import com.dfdx047.dragonfury.controls.GameActions
 import com.dfdx047.dragonfury.controls.PadInput
+import com.dfdx047.dragonfury.data.ButtonBadge
 import com.dfdx047.dragonfury.data.ControlStyle
+import com.dfdx047.dragonfury.data.Directional
 import kotlin.math.atan2
 import kotlin.math.hypot
 
@@ -56,6 +58,18 @@ class TouchControlsView(context: Context) : View(context) {
             invalidate()
         }
     var style: ControlStyle = ControlStyle.DRAGON
+        set(value) {
+            field = value
+            invalidate()
+        }
+    /** D-pad de 8 direcoes ou analogico (o outro fica escondido). */
+    var directional: Directional = Directional.DPAD
+        set(value) {
+            field = value
+            invalidate()
+        }
+    /** Indicacao do botao do comando (Xbox / PlayStation) no canto de cada botao. */
+    var badge: ButtonBadge = ButtonBadge.XBOX
         set(value) {
             field = value
             invalidate()
@@ -97,11 +111,11 @@ class TouchControlsView(context: Context) : View(context) {
     private var dragOffX = 0f
     private var dragOffY = 0f
 
-    // Cores do tema Dragon Fury
-    private val cream = Color.parseColor("#FFE7B0")
+    // Cores Dragon Fury: icones dourados/laranja sobre vidro fosco.
+    private val gold = Color.parseColor("#FFD27A")
     private val orange = Color.parseColor("#FF8A1F")
     private val yellow = Color.parseColor("#FFC94A")
-    private val blue = Color.parseColor("#1E5BFF")
+    private val glassEdge = Color.parseColor("#FFF3DE")
 
     init {
         isHapticFeedbackEnabled = true
@@ -117,10 +131,17 @@ class TouchControlsView(context: Context) : View(context) {
     private fun alphaOf(e: ControlElement, base: Float): Int =
         (255 * base * e.opacity * (if (editMode) 1f else globalOpacity)).toInt().coerceIn(0, 255)
 
+    /** Visivel agora: escondido pelo usuario ou pelo tipo de direcional escolhido. */
+    private fun isShown(e: ControlElement): Boolean = e.visible && when (e.kind) {
+        ElementKind.STICK -> directional == Directional.STICK
+        ElementKind.DPAD -> directional == Directional.DPAD
+        ElementKind.BUTTON -> true
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         for (e in layout.elements) {
-            if (!e.visible) continue
+            if (!isShown(e)) continue
             when (e.kind) {
                 ElementKind.BUTTON -> drawButton(canvas, e)
                 ElementKind.STICK -> drawStick(canvas, e)
@@ -144,6 +165,31 @@ class TouchControlsView(context: Context) : View(context) {
     private fun isFaceButton(e: ControlElement): Boolean =
         mainInput(e) in setOf(PadInput.A, PadInput.B, PadInput.X, PadInput.Y)
 
+    /**
+     * Fundo "vidro fosco": branco muito translucido com um brilho em cima e uma
+     * borda clara fina. Premido: o vidro acende em laranja por baixo do icone.
+     */
+    private fun drawGlass(c: Canvas, e: ControlElement, x: Float, y: Float, r: Float, down: Boolean) {
+        fill.shader = RadialGradient(
+            x, y - r * 0.45f, r * 1.4f,
+            intArrayOf(Color.argb(95, 255, 255, 255), Color.argb(38, 255, 255, 255), Color.argb(26, 20, 16, 40)),
+            floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP,
+        )
+        fill.alpha = alphaOf(e, 1f)
+        c.drawCircle(x, y, r, fill)
+        if (down) {
+            fill.shader = RadialGradient(x, y, r, intArrayOf(Color.argb(170, 255, 201, 74), Color.argb(110, 255, 138, 31), Color.argb(0, 255, 138, 31)),
+                floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP)
+            fill.alpha = alphaOf(e, 1f)
+            c.drawCircle(x, y, r, fill)
+        }
+        fill.shader = null
+        ring.strokeWidth = 1.5f * density
+        ring.color = if (down) yellow else glassEdge
+        ring.alpha = alphaOf(e, if (down) 0.95f else 0.55f)
+        c.drawCircle(x, y, r - ring.strokeWidth / 2, ring)
+    }
+
     private fun drawButton(c: Canvas, e: ControlElement) {
         val x = cx(e)
         val y = cy(e)
@@ -151,58 +197,73 @@ class TouchControlsView(context: Context) : View(context) {
         val down = e.id in pressed
         val classic = style != ControlStyle.DRAGON && isFaceButton(e)
 
-        // Fundo translucido; premido acende em laranja.
-        if (down) {
-            fill.shader = RadialGradient(x, y, r, intArrayOf(yellow, orange, Color.argb(0, 255, 138, 31)), floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP)
-            fill.alpha = alphaOf(e, 0.85f)
-        } else {
-            fill.shader = null
-            fill.color = Color.BLACK
-            fill.alpha = alphaOf(e, 0.35f)
-        }
-        c.drawCircle(x, y, r, fill)
-        fill.shader = null
-
-        ring.strokeWidth = 2f * density
-        ring.color = if (classic) classicColor(mainInput(e)!!) else if (down) yellow else cream
-        ring.alpha = alphaOf(e, 0.9f)
-        c.drawCircle(x, y, r - ring.strokeWidth / 2, ring)
-        if (style == ControlStyle.DRAGON && !down) {
-            // Brilho fino laranja por dentro (aura).
-            ring.strokeWidth = 1f * density
-            ring.color = orange
-            ring.alpha = alphaOf(e, 0.6f)
-            c.drawCircle(x, y, r - 4 * density, ring)
-        }
+        drawGlass(c, e, x, y, r, down)
 
         if (classic) {
-            drawClassicGlyph(c, mainInput(e)!!, x, y, r, alphaOf(e, 1f))
+            drawClassicGlyph(c, mainInput(e)!!, style == ControlStyle.PLAYSTATION, x, y, r * 0.95f, alphaOf(e, 1f))
         } else if (e.icon == ControlIcon.MACRO && e.label.isNotBlank()) {
-            text.color = if (down) Color.WHITE else cream
+            text.color = if (down) Color.WHITE else gold
             text.alpha = alphaOf(e, 1f)
             text.textSize = r * 0.55f
             c.drawText(e.label.take(4), x, y + text.textSize / 3, text)
         } else {
             val d = icon(e.icon)
-            val s = (r * 1.1f).toInt()
+            val s = (r * 1.05f).toInt()
             d.setBounds((x - s / 2).toInt(), (y - s / 2).toInt(), (x + s / 2).toInt(), (y + s / 2).toInt())
-            d.colorFilter = PorterDuffColorFilter(if (down) Color.WHITE else cream, PorterDuff.Mode.SRC_IN)
+            d.colorFilter = PorterDuffColorFilter(if (down) Color.WHITE else gold, PorterDuff.Mode.SRC_IN)
             d.alpha = alphaOf(e, 1f)
             d.draw(c)
-            // Rotulo pequeno (LB, RT...) nos estilos classicos.
-            if (style != ControlStyle.DRAGON) {
-                val input = mainInput(e)
-                if (input != null) {
-                    text.textSize = r * 0.32f
-                    text.color = yellow
-                    text.alpha = alphaOf(e, 1f)
-                    c.drawText(GameActions.classicLabel(input, style == ControlStyle.PLAYSTATION), x, y + r * 0.92f, text)
-                }
-            }
+        }
+        // Indicacao do botao do comando no canto (nos classicos so nos que nao sao A/B/X/Y).
+        val badgeStyle = when {
+            style == ControlStyle.XBOX -> ButtonBadge.XBOX
+            style == ControlStyle.PLAYSTATION -> ButtonBadge.PLAYSTATION
+            else -> badge
+        }
+        if (badgeStyle != ButtonBadge.NONE && !classic) drawBadge(c, e, badgeStyle == ButtonBadge.PLAYSTATION, x, y, r)
+    }
+
+    /** O que o botao faz no comando: um botao, uma combinacao ou "defesa + tras tras". */
+    private fun badgeInputs(e: ControlElement): Pair<List<PadInput>, String> = when (val a = e.action) {
+        is ControlAction.Press -> a.inputs.toList() to ""
+        is ControlAction.Sequence -> {
+            val firstButtons = a.steps.flatMap { it.inputs }.filter { it.ordinal <= PadInput.R3.ordinal }.distinct()
+            val dirs = a.steps.count { PadInput.BACKWARD in it.inputs }
+            firstButtons to (if (dirs > 0) "◀".repeat(dirs.coerceAtMost(2)) else "")
         }
     }
 
-    private fun classicColor(i: PadInput): Int = if (style == ControlStyle.PLAYSTATION) {
+    private fun drawBadge(c: Canvas, e: ControlElement, ps: Boolean, x: Float, y: Float, r: Float) {
+        val (inputs, suffix) = badgeInputs(e)
+        if (inputs.isEmpty()) return
+        // Selo pequeno a 45 graus, em cima a direita.
+        val br = (r * 0.36f).coerceIn(9f * density, 15f * density)
+        val bx = x + r * 0.72f
+        val by = y - r * 0.72f
+        val face = inputs.filter { it in setOf(PadInput.A, PadInput.B, PadInput.X, PadInput.Y) }
+        val label = if (face.size == inputs.size && face.size == 1 && suffix.isEmpty()) null
+        else inputs.joinToString("+") { GameActions.classicLabel(it, ps) } + suffix
+        if (label != null) {
+            // Texto (LB, R1, ✕◀◀, X+Y...): pilula escura translucida.
+            text.textSize = br * 0.95f
+            val w = text.measureText(label) + br * 0.9f
+            fill.shader = null
+            fill.color = Color.argb(150, 12, 10, 28)
+            fill.alpha = alphaOf(e, 0.75f)
+            c.drawRoundRect(bx - w / 2, by - br * 0.8f, bx + w / 2, by + br * 0.8f, br, br, fill)
+            text.color = Color.WHITE
+            text.alpha = alphaOf(e, 1f)
+            c.drawText(label, bx, by + text.textSize / 3, text)
+            return
+        }
+        fill.shader = null
+        fill.color = Color.argb(160, 12, 10, 28)
+        fill.alpha = alphaOf(e, 0.8f)
+        c.drawCircle(bx, by, br, fill)
+        drawClassicGlyph(c, face[0], ps, bx, by, br * 1.05f, alphaOf(e, 1f))
+    }
+
+    private fun classicColor(i: PadInput, ps: Boolean): Int = if (ps) {
         when (i) {
             PadInput.A -> Color.parseColor("#7CB2E8")
             PadInput.B -> Color.parseColor("#FF6666")
@@ -218,9 +279,10 @@ class TouchControlsView(context: Context) : View(context) {
         }
     }
 
-    private fun drawClassicGlyph(c: Canvas, i: PadInput, x: Float, y: Float, r: Float, alpha: Int) {
-        val color = classicColor(i)
-        if (style == ControlStyle.XBOX) {
+    /** Letra do Xbox ou simbolo do PlayStation, centrado em (x, y) com raio r. */
+    private fun drawClassicGlyph(c: Canvas, i: PadInput, ps: Boolean, x: Float, y: Float, r: Float, alpha: Int) {
+        val color = classicColor(i, ps)
+        if (!ps) {
             text.color = color
             text.alpha = alpha
             text.textSize = r * 0.9f
@@ -229,7 +291,7 @@ class TouchControlsView(context: Context) : View(context) {
         }
         ring.color = color
         ring.alpha = alpha
-        ring.strokeWidth = r * 0.12f
+        ring.strokeWidth = (r * 0.12f).coerceAtLeast(1.5f * density)
         val s = r * 0.42f
         when (i) {
             PadInput.A -> { // cruz
@@ -253,35 +315,26 @@ class TouchControlsView(context: Context) : View(context) {
         val x = cx(e)
         val y = cy(e)
         val r = radius(e)
-        fill.shader = null
-        fill.color = Color.BLACK
-        fill.alpha = alphaOf(e, 0.28f)
-        c.drawCircle(x, y, r, fill)
-        ring.strokeWidth = 2f * density
-        ring.color = cream
-        ring.alpha = alphaOf(e, 0.7f)
-        c.drawCircle(x, y, r - density, ring)
-        // Marcas das 4 direcoes
-        text.color = cream
-        text.alpha = alphaOf(e, 0.6f)
-        text.textSize = r * 0.18f
+        drawGlass(c, e, x, y, r, false)
+        text.color = gold
+        text.alpha = alphaOf(e, 0.7f)
+        text.textSize = r * 0.16f
         c.drawText("▲", x, y - r * 0.72f, text)
         c.drawText("▼", x, y + r * 0.84f, text)
         c.drawText("◀", x - r * 0.78f, y + r * 0.06f, text)
         c.drawText("▶", x + r * 0.78f, y + r * 0.06f, text)
-        // Pomo
+        // Pomo: esfera do dragao.
         val active = stickPointer >= 0 && !editMode
         val kx = x + (if (active) stickDx else 0f) * r * 0.55f
         val ky = y + (if (active) stickDy else 0f) * r * 0.55f
-        val kr = r * 0.42f
+        val kr = r * 0.4f
         fill.shader = RadialGradient(kx - kr * 0.3f, ky - kr * 0.3f, kr * 1.3f,
             intArrayOf(if (style == ControlStyle.DRAGON) yellow else Color.LTGRAY, if (style == ControlStyle.DRAGON) orange else Color.GRAY),
             null, Shader.TileMode.CLAMP)
-        fill.alpha = alphaOf(e, if (active) 0.95f else 0.7f)
+        fill.alpha = alphaOf(e, if (active) 0.9f else 0.65f)
         c.drawCircle(kx, ky, kr, fill)
         fill.shader = null
         if (style == ControlStyle.DRAGON) {
-            // Estrelas da esfera no pomo.
             text.color = Color.parseColor("#D7261E")
             text.alpha = alphaOf(e, 0.9f)
             text.textSize = kr * 0.55f
@@ -290,26 +343,56 @@ class TouchControlsView(context: Context) : View(context) {
         }
     }
 
+    /**
+     * D-pad de 8 direcoes: vidro redondo com as 4 setas e 4 marcas nas
+     * diagonais; as direcoes premidas (incluindo diagonais) acendem.
+     */
     private fun drawDpad(c: Canvas, e: ControlElement) {
         val x = cx(e)
         val y = cy(e)
         val r = radius(e)
-        val arm = r * 0.36f
         val state = dpadState[e.id].orEmpty()
-        fun drawArm(dir: PadInput, l: Float, t: Float, rr: Float, b: Float) {
-            fill.shader = null
-            fill.color = if (dir in state) orange else Color.BLACK
-            fill.alpha = alphaOf(e, if (dir in state) 0.85f else 0.35f)
-            c.drawRoundRect(l, t, rr, b, arm * 0.3f, arm * 0.3f, fill)
-            ring.strokeWidth = 1.5f * density
-            ring.color = cream
-            ring.alpha = alphaOf(e, 0.8f)
-            c.drawRoundRect(l, t, rr, b, arm * 0.3f, arm * 0.3f, ring)
+        drawGlass(c, e, x, y, r, false)
+        // Cruz
+        val arm = r * 0.30f
+        fill.shader = null
+        fill.color = Color.argb(70, 255, 255, 255)
+        fill.alpha = alphaOf(e, 0.6f)
+        c.drawRoundRect(x - arm, y - r * 0.82f, x + arm, y + r * 0.82f, arm * 0.4f, arm * 0.4f, fill)
+        c.drawRoundRect(x - r * 0.82f, y - arm, x + r * 0.82f, y + arm, arm * 0.4f, arm * 0.4f, fill)
+        // Direcoes premidas acendem em laranja.
+        fun lit(dir: PadInput, l: Float, t: Float, rr: Float, b: Float) {
+            if (dir !in state) return
+            fill.color = orange
+            fill.alpha = alphaOf(e, 0.75f)
+            c.drawRoundRect(l, t, rr, b, arm * 0.4f, arm * 0.4f, fill)
         }
-        drawArm(PadInput.UP, x - arm, y - r, x + arm, y - arm)
-        drawArm(PadInput.DOWN, x - arm, y + arm, x + arm, y + r)
-        drawArm(PadInput.LEFT, x - r, y - arm, x - arm, y + arm)
-        drawArm(PadInput.RIGHT, x + arm, y - arm, x + r, y + arm)
+        lit(PadInput.UP, x - arm, y - r * 0.82f, x + arm, y - arm)
+        lit(PadInput.DOWN, x - arm, y + arm, x + arm, y + r * 0.82f)
+        lit(PadInput.LEFT, x - r * 0.82f, y - arm, x - arm, y + arm)
+        lit(PadInput.RIGHT, x + arm, y - arm, x + r * 0.82f, y + arm)
+        // Setas
+        text.color = gold
+        text.alpha = alphaOf(e, 1f)
+        text.textSize = r * 0.24f
+        c.drawText("▲", x, y - r * 0.5f, text)
+        c.drawText("▼", x, y + r * 0.62f, text)
+        c.drawText("◀", x - r * 0.56f, y + r * 0.08f, text)
+        c.drawText("▶", x + r * 0.56f, y + r * 0.08f, text)
+        // Diagonais (marcas que acendem quando a diagonal esta premida)
+        val d = r * 0.62f
+        for ((dx, dy) in listOf(-1f to -1f, 1f to -1f, -1f to 1f, 1f to 1f)) {
+            val h = if (dx < 0) PadInput.LEFT else PadInput.RIGHT
+            val v = if (dy < 0) PadInput.UP else PadInput.DOWN
+            val on = h in state && v in state
+            fill.color = if (on) yellow else glassEdge
+            fill.alpha = alphaOf(e, if (on) 0.95f else 0.45f)
+            c.drawCircle(x + dx * d * 0.72f, y + dy * d * 0.72f, r * (if (on) 0.07f else 0.045f), fill)
+        }
+        // Centro
+        fill.color = Color.argb(60, 255, 255, 255)
+        fill.alpha = alphaOf(e, 0.6f)
+        c.drawCircle(x, y, arm * 0.7f, fill)
     }
 
     // ------------------------------------------------------------------ toque
@@ -318,7 +401,7 @@ class TouchControlsView(context: Context) : View(context) {
         var best: ControlElement? = null
         var bestD = Float.MAX_VALUE
         for (e in layout.elements) {
-            if (!e.visible) continue
+            if (!isShown(e)) continue
             val d = hypot(px - cx(e), py - cy(e))
             // Um pouco de margem fora do circulo ajuda os dedos.
             val reach = radius(e) * (if (e.kind == ElementKind.BUTTON) 1.15f else 1.25f)

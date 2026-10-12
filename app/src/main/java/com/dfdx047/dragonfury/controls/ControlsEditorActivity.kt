@@ -78,14 +78,18 @@ class ControlsEditorActivity : AppCompatActivity() {
         val prefs = LauncherPrefs(this)
         setContent {
             DragonFuryTheme(themeMode = prefs.themeMode, darkMode = com.dfdx047.dragonfury.data.DarkMode.DARK) {
-                Editor(prefs) { finish() }
+                ControlsEditor(prefs) { finish() }
             }
         }
     }
 }
 
+/**
+ * Editor do layout. Usado pela ControlsEditorActivity (launcher) e por cima do
+ * jogo pausado ([overGame] = fundo transparente, ve-se o jogo atras).
+ */
 @Composable
-private fun Editor(prefs: LauncherPrefs, close: () -> Unit) {
+fun ControlsEditor(prefs: LauncherPrefs, overGame: Boolean = false, close: () -> Unit) {
     var layout by remember { mutableStateOf(ControlLayoutStore.load()) }
     var selected by remember { mutableStateOf<String?>(null) }
     var addMenu by remember { mutableStateOf(false) }
@@ -102,7 +106,7 @@ private fun Editor(prefs: LauncherPrefs, close: () -> Unit) {
         dirty = true
     }
 
-    Box(Modifier.fillMaxSize().background(Color(0xFF15102A))) {
+    Box(Modifier.fillMaxSize().background(if (overGame) Color.Black.copy(alpha = 0.35f) else Color(0xFF15102A))) {
         Text(
             stringResource(R.string.editor_hint),
             color = Color.White.copy(alpha = 0.35f),
@@ -114,6 +118,8 @@ private fun Editor(prefs: LauncherPrefs, close: () -> Unit) {
                 TouchControlsView(ctx).apply {
                     editMode = true
                     style = prefs.controlStyle
+                    directional = prefs.directional
+                    badge = prefs.buttonBadge
                     editListener = object : TouchControlsView.EditListener {
                         override fun onSelected(id: String?) {
                             selected = id
@@ -131,6 +137,8 @@ private fun Editor(prefs: LauncherPrefs, close: () -> Unit) {
                 v.layout = layout
                 v.selectedId = selected
                 v.style = prefs.controlStyle
+                v.directional = prefs.directional
+                v.badge = prefs.buttonBadge
             },
             modifier = Modifier.fillMaxSize(),
         )

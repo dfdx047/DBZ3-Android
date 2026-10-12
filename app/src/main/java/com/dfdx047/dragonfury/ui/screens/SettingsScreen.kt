@@ -44,8 +44,10 @@ import com.dfdx047.dragonfury.R
 import com.dfdx047.dragonfury.controls.ControlLayoutStore
 import com.dfdx047.dragonfury.controls.ControlsEditorActivity
 import com.dfdx047.dragonfury.data.AppLanguage
+import com.dfdx047.dragonfury.data.ButtonBadge
 import com.dfdx047.dragonfury.data.ControlStyle
 import com.dfdx047.dragonfury.data.DarkMode
+import com.dfdx047.dragonfury.data.Directional
 import com.dfdx047.dragonfury.data.ThemeMode
 import com.dfdx047.dragonfury.ui.LauncherViewModel
 import com.dfdx047.dragonfury.ui.components.Level
@@ -221,6 +223,16 @@ fun SettingsScreen(vm: LauncherViewModel) {
                 onChange = vm::setTouchEnabled,
             )
             SettingSegmented(
+                title = stringResource(R.string.ingame_directional),
+                subtitle = stringResource(R.string.settings_directional_sub),
+                options = listOf(
+                    Directional.DPAD to stringResource(R.string.directional_dpad),
+                    Directional.STICK to stringResource(R.string.directional_stick),
+                ),
+                selected = vm.directional,
+                onSelect = vm::setDirectional,
+            )
+            SettingSegmented(
                 title = stringResource(R.string.settings_touch_style),
                 options = listOf(
                     ControlStyle.DRAGON to "Dragon Fury",
@@ -230,6 +242,18 @@ fun SettingsScreen(vm: LauncherViewModel) {
                 selected = vm.controlStyle,
                 onSelect = vm::setControlStyle,
             )
+            if (vm.controlStyle == ControlStyle.DRAGON) {
+                SettingSegmented(
+                    title = stringResource(R.string.ingame_badge),
+                    options = listOf(
+                        ButtonBadge.XBOX to "Xbox",
+                        ButtonBadge.PLAYSTATION to "PlayStation",
+                        ButtonBadge.NONE to stringResource(R.string.badge_none),
+                    ),
+                    selected = vm.buttonBadge,
+                    onSelect = vm::setButtonBadge,
+                )
+            }
             SettingSlider(
                 title = stringResource(R.string.settings_touch_opacity),
                 value = vm.touchOpacity,
@@ -237,6 +261,12 @@ fun SettingsScreen(vm: LauncherViewModel) {
                 label = { v -> "${(v * 100).roundToInt()}%" },
             ) { v -> vm.setTouchOpacity(v) }
             SettingSwitch(stringResource(R.string.settings_touch_haptics), checked = vm.touchHaptics, onChange = vm::setTouchHaptics)
+            SettingSwitch(
+                stringResource(R.string.settings_pause_menus),
+                stringResource(R.string.settings_pause_menus_sub),
+                checked = vm.pauseOnMenus,
+                onChange = vm::setPauseOnMenus,
+            )
             SettingSwitch(
                 stringResource(R.string.settings_touch_hide_pad),
                 stringResource(R.string.settings_touch_hide_pad_sub),

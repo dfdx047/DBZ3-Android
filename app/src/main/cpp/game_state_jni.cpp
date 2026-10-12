@@ -92,3 +92,52 @@ Java_com_dfdx047_dragonfury_game_NativeGameState_nativeP1Side(JNIEnv*, jclass) {
   }
   return g_tracker.p1_left ? 1 : 2;
 }
+
+// ---------------------------------------------------------------------------
+// Pausa do jogo enquanto um menu esta aberto (menu dos controles por toque do
+// launcher ou o menu rapido do port, Back+Start / F1).
+//
+// Usa o mesmo mecanismo de suspensao do Xenia: GraphicsSystem::Pause() suspende
+// a thread do command processor da GPU e AudioSystem::Pause() para o audio.
+// Sem GPU a consumir comandos, a thread principal do jogo fica parada na espera
+// do ring buffer (sub_82235918, ver android_hooks.cpp) e o jogo congela no
+// frame atual. Resume() continua de onde parou.
+//
+// O Kotlin chama nativeSyncPause a cada tick do HelperEngine (60 Hz): assim o
+// menu rapido do port tambem pausa, sem mexer no codigo dele.
+// ---------------------------------------------------------------------------
+
+#include <rex/audio/audio_system.h>
+#include <rex/graphics/graphics_system.h>
+#include <rex/runtime.h>
+#include <rex/ui/overlay/quick_menu.h>
+
+namespace {
+std::mutex g_pause_mu;
+bool g_paused = false;
+}  // namespace
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_dfdx047_dragonfury_game_NativeGameState_nativeSyncPause(JNIEnv*, jclass, jboolean overlay_open,
+                                                                jboolean pause_quick_menu) {
+  std::lock_guard<std::mutex> lock(g_pause_mu);
+  auto* rt = rex::Runtime::instance();
+  if (!rt || !g_dragonfury_guest_base.load(std::memory_order_acquire)) return JNI_FALSE;
+  const bool want = overlay_open || (pause_quick_menu && rex::ui::QuickMenuDialog::IsOpen());
+  if (want == g_paused) return g_paused ? JNI_TRUE : JNI_FALSE;
+
+  // IGraphicsSystem/IAudioSystem sao as interfaces; as implementacoes do runtime
+  // sao sempre rex::graphics::GraphicsSystem (Vulkan deriva dela) e
+  // rex::audio::AudioSystem (SDL deriva dela).
+  auto* gpu = static_cast<rex::graphics::GraphicsSystem*>(rt->graphics_system());
+  auto* audio = static_cast<rex::audio::AudioSystem*>(rt->audio_system());
+  if (want) {
+    if (audio) audio->Pause();
+    if (gpu) gpu->Pause();
+  } else {
+    if (gpu) gpu->Resume();
+    if (audio) audio->Resume();
+  }
+  g_paused = want;
+  return g_paused ? JNI_TRUE : JNI_FALSE;
+}

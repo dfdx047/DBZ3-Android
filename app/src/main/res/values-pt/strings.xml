@@ -232,7 +232,7 @@
     <string name="settings_touch_hide_pad">Esconder com comando</string>
     <string name="settings_touch_hide_pad_sub">Quando um comando físico está ligado.</string>
     <string name="settings_touch_edit">Editar layout</string>
-    <string name="settings_touch_helpers_note">Botões do port: Ki (segure para carregar, sem Defesa + trás trás), Agarrão, Transformar, Modo Hyper, Contra-ataque e Troca do Tag. Crie as suas combinações no editor.</string>
+    <string name="settings_touch_helpers_note">Botões do port: Ki (segure para carregar, sem Defesa + trás trás), Agarrão, Transformar, Modo Hyper, Contra-ataque e Troca do Tag. Crie as suas combinações no editor. No jogo, a engrenagem (canto de cima) abre estas opções com o jogo pausado.</string>
     <string name="settings_touch_reset_title">Restaurar o layout?</string>
     <string name="settings_touch_reset_text">Todos os botões voltam ao lugar, tamanho e opacidade padrão. As suas macros são apagadas.</string>
     <string name="settings_physical_pad">Comando físico</string>
@@ -299,4 +299,16 @@
     <string name="about_project_text">O Dragon Fury é o port Android do DBZ Budokai 3 HD Collection, uma recompilação estática do jogo de Xbox 360: o código do jogo roda nativo, não é emulado. Baseado no projeto de PC do NovaPowers:</string>
     <string name="about_credits">Agradecimentos: NovaPowers (DBZ Budokai 3 HD Collection), equipe do ReXGlue SDK, SDL, libadrenotools (bylaws) e quem compila os drivers Turnip/Mesa (Mr. Purple, StevenMXZ, K11MCH1).</string>
     <string name="about_legal">Projeto de fã, não oficial e sem fins lucrativos. Nenhum arquivo do jogo é incluído: você precisa da sua cópia legal. Dragon Ball pertence à Bird Studio/Shueisha, Toei Animation e Bandai Namco.</string>
+    <string name="ingame_title">Controles</string>
+    <string name="ingame_paused">Jogo pausado enquanto este menu está aberto.</string>
+    <string name="ingame_directional">Direcional</string>
+    <string name="directional_dpad">D-pad (8 direções)</string>
+    <string name="directional_stick">Analógico</string>
+    <string name="ingame_badge">Indicação do botão do comando</string>
+    <string name="badge_none">Nenhuma</string>
+    <string name="ingame_port_menu">Menu do port</string>
+    <string name="ingame_resume">Continuar</string>
+    <string name="settings_directional_sub">O D-pad é melhor para este jogo 2D: toques duplos para dash e diagonais para voar.</string>
+    <string name="settings_pause_menus">Pausar nos menus</string>
+    <string name="settings_pause_menus_sub">O jogo para enquanto o menu dos controles (engrenagem no jogo) ou o menu do port (Back + Start) está aberto.</string>
 </resources>

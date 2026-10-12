@@ -40,6 +40,20 @@ class HelperEngine {
     private var running = false
     @Volatile private var side = NativeGameState.SIDE_UNKNOWN
 
+    /** Menu dos controles aberto por cima do jogo: o jogo fica pausado. */
+    @Volatile var menuOpen = false
+        set(value) {
+            field = value
+            handler.post { step() }
+        }
+
+    /** Pausar tambem enquanto o menu rapido do port (Back+Start) estiver aberto. */
+    @Volatile var pauseQuickMenu = true
+
+    /** Se o jogo esta pausado agora (pelo menu dos controles ou pelo menu rapido). */
+    @Volatile var paused = false
+        private set
+
     private val tick = object : Runnable {
         override fun run() {
             val start = SystemClock.uptimeMillis()
@@ -112,6 +126,7 @@ class HelperEngine {
     }
 
     private fun step() {
+        paused = NativeGameState.syncPause(menuOpen, pauseQuickMenu)
         side = NativeGameState.p1Side()
         val wanted = HashSet<PadInput>()
         val lx: Float

@@ -13,6 +13,12 @@ enum class GameOrientation(val key: String) { LANDSCAPE("landscape"), REVERSE("r
 /** Aspeto dos controles por toque. */
 enum class ControlStyle(val key: String) { DRAGON("dragon"), XBOX("xbox"), PLAYSTATION("playstation") }
 
+/** Direcional na tela: D-pad de 8 direcoes (padrao, melhor para os dash do jogo 2D) ou analogico. */
+enum class Directional(val key: String) { DPAD("dpad"), STICK("stick") }
+
+/** Indicacao do botao do comando no canto de cada botao (estilo Dragon Fury). */
+enum class ButtonBadge(val key: String) { XBOX("xbox"), PLAYSTATION("playstation"), NONE("none") }
+
 inline fun <reified T : Enum<T>> enumByKey(value: String?, default: T, key: (T) -> String): T =
     enumValues<T>().firstOrNull { key(it) == value } ?: default
 
@@ -39,6 +45,19 @@ class LauncherPrefs(context: Context) {
     var controlStyle: ControlStyle
         get() = enumByKey(prefs.getString(KEY_CONTROL_STYLE, null), ControlStyle.DRAGON) { it.key }
         set(v) = prefs.edit().putString(KEY_CONTROL_STYLE, v.key).apply()
+
+    var directional: Directional
+        get() = enumByKey(prefs.getString(KEY_DIRECTIONAL, null), Directional.DPAD) { it.key }
+        set(v) = prefs.edit().putString(KEY_DIRECTIONAL, v.key).apply()
+
+    var buttonBadge: ButtonBadge
+        get() = enumByKey(prefs.getString(KEY_BADGE, null), ButtonBadge.XBOX) { it.key }
+        set(v) = prefs.edit().putString(KEY_BADGE, v.key).apply()
+
+    /** Pausar o jogo enquanto o menu dos controles ou o menu rapido do port estao abertos. */
+    var pauseOnMenus: Boolean
+        get() = prefs.getBoolean(KEY_PAUSE_MENUS, true)
+        set(v) = prefs.edit().putBoolean(KEY_PAUSE_MENUS, v).apply()
 
     var touchEnabled: Boolean
         get() = prefs.getBoolean(KEY_TOUCH_ENABLED, true)
@@ -76,6 +95,9 @@ class LauncherPrefs(context: Context) {
         const val KEY_DARK = "dark_mode"
         const val KEY_ORIENTATION = "game_orientation"
         const val KEY_CONTROL_STYLE = "control_style"
+        const val KEY_DIRECTIONAL = "touch_directional"
+        const val KEY_BADGE = "touch_badge"
+        const val KEY_PAUSE_MENUS = "pause_on_menus"
         const val KEY_TOUCH_ENABLED = "touch_enabled"
         const val KEY_TOUCH_HIDE_WITH_PAD = "touch_hide_with_pad"
         const val KEY_TOUCH_HAPTICS = "touch_haptics"

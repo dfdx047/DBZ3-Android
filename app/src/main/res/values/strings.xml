@@ -233,7 +233,7 @@
     <string name="settings_touch_hide_pad">Hide with a gamepad</string>
     <string name="settings_touch_hide_pad_sub">When a physical controller is connected.</string>
     <string name="settings_touch_edit">Edit layout</string>
-    <string name="settings_touch_helpers_note">Port buttons: Ki (hold to charge, no need for Guard + back back), Grab, Transform, Hyper Mode, Counter and Tag switch. Create your own combos in the editor.</string>
+    <string name="settings_touch_helpers_note">Port buttons: Ki (hold to charge, no need for Guard + back back), Grab, Transform, Hyper Mode, Counter and Tag switch. Create your own combos in the editor. In game, the gear (top left) opens these options with the game paused.</string>
     <string name="settings_touch_reset_title">Reset the layout?</string>
     <string name="settings_touch_reset_text">Every button goes back to the default place, size and opacity. Your macros are removed.</string>
     <string name="settings_physical_pad">Physical controller</string>
@@ -300,4 +300,16 @@
     <string name="about_project_text">Dragon Fury is the Android port of DBZ Budokai 3 HD Collection, a static recompilation of the Xbox 360 game: the game code runs natively, it is not emulated. Based on the PC project by NovaPowers:</string>
     <string name="about_credits">Thanks to: NovaPowers (DBZ Budokai 3 HD Collection), the ReXGlue SDK team, SDL, libadrenotools (bylaws) and the Turnip/Mesa driver builders (Mr. Purple, StevenMXZ, K11MCH1).</string>
     <string name="about_legal">Unofficial, non-commercial fan project. No game files are included: you need your own legal copy. Dragon Ball belongs to Bird Studio/Shueisha, Toei Animation and Bandai Namco.</string>
+    <string name="ingame_title">Controls</string>
+    <string name="ingame_paused">Game paused while this menu is open.</string>
+    <string name="ingame_directional">Directional</string>
+    <string name="directional_dpad">D-pad (8 directions)</string>
+    <string name="directional_stick">Analog stick</string>
+    <string name="ingame_badge">Controller hint on the buttons</string>
+    <string name="badge_none">None</string>
+    <string name="ingame_port_menu">Port menu</string>
+    <string name="ingame_resume">Resume</string>
+    <string name="settings_directional_sub">D-pad is better for this 2D fighter: double taps for dashes and diagonals for flying.</string>
+    <string name="settings_pause_menus">Pause in menus</string>
+    <string name="settings_pause_menus_sub">The game stops while the controls menu (gear in game) or the port menu (Back + Start) is open.</string>
 </resources>

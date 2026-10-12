@@ -26,6 +26,23 @@ object NativeGameState {
         }
     }
 
+    /**
+     * Pausa (GPU + audio) enquanto [overlayOpen] ou, com [pauseQuickMenu], enquanto o
+     * menu rapido do port estiver aberto. Devolve se o jogo esta pausado.
+     */
+    fun syncPause(overlayOpen: Boolean, pauseQuickMenu: Boolean): Boolean {
+        if (!available) return false
+        return try {
+            nativeSyncPause(overlayOpen, pauseQuickMenu)
+        } catch (e: UnsatisfiedLinkError) {
+            available = false
+            false
+        }
+    }
+
     @JvmStatic
     private external fun nativeP1Side(): Int
+
+    @JvmStatic
+    private external fun nativeSyncPause(overlayOpen: Boolean, pauseQuickMenu: Boolean): Boolean
 }

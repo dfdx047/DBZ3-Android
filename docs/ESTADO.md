@@ -139,6 +139,16 @@ stubs; a interface Compose não foi compilada.
   em cima. O D-pad existe mas vem escondido.
 - Editor: arrastar, tamanho, opacidade, esconder, adicionar botões do comando, botões do
   port e macros (combinação ou sequência por frames, com "segurar último passo").
+- Visual (2026-10-12, pedido do usuário): botões de vidro fosco (branco translúcido), ícones
+  dourados, sem nomes por baixo; selo no canto com o botão do comando (Xbox ou PlayStation,
+  ou nenhum) — ex. "LB", "A◀◀" no botão de ki. Estilos clássicos Xbox/PlayStation mantêm-se.
+- Direcional: **D-pad de 8 direções por omissão** (jogo 2D: toque duplo = dash, diagonais
+  para voar) ou analógico, escolhido no launcher ou no jogo.
+- Engrenagem no canto de cima (no jogo): menu dos controles (direcional, estilo, selo,
+  opacidade, vibração, editar layout por cima do jogo, abrir o menu do port). Com o menu
+  aberto o jogo **pausa** (`nativeSyncPause`: `GraphicsSystem::Pause` + `AudioSystem::Pause`);
+  o menu rápido do port (Back+Start) também pausa, verificado a 60 Hz com
+  `QuickMenuDialog::IsOpen()`. Opção "Pausar nos menus" nas Configurações.
 
 ### Por testar no aparelho
 
@@ -150,6 +160,9 @@ stubs; a interface Compose não foi compilada.
 - [ ] Ícone, tema e textos pt/en; atalho na tela inicial; orientação invertida/automática
 - [ ] Importação SAF de ~2,5 GB e verificação completa
 - [ ] Drivers: lista, download e ativação (nome exato do repositório do StevenMXZ)
+- [ ] Pausa: o jogo congela e volta sem travar (áudio incluído); o menu rápido do port
+  continua a responder com a GPU pausada
+- [ ] Menu da engrenagem e editor por cima do jogo (ComposeView num SDLActivity)
 
 ## Perfil (8 Elite, 2026-10-12, `tools/profile.sh`)
 

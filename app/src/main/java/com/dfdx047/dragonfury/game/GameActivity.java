@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.WindowManager;
 
 import org.libsdl.app.SDLActivity;
@@ -96,6 +97,20 @@ public class GameActivity extends SDLActivity {
             mOverlay = null;
         }
         super.onDestroy();
+    }
+
+    /** Com o menu dos controles aberto, o Back do Android fecha o menu (nao vai para o jogo). */
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (mOverlay != null && mOverlay.isMenuOpen()) {
+            if (event.getKeyCode() == KeyEvent.KEYCODE_BACK) {
+                if (event.getAction() == KeyEvent.ACTION_UP) {
+                    mOverlay.onBackPressed();
+                }
+                return true;
+            }
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     /** Orientacao escolhida no launcher: paisagem, paisagem invertida ou automatica. */

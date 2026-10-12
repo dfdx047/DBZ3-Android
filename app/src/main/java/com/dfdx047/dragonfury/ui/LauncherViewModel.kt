@@ -99,6 +99,21 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     @JvmName("changeControlStyle")
     fun setControlStyle(v: ControlStyle) { controlStyle = v; prefs.controlStyle = v }
 
+    var directional by mutableStateOf(prefs.directional)
+        private set
+    @JvmName("changeDirectional")
+    fun setDirectional(v: com.dfdx047.dragonfury.data.Directional) { directional = v; prefs.directional = v }
+
+    var buttonBadge by mutableStateOf(prefs.buttonBadge)
+        private set
+    @JvmName("changeButtonBadge")
+    fun setButtonBadge(v: com.dfdx047.dragonfury.data.ButtonBadge) { buttonBadge = v; prefs.buttonBadge = v }
+
+    var pauseOnMenus by mutableStateOf(prefs.pauseOnMenus)
+        private set
+    @JvmName("changePauseOnMenus")
+    fun setPauseOnMenus(v: Boolean) { pauseOnMenus = v; prefs.pauseOnMenus = v }
+
     var touchEnabled by mutableStateOf(prefs.touchEnabled)
         private set
     // JvmName: evita o conflito com o setter privado da propriedade (mesma assinatura JVM).
