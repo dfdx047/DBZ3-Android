@@ -122,16 +122,17 @@ object GameActions {
                 ControlElement("transform", ElementKind.BUTTON, ControlAction.Press(setOf(PadInput.RB)), ControlIcon.TRANSFORM, "RB", 0.74f, 0.42f, 50f),
                 ControlElement("hyper", ElementKind.BUTTON, ControlAction.Press(setOf(PadInput.LT)), ControlIcon.HYPER, "LT", 0.82f, 0.30f, 50f),
                 ControlElement("counter", ElementKind.BUTTON, ControlAction.Press(setOf(PadInput.RT)), ControlIcon.COUNTER, "RT", 0.95f, 0.40f, 50f),
-                ControlElement("swap", ElementKind.BUTTON, ControlAction.Press(setOf(PadInput.BACK)), ControlIcon.SWAP, "BACK", 0.44f, 0.09f, 42f),
-                ControlElement("start", ElementKind.BUTTON, ControlAction.Press(setOf(PadInput.START)), ControlIcon.START, "START", 0.56f, 0.09f, 42f),
+                ControlElement("swap", ElementKind.BUTTON, ControlAction.Press(setOf(PadInput.BACK)), ControlIcon.SWAP, "BACK", 0.33f, 0.09f, 42f),
+                ControlElement("start", ElementKind.BUTTON, ControlAction.Press(setOf(PadInput.START)), ControlIcon.START, "START", 0.67f, 0.09f, 42f),
             ),
         )
     }
 
-    /** Menus do jogo: so o necessario para navegar. */
+    /**
+     * Menus do jogo: so o necessario. No Budokai 3 confirma-se com A (✕), volta-se
+     * com Y (△) e Back/Select mostra a informacao da tela.
+     */
     fun defaultMenuLayout(): ControlLayout {
-        val cx = 0.875f
-        val cy = 0.66f
         fun pad(id: String, input: PadInput, x: Float, y: Float, size: Float) =
             ControlElement(id, ElementKind.BUTTON, ControlAction.Press(setOf(input)), ControlIcon.MACRO,
                 classicLabel(input, false), x, y, size)
@@ -139,13 +140,9 @@ object GameActions {
             listOf(
                 ControlElement("stick", ElementKind.STICK, ControlAction.Press(emptySet()), ControlIcon.MACRO, "", 0.15f, 0.66f, 150f),
                 ControlElement("dpad", ElementKind.DPAD, ControlAction.Press(emptySet()), ControlIcon.MACRO, "", 0.15f, 0.66f, 150f),
-                pad("m_a", PadInput.A, cx, cy + 0.18f, 62f),
-                pad("m_b", PadInput.B, cx + 0.075f, cy, 62f),
-                pad("m_x", PadInput.X, cx - 0.075f, cy, 52f),
-                pad("m_y", PadInput.Y, cx, cy - 0.18f, 52f),
-                pad("m_lb", PadInput.LB, 0.06f, 0.12f, 46f),
-                pad("m_rb", PadInput.RB, 0.94f, 0.12f, 46f),
-                ControlElement("m_start", ElementKind.BUTTON, ControlAction.Press(setOf(PadInput.START)), ControlIcon.START, "START", 0.62f, 0.09f, 42f),
+                pad("m_a", PadInput.A, 0.84f, 0.76f, 68f),
+                pad("m_y", PadInput.Y, 0.93f, 0.56f, 62f),
+                ControlElement("m_back", ElementKind.BUTTON, ControlAction.Press(setOf(PadInput.BACK)), ControlIcon.BACK, "SELECT", 0.84f, 0.30f, 46f),
             ),
             menu = true,
         )

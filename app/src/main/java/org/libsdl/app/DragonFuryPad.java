@@ -39,10 +39,12 @@ public final class DragonFuryPad {
             return true;
         }
         try {
+            // Rumble do jogo -> vibrador do aparelho (ver DragonFuryHaptics).
+            DragonFuryHaptics.install(SDL.getContext());
             // pid.codes (0x1209): VID/PID que nenhum driver HIDAPI do SDL reclama.
             SDLControllerManager.nativeAddJoystick(DEVICE_ID, "Dragon Fury Touch",
                     "dragonfury-touch-pad", 0x1209, 0xDF03, BUTTON_MASK, 6, AXIS_MASK, 0,
-                    false, false);
+                    true, false);
             sAttached = true;
             // Valores iniciais: analogicos ao centro e gatilhos soltos.
             for (int i = 0; i < 4; i++) {

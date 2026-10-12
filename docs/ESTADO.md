@@ -175,6 +175,32 @@ stubs; a interface Compose não foi compilada.
     talvez 32-bit, sem estragar a build principal;
   - cheats que faltam (RE do save); testar mods e packs de texturas.
 
+### Teste de 2026-10-12 à noite (Odin 3) e correções
+
+- Layout de menus refeito: só D-pad, A (✕ confirma), Y (△ volta) e Back/Select (informação).
+  O LB do layout antigo ficava por cima da engrenagem. Back/Start da luta afastados do pause.
+- Troca luta/menus: histerese baixada para 1,5 s; botão para trocar à mão (ao lado da engrenagem).
+- **Pausa não parava o jogo** (só o áudio): `GraphicsSystem::Pause` suspende a thread da GPU com
+  `Thread::Suspend`, que no Android não parou nada. Agora a thread principal do jogo fica presa
+  no hook da espera do ring buffer (`android_hooks.cpp`, `g_dragonfury_pause` + condvar) enquanto
+  a pausa estiver pedida; áudio com `AudioSystem::Pause`. `nativeForceResume` ao fechar o jogo.
+  (O patch 0012 continua aplicado mas já não é usado.)
+- Vibração com comando físico: o SDL só faz rumble em comandos com motor próprio (o embutido do
+  Odin/Retroid não tem). O comando virtual passa a anunciar rumble e fica sempre ligado;
+  `DragonFuryHaptics` manda esse rumble para o vibrador do aparelho. Por confirmar que o runtime
+  envia o rumble do jogador 1 também para o comando virtual.
+- Botão **Exportar logs** (Sobre e Configurações): zip em `Download/` com logcat da app, log da
+  sessão, `dbz3_user.toml`, `cvars.txt`, driver ativo e propriedades gráficas. Opção "Log
+  detalhado" (`log_level = "debug"`).
+- **Tag Team não aparece**: o CMake do Android compila só as fontes antigas do projeto original
+  (sem `tagteam.cpp`, `tagteam_slots.cpp`, `tagteam_panel.cpp`, `net/*`, `campaigns.cpp`...).
+  Adicionado `-Pdf.fullSources=true` (opção `DBZ3_FULL_SOURCES`, desligada por omissão) que as
+  compila se existirem em `external/dbz3`. Pode pedir um `external/dbz3` mais recente, novo
+  codegen do `generated/` e reaplicar o overlay ao SDK: validar com o PC ligado.
+- Pedidos para depois: mais proporções de tela e patch de widescreen (RE da câmara/HUD), cheats.
+- Depuração do driver Qualcomm: `tools/gpu-ab.sh <nome> [cvar=valor ...]` (A/B com captura de
+  ecrã e logcat em `perf/gpu/<nome>/`).
+
 ### Por testar no aparelho
 
 - [ ] Compila (Kotlin 2.2.10, Compose BOM 2025.09.00, AGP 8.13.0) — corrigir o que falhar

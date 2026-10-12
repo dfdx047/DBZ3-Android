@@ -13,7 +13,9 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
+#include <mutex>
 #include <thread>
 
 #include <rex/hook.h>
@@ -25,6 +27,15 @@ REX_EXTERN(__imp__sub_82235918);
 // corre logo desde o arranque e muitas vezes por frame.
 extern std::atomic<uint8_t*> g_dragonfury_guest_base;
 
+// Pausa dos menus por cima do jogo (game_state_jni.cpp). A thread principal do
+// jogo passa por este hook em todos os frames (espera por espaco no ring buffer
+// da GPU); com a pausa pedida fica aqui parada ate a pausa acabar, e a logica do
+// jogo congela no frame atual. (O GraphicsSystem::Pause do SDK suspende a thread
+// da GPU com Thread::Suspend, que no Android nao parava o jogo.)
+std::atomic<bool> g_dragonfury_pause{false};
+std::mutex g_dragonfury_pause_mu;
+std::condition_variable g_dragonfury_pause_cv;
+
 REX_HOOK_RAW(sub_82235918) {
   using clock = std::chrono::steady_clock;
   thread_local clock::time_point last_call{};
@@ -32,6 +43,10 @@ REX_HOOK_RAW(sub_82235918) {
 
   if (g_dragonfury_guest_base.load(std::memory_order_relaxed) != base) {
     g_dragonfury_guest_base.store(base, std::memory_order_release);
+  }
+  if (g_dragonfury_pause.load(std::memory_order_acquire)) {
+    std::unique_lock<std::mutex> lock(g_dragonfury_pause_mu);
+    g_dragonfury_pause_cv.wait(lock, [] { return !g_dragonfury_pause.load(std::memory_order_acquire); });
   }
 
   const auto now = clock::now();

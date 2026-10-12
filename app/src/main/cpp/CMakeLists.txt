@@ -112,6 +112,32 @@ set(DBZ3_SOURCES
     ${DBZ3_ROOT}/src/ingame/quick_settings.cpp
 )
 
+# Fontes que versoes mais novas do projeto original trouxeram (Tag Team, online,
+# campanhas, UI do jogo). So entram se existirem no external/dbz3: com uma copia
+# antiga do projeto o build continua igual. Atualizar o external/dbz3 pede
+# tambem regenerar o generated/ (codegen) e reaplicar o overlay ao SDK.
+# Ainda por validar no Android: ligar com ./gradlew assembleRelease -Pdf.fullSources=true
+option(DBZ3_FULL_SOURCES "Compilar Tag Team, online e campanhas do projeto original" OFF)
+if(DBZ3_FULL_SOURCES)
+foreach(DBZ3_OPTIONAL_SOURCE
+        src/launcher/novas_mods.cpp
+        src/ingame/game_style.cpp
+        src/ingame/native_ui.cpp
+        src/ingame/menu_pilot.cpp
+        src/ingame/online_panel.cpp
+        src/ingame/tagteam_panel.cpp
+        src/net/netplay.cpp
+        src/net/room.cpp
+        src/net/netplay_hooks.cpp
+        src/tagteam.cpp
+        src/tagteam_slots.cpp
+        src/campaigns.cpp)
+    if(EXISTS "${DBZ3_ROOT}/${DBZ3_OPTIONAL_SOURCE}")
+        list(APPEND DBZ3_SOURCES "${DBZ3_ROOT}/${DBZ3_OPTIONAL_SOURCE}")
+    endif()
+endforeach()
+endif()
+
 # Codigo recompilado do yae3_xenon.xex (define GENERATED_SOURCES).
 include("${DBZ3_GENERATED}/sources.cmake")
 

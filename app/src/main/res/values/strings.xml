@@ -323,4 +323,11 @@
     <string name="settings_touch_layout_menu">Menus</string>
     <string name="settings_touch_layout_battle">Battle</string>
     <string name="editor_layout">Layout</string>
+    <string name="export_logs">Export logs</string>
+    <string name="busy_exporting_logs">Collecting logs</string>
+    <string name="msg_logs_exported">Saved to Download/%1$s</string>
+    <string name="err_logs_export">Could not export the logs: %1$s</string>
+    <string name="settings_verbose_log">Detailed log (debugging)</string>
+    <string name="settings_verbose_log_sub">The game writes much more to the log. Use it to report a problem; it can cost a little performance.</string>
+    <string name="ingame_switch_layout">Switch battle / menu controls</string>
 </resources>

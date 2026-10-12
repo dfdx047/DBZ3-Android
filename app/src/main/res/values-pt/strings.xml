@@ -322,4 +322,11 @@
     <string name="settings_touch_layout_menu">Menus</string>
     <string name="settings_touch_layout_battle">Luta</string>
     <string name="editor_layout">Layout</string>
+    <string name="export_logs">Exportar logs</string>
+    <string name="busy_exporting_logs">Juntando os logs</string>
+    <string name="msg_logs_exported">Salvo em Download/%1$s</string>
+    <string name="err_logs_export">Não deu para exportar os logs: %1$s</string>
+    <string name="settings_verbose_log">Log detalhado (depuração)</string>
+    <string name="settings_verbose_log_sub">O jogo escreve muito mais no log. Use para reportar um problema; pode custar um pouco de desempenho.</string>
+    <string name="ingame_switch_layout">Trocar controles de luta / menu</string>
 </resources>

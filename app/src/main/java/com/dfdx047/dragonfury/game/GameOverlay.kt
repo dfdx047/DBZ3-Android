@@ -56,6 +56,7 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
     private var view: TouchControlsView? = null
     private var gear: ImageView? = null
     private var pauseButton: ImageView? = null
+    private var layoutButton: ImageView? = null
     private var compose: ComposeView? = null
     private val owner = OverlayOwner()
     private val screen = mutableStateOf(InGameScreen.CLOSED)
@@ -129,6 +130,24 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
             },
         )
 
+        // Trocar a mao entre o layout de luta e o de menus (ao lado da engrenagem). A troca
+        // automatica seguinte volta a mandar.
+        val lb = roundButton(R.drawable.ic_btn_layout, R.string.ingame_switch_layout) {
+            inBattle = !inBattle
+            view?.let {
+                it.releaseAll()
+                it.layout = currentLayout()
+            }
+        }
+        layoutButton = lb
+        activity.addContentView(
+            lb,
+            FrameLayout.LayoutParams((40 * density).toInt(), (40 * density).toInt(), Gravity.TOP or Gravity.START).apply {
+                leftMargin = (64 * density).toInt()
+                topMargin = (10 * density).toInt()
+            },
+        )
+
         // Menus (Compose), escondidos ate um dos botoes ser tocado.
         val c = ComposeView(activity).apply {
             setViewTreeLifecycleOwner(owner)
@@ -176,7 +195,9 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
     }
 
     private fun attachPad() {
-        if (prefs.touchMode != TouchMode.OFF) DragonFuryPad.attach()
+        // Sempre ligado (mesmo sem controles na tela): e por ele que a vibracao do
+        // jogo chega ao motor do aparelho quando o comando fisico nao tem motor.
+        DragonFuryPad.attach()
         engine.start()
     }
 
@@ -260,6 +281,7 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
         val a = prefs.touchOpacity.coerceAtLeast(0.4f)
         gear?.alpha = a
         pauseButton?.alpha = a
+        layoutButton?.alpha = a
         updateVisibility()
     }
 
@@ -268,7 +290,7 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
     fun onResume() {
         engine.pauseQuickMenu = prefs.pauseOnMenus
         applyAppearance()
-        if (DragonFuryPad.isAttached() || prefs.touchMode == TouchMode.OFF) engine.start()
+        if (DragonFuryPad.isAttached()) engine.start()
     }
 
     fun onPause() {
@@ -277,6 +299,7 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
     }
 
     fun onDestroy() {
+        NativeGameState.forceResume()
         main.removeCallbacks(attachRunnable)
         inputManager.unregisterInputDeviceListener(this)
         engine.release()
@@ -319,6 +342,8 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
         val buttons = if (menuOpen) View.GONE else View.VISIBLE
         gear?.visibility = buttons
         pauseButton?.visibility = buttons
+        // A troca de layout so faz sentido com os controles da tela a mostra.
+        layoutButton?.visibility = if (show) View.VISIBLE else View.GONE
     }
 
     override fun onInputDeviceAdded(deviceId: Int) {

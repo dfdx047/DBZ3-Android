@@ -26,6 +26,9 @@ val cmakeVersionFromDir: String? = cmakeDir?.let { dir ->
 // sem o jogo nativo: util para mexer na interface sem esperar pelo NDK.
 // O APK resultante abre o launcher mas nao consegue arrancar o jogo.
 val uiOnly = (project.findProperty("df.uiOnly") as String?) == "true"
+// "-Pdf.fullSources=true": compila tambem Tag Team, online e campanhas do projeto
+// original (precisa de um external/dbz3 recente e do generated/ dessa versao).
+val fullSources = (project.findProperty("df.fullSources") as String?) == "true"
 
 android {
     namespace = "com.dfdx047.dragonfury"
@@ -55,6 +58,7 @@ android {
                         "-DCMAKE_BUILD_TYPE=Release",
                         "-DREXGLUE_ENABLE_TRACY=OFF",
                         "-DREXGLUE_BUILD_TESTS=OFF",
+                        "-DDBZ3_FULL_SOURCES=" + (if (fullSources) "ON" else "OFF"),
                     )
                     targets += listOf(
                         "main", "rexruntime", "rexgpu-xenos", "SDL3-shared",

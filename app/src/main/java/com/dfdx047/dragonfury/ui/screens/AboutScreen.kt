@@ -74,6 +74,9 @@ fun AboutScreen(vm: LauncherViewModel) {
                 Text(stringResource(R.string.about_check_updates))
             }
         }
+        OutlinedButton(onClick = { vm.exportLogs(context) }, enabled = vm.busy == null) {
+            Text(stringResource(R.string.export_logs))
+        }
         if (vm.updateState == UpdateState.AVAILABLE) {
             TextButton(onClick = { vm.showUpdateDialog = true }) {
                 Text(stringResource(R.string.about_update_available, vm.updateInfo?.version ?: ""))

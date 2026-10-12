@@ -222,8 +222,8 @@ class HelperEngine {
     }
 
     companion object {
-        /** ~6 s a 60 Hz: entre assaltos o layout de luta fica. */
-        const val MENU_DELAY_TICKS = 360
+        /** 1,5 s a 60 Hz (pedido do usuario: no maximo ~2 s). */
+        const val MENU_DELAY_TICKS = 90
     }
 
     private fun keyFor(i: PadInput): Int? = when (i) {

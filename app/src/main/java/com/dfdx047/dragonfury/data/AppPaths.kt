@@ -38,7 +38,7 @@ object AppPaths {
     val lastRunLog: File get() = File(logsDir, "dragonfury_last.log")
     val driversDir: File get() = File(appDir, "drivers")
     val activeDriverDir: File get() = File(appDir, "driver")
-    val controlsFile: File get() = File(internalDir, "controls/layout.json")
-    val controlsMenuFile: File get() = File(internalDir, "controls/layout_menu.json")
+    val controlsFile: File get() = File(internalDir, "controls/layout_v2.json")
+    val controlsMenuFile: File get() = File(internalDir, "controls/layout_menu_v2.json")
     val updatesDir: File get() = File(cacheDir, "updates")
 }

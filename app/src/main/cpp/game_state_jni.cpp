@@ -94,24 +94,26 @@ Java_com_dfdx047_dragonfury_game_NativeGameState_nativeP1Side(JNIEnv*, jclass) {
 }
 
 // ---------------------------------------------------------------------------
-// Pausa do jogo enquanto um menu esta aberto (menu dos controles por toque do
-// launcher ou o menu rapido do port, Back+Start / F1).
+// Pausa do jogo enquanto um menu esta aberto (menus do launcher por cima do jogo
+// ou o menu rapido do port, Back+Start / F1).
 //
-// Usa o mesmo mecanismo de suspensao do Xenia: IGraphicsSystem::Pause() (virtual,
-// patch 0012: o plugin da GPU esconde os simbolos, por isso chama-se pela vtable)
-// chega a GraphicsSystem::Pause(), que suspende
-// a thread do command processor da GPU e AudioSystem::Pause() para o audio.
-// Sem GPU a consumir comandos, a thread principal do jogo fica parada na espera
-// do ring buffer (sub_82235918, ver android_hooks.cpp) e o jogo congela no
-// frame atual. Resume() continua de onde parou.
+// O jogo para no hook da espera do ring buffer (android_hooks.cpp), por onde a
+// thread principal passa em todos os frames; o audio para com AudioSystem::Pause().
+// (O GraphicsSystem::Pause do SDK so suspendia a thread da GPU e o jogo continuava.)
 //
 // O Kotlin chama nativeSyncPause a cada tick do HelperEngine (60 Hz): assim o
 // menu rapido do port tambem pausa, sem mexer no codigo dele.
 // ---------------------------------------------------------------------------
 
+#include <condition_variable>
+
 #include <rex/audio/audio_system.h>
 #include <rex/runtime.h>
 #include <rex/ui/overlay/quick_menu.h>
+
+extern std::atomic<bool> g_dragonfury_pause;
+extern std::mutex g_dragonfury_pause_mu;
+extern std::condition_variable g_dragonfury_pause_cv;
 
 namespace {
 std::mutex g_pause_mu;
@@ -127,19 +129,31 @@ Java_com_dfdx047_dragonfury_game_NativeGameState_nativeSyncPause(JNIEnv*, jclass
   const bool want = overlay_open || (pause_quick_menu && rex::ui::QuickMenuDialog::IsOpen());
   if (want == g_paused) return g_paused ? JNI_TRUE : JNI_FALSE;
 
-  // A GPU pausa pela interface (patch 0012). O audio do runtime e sempre
-  // rex::audio::AudioSystem (o SDL deriva dela), que esta no librexruntime.
-  auto* gpu = rt->graphics_system();
+  // O audio do runtime e sempre rex::audio::AudioSystem (o SDL deriva dela).
   auto* audio = static_cast<rex::audio::AudioSystem*>(rt->audio_system());
   if (want) {
+    g_dragonfury_pause.store(true, std::memory_order_release);
     if (audio) audio->Pause();
-    if (gpu) gpu->Pause();
   } else {
-    if (gpu) gpu->Resume();
     if (audio) audio->Resume();
+    {
+      std::lock_guard<std::mutex> l(g_dragonfury_pause_mu);
+      g_dragonfury_pause.store(false, std::memory_order_release);
+    }
+    g_dragonfury_pause_cv.notify_all();
   }
   g_paused = want;
   return g_paused ? JNI_TRUE : JNI_FALSE;
+}
+
+/** Ao sair do jogo: nunca deixar a thread do jogo presa na pausa. */
+extern "C" JNIEXPORT void JNICALL
+Java_com_dfdx047_dragonfury_game_NativeGameState_nativeForceResume(JNIEnv*, jclass) {
+  {
+    std::lock_guard<std::mutex> l(g_dragonfury_pause_mu);
+    g_dragonfury_pause.store(false, std::memory_order_release);
+  }
+  g_dragonfury_pause_cv.notify_all();
 }
 
 // ---------------------------------------------------------------------------

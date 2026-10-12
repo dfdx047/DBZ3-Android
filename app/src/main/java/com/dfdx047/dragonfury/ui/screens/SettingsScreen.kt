@@ -331,6 +331,14 @@ fun SettingsScreen(vm: LauncherViewModel) {
                 onSelect = vm::setLanguage,
             )
             SettingSwitch(
+                stringResource(R.string.settings_verbose_log),
+                stringResource(R.string.settings_verbose_log_sub),
+                checked = c.verboseLog,
+            ) { on -> vm.updateConfig { it.copy(verboseLog = on) } }
+            OutlinedButton(onClick = { vm.exportLogs(context) }, enabled = vm.busy == null) {
+                Text(stringResource(R.string.export_logs))
+            }
+            SettingSwitch(
                 stringResource(R.string.settings_check_updates),
                 checked = vm.checkUpdatesOnStart,
                 onChange = vm::setCheckUpdatesOnStart,

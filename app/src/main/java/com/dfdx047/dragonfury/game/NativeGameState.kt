@@ -62,6 +62,19 @@ object NativeGameState {
         }
     }
 
+    /** Solta a pausa sem condicoes (ao fechar o jogo). */
+    fun forceResume() {
+        if (!available) return
+        try {
+            nativeForceResume()
+        } catch (e: UnsatisfiedLinkError) {
+            available = false
+        }
+    }
+
+    @JvmStatic
+    private external fun nativeForceResume()
+
     @JvmStatic
     private external fun nativeFightFlag(): Int
 

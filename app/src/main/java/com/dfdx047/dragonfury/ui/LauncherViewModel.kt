@@ -511,6 +511,21 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ------------------------------------------------------------------ logs
+    fun exportLogs(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            busy = Busy(R.string.busy_exporting_logs)
+            try {
+                val name = com.dfdx047.dragonfury.data.LogExporter.export(context.applicationContext)
+                say(R.string.msg_logs_exported, name)
+            } catch (e: Exception) {
+                say(R.string.err_logs_export, e.message ?: "-")
+            } finally {
+                busy = null
+            }
+        }
+    }
+
     // ------------------------------------------------------------ atualizacao
     var updateState by mutableStateOf(UpdateState.IDLE)
         private set
