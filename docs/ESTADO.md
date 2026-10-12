@@ -62,6 +62,6 @@ com `yae3_xenon.xex` e a pasta `us/`.
 
 ## Perfil (8 Elite, 2026-10-12, `tools/profile.sh`)
 
-- Main XThread ~40% das amostras do processo: `sub_82235918` 54% e `sub_82231110` 12% dessa thread (código do jogo; a investigar se é espera ativa).
+- Main XThread ~40% das amostras do processo: `sub_82235918` 54% e `sub_82231110` 12% dessa thread. Confirmado: é a espera do D3D do 360 por espaço no ring buffer da GPU (`cctpl/db16cyc` viram nada ao recompilar). Hook em `app/src/main/cpp/android_hooks.cpp` (yield e depois sleep de 50 µs).
 - Audio Worker ~21%: polling em `WaitMultiple` (corrigido em 0006).
 - GPU Commands ~15%: `vkUpdateDescriptorSets` do driver Adreno é o maior custo.
