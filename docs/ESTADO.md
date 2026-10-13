@@ -390,3 +390,14 @@ stubs; a interface Compose não foi compilada.
   modo rápido (o enviado era o antigo, 00:31).
 - Próximo ganho possível no atalho: escrever direto na textura (imageStore, textura com
   STORAGE) em vez de buffer + cópia (~0,8 ms). Antes disso: medir 865 e Mali.
+
+### 2026-10-13 01:21 — Turnip com modo rápido
+- Luta: 10,1 ms de GPU por frame (era 11,5 sem atalho): desenho 3,8 (60 passes), resolve
+  2,9 (agora é quase só o custo do próprio atalho: 9 × compute + cópia buffer->imagem),
+  transfer 1,6 (24 passes), texturas 1,3. Carga do KGSL 64–74 % a 900 MHz (era 77–93 %),
+  menos trocas de clock. Ainda 1–6 frames > 16,7 ms a cada 5 s (máx. 20–28 ms).
+- 0022: a linha perf mostra as categorias do pior frame da janela (`pior: ...`), para ver o
+  que rebenta nesses frames.
+- Próximos ganhos no Odin: atalho a escrever direto na imagem (storage image, ~1 ms);
+  o resto (desenho + transferências ≈ 5,4 ms, 84 passes de tiler por frame) é do método de
+  emulação do EDRAM e não se corta sem outro caminho de render targets.
