@@ -82,3 +82,18 @@ O `yae3_xenon.xex` e o `generated/` só existem no PC do utilizador, por isso o 
    função chamada ~400×/frame que escreve DRAW_INDX é o DrawIndexedVertices, etc.
 3. Com o `d3d_map.md` (e o trace, se houver) fecha-se a tabela endereço → função D3D em
    `docs/D3D_MAP.md`, e só então se escrevem os hooks do renderizador nativo.
+
+## Alvo Mali (RG Cube, Mali-G57, driver r40p0, `cmd gpu vkjson`, 2026-10-13)
+- Vulkan **1.3**: dynamic rendering, synchronization2, extended dynamic state 1/2, scalarBlockLayout,
+  descriptor indexing, timeline semaphores, float16.
+- **Não tem**: `vertexPipelineStoresAndAtomics` (o Xenia exige; o nativo não escreve memória no
+  VS), `textureCompressionBC` (texturas DXT do jogo → descomprimir no CPU para RGBA8/RGB565, ou
+  transcodificar para ETC2/ASTC, que o Mali tem), `dualSrcBlend`, `logicOp`, `fillModeNonSolid`,
+  `depthBounds`, `shaderClipDistance` (planos de recorte da Xenos → `discard` no PS, se o jogo os usar).
+- Tem D24S8, MSAA 4x, `VK_EXT_multisampled_render_to_single_sampled`, `index_type_uint8`,
+  `primitive_topology_list_restart`, anisotropia 16x.
+- Limites: uniform buffer 64 KB (constantes VS 256×vec4 = 4 KB, cabe), storage buffer 256 MB,
+  7 descriptor sets, push constants 256 B.
+- Base do backend: Vulkan 1.1 + o que existir; no Mali usar dynamic rendering e sync2; no driver
+  da Qualcomm do 865 (Vulkan 1.1) render passes clássicos. Texturas BC: caminho de descompressão
+  obrigatório no Mali, nativo no Adreno.
