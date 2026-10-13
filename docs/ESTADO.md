@@ -612,3 +612,12 @@ a cache de pipelines passou a ser lida no arranque (patch 0024).
   Segue-se o renderizador nativo ao nível D3D (ver `PLANO_RENDER_NATIVO.md` e
   `GUIA_PORT_XBOX360_ANDROID.md`). Resumo para continuar numa conversa nova:
   `docs/RESUMO_CONTINUACAO.md`.
+
+### 2026-10-13 22:00 — início do render nativo: ferramentas do mapa D3D
+- `tools/d3d_map.py`: mapa estático das funções da biblioteca D3D do XDK a partir do
+  `generated/` (PM4 escritos, registos, imports Vd*, grafo de chamadas, intervalo da
+  biblioteca, API pública, sugestões de nome) → `perf/d3d/d3d_map.md` + `.json`.
+- `tools/d3d_trace_gen.py` + `-Pdf.d3dTrace=true`: hooks de rastreio das candidatas
+  (chamadas por frame e argumentos) em `logs/d3d_trace.log`, para confirmar no aparelho.
+- Testado com código sintético no formato do codegen do ReXGlue v0.10; falta correr no
+  `generated/` real (PC). Procedimento em `PLANO_RENDER_NATIVO.md`, secção F0.1.

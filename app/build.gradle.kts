@@ -29,6 +29,10 @@ val uiOnly = (project.findProperty("df.uiOnly") as String?) == "true"
 // "-Pdf.fullSources=true": compila tambem Tag Team, online e campanhas do projeto
 // original (precisa de um external/dbz3 recente e do generated/ dessa versao).
 val fullSources = (project.findProperty("df.fullSources") as String?) == "true"
+// "-Pdf.d3dTrace=true": compila os hooks de rastreio das funcoes D3D
+// (app/src/main/cpp/d3d_trace_hooks.cpp, gerado por tools/d3d_trace_gen.py).
+// So para mapear a biblioteca D3D; nao usar em testes de desempenho.
+val d3dTrace = (project.findProperty("df.d3dTrace") as String?) == "true"
 
 android {
     namespace = "com.dfdx047.dragonfury"
@@ -59,6 +63,7 @@ android {
                         "-DREXGLUE_ENABLE_TRACY=OFF",
                         "-DREXGLUE_BUILD_TESTS=OFF",
                         "-DDBZ3_FULL_SOURCES=" + (if (fullSources) "ON" else "OFF"),
+                        "-DDBZ3_D3D_TRACE=" + (if (d3dTrace) "ON" else "OFF"),
                     )
                     targets += listOf(
                         "main", "rexruntime", "rexgpu-xenos", "SDL3-shared",

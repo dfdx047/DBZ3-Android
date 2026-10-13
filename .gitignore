@@ -26,3 +26,4 @@ captures/
 
 # Perfis do simpleperf
 /perf/
+/app/src/main/cpp/d3d_trace_hooks.cpp

@@ -62,3 +62,23 @@ da biblioteca D3D do XDK, fila de comandos para uma thread de render Vulkan, res
 shaders do jogo traduzidos offline). É o método descrito em `docs/GUIA_PORT_XBOX360_ANDROID.md`,
 pensado para ser reutilizado noutros jogos de Xbox 360. Os hooks ao nível do motor (como o
 Skate 3) ficam só para o que o nível D3D não cobrir.
+
+## F0.1 — Mapa das funções D3D (ferramentas, 2026-10-13 22:00)
+O `yae3_xenon.xex` e o `generated/` só existem no PC do utilizador, por isso o mapa faz-se lá:
+1. `python3 tools/d3d_map.py` lê `external/dbz3/generated/*.cpp` (o codegen deixa a desmontagem
+   PowerPC em comentário), segue constantes em registos (lis/ori/li/addi) até aos `stw` e regista
+   os cabeçalhos PM4 type-3 (DRAW_INDX, DRAW_INDX_2, SET_CONSTANT e o tipo/registo do dword
+   seguinte, IM_LOAD, LOAD_ALU_CONSTANT, EVENT_WRITE, VIZ_QUERY...), escritas type-0 de registos
+   (RB_COPY_*, RB_SURFACE_INFO, PA_CL_VPORT...), imports do kernel (VdSwap, VdInitializeRingBuffer,
+   XPhysicalAlloc...) e o grafo de chamadas. Âncoras: `sub_82235918`/`sub_82231110` (espera por
+   espaço no ring buffer, já conhecidas do perfil). Resultado em `perf/d3d/d3d_map.md` (tabela
+   com o intervalo provável da biblioteca D3D, funções públicas = chamadas só de fora do
+   intervalo, e sugestões de nome) e `perf/d3d/d3d_map.json`.
+   `--dump sub_XXXXXXXX` imprime a desmontagem de uma função para confirmar à mão.
+2. Opcional, se o estático não chegar: `python3 tools/d3d_trace_gen.py` gera
+   `app/src/main/cpp/d3d_trace_hooks.cpp` (um `REX_HOOK_RAW` por candidata: chamadas por frame +
+   argumentos r3–r10/f1–f4/lr) e `./gradlew assembleRelease -Pdf.d3dTrace=true` compila-os;
+   numa luta escreve `logs/d3d_trace.log` (vai no "Exportar logs"). Com ~400 draws/frame, a
+   função chamada ~400×/frame que escreve DRAW_INDX é o DrawIndexedVertices, etc.
+3. Com o `d3d_map.md` (e o trace, se houver) fecha-se a tabela endereço → função D3D em
+   `docs/D3D_MAP.md`, e só então se escrevem os hooks do renderizador nativo.

@@ -164,6 +164,17 @@ target_sources(main PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/game_state_jni.cpp"
 )
 
+# Rastreio das funcoes D3D candidatas (tools/d3d_map.py + tools/d3d_trace_gen.py).
+option(DBZ3_D3D_TRACE "Hooks de rastreio da biblioteca D3D (logs/d3d_trace.log)" OFF)
+if(DBZ3_D3D_TRACE)
+    if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/d3d_trace_hooks.cpp")
+        target_sources(main PRIVATE "${CMAKE_CURRENT_LIST_DIR}/d3d_trace_hooks.cpp")
+    else()
+        message(FATAL_ERROR "DBZ3_D3D_TRACE ligado mas falta d3d_trace_hooks.cpp: corre "
+            "python3 tools/d3d_map.py && python3 tools/d3d_trace_gen.py")
+    endif()
+endif()
+
 # O imgui.h vem com o SDK instalado no PC; aqui apontamos para o submodulo.
 # (O codigo do ImGui em si ja esta dentro do librexruntime.so.)
 target_include_directories(main PRIVATE
