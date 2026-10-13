@@ -677,3 +677,16 @@ a cache de pipelines passou a ser lida no arranque (patch 0024).
 - 0040: `dbz3_skip_msaa_prepass` (cvars.txt, desligado por omissão) salta o pré-passo 4x
   (pitch 640) e, com isso, a transferência 4x → 1x. Com render targets diretos a imagem 1x já
   guarda o frame anterior, que é o que o pré-passo reconstrói. Por validar visualmente.
+
+### 2026-10-14 00:45–01:20 — o "pré-passo 4x" é o Clear() do D3D (patch 0041)
+- 0040 (`dbz3_skip_msaa_prepass`) deu ecrã preto nos dois (só 6 draws por frame): o pré-passo
+  não pode ser saltado. Fica desligado (não usar).
+- Desmontagem (ferramenta xdisasm feita a partir do SDK: shader.cpp + translator_disasm.cpp):
+  VS 1E6883FCCDE1F688 = `vfetch` posição xyz + cor de vf95 (stride 28 B) → oPos/o0;
+  PS A4A965C189287B99 = `oC0 = r0`. São os shaders embutidos do Clear() do XDK: um
+  retângulo (RECTLIST) com posições em píxeis (PA_CL_VTE_CNTL = 0x300) num render target
+  4x MSAA de pitch 640 (= 1280 a 1x no EDRAM), draw 0 cor+profundidade, draw 1 só
+  profundidade (RB_MODECONTROL 5). Depois o render target cache transfere 4x → 1x.
+- 0041 `dbz3_clear_to_1x` (cvars.txt): esse retângulo passa a ser desenhado direto na imagem
+  1x (posições ×2 na memória do guest, RB_SURFACE_INFO 1x com pitch ×2). Sem draw 4x não há
+  transferência 4x → 1x. Esperado: −2,5 ms no 865, até −17 ms no Mali.
