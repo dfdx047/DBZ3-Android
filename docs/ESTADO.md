@@ -505,3 +505,13 @@ fidelidade ao EDRAM (transferências entre configurações, dump + resolve). O c
 Esperado no RP5 com o driver da Qualcomm: transfer (8–9 ms) e resolve (4 ms) quase a zero;
 "outros" (13 ms) deve cair com o fim dos dumps. Risco: partes da imagem a faltar se algum
 passe dependesse do conteúdo transferido (desligar o interruptor confirma).
+
+### 2026-10-13 13:46 — render targets diretos: ecrã preto (patch 0029)
+Sem nenhuma transferência não há imagem, nem no vídeo de abertura. Causa: o Budokai 3 limpa
+cor e profundidade com 2 draws de ecrã inteiro a **4x MSAA e pitch 640** (mesmos tiles do
+EDRAM que 1x a 1280); sem a transferência 4x→1x a imagem de 1280 nunca é inicializada e o
+depth buffer fica com lixo. 0029: no modo direto ficam só as transferências entre chaves com a
+mesma base, pitch em tiles, formato e profundidade/cor, mas MSAA diferente (a "limpeza");
+caem as outras, incluindo as restaurações profundidade↔cor de ecrã inteiro (2 por lutador),
+que eram o grosso dos 8–9 ms. Nota: "Created 83 graphics pipelines from Vulkan storage" —
+a cache de pipelines passou a ser lida no arranque (patch 0024).
