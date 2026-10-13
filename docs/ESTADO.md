@@ -478,3 +478,30 @@ O RB2 usa Turnip v26.0.0-rc08 R8 (K11MCH1) nos 6xx/7xx.
   Pode explicar parte dos defeitos do driver nativo no RP5 (cores, sinais das texturas).
 - Também a considerar: afinidade das threads (CP/GPU nos núcleos grandes, XMA/ficheiros nos
   pequenos), ThinLTO, `vulkan_spirv_optimize` (SPIRV-Tools antes do driver).
+
+### 2026-10-13 13:29 — primeira captura de frames (RP5, luta, driver do sistema) e patch 0028
+Captura 20261013-132922.dfc: 2 frames, ~400 draws e 33 shaders por frame. Estrutura de um
+frame de luta (`tools/dfc_parse.py`):
+1. 2 draws a 4x MSAA pitch 640 (restauro da profundidade do frame anterior a partir da
+   textura 24_8 em 1EC2F000, zfunc always).
+2. Cena do lutador 1: 137 draws a 1280x720 (cenário + lutador), depois **resolve de
+   profundidade** → 1EC2F000, **cópia da cor** → 1F35F000, passe de **512x512** (pitch 560,
+   21 draws: silhueta do lutador para o contorno/aura) → 1E2D3000, 1 draw que desenha 1F35F000
+   de volta (restaura a cor) e 2 draws que escrevem 1EC2F000 em color@1328 (restauram a
+   profundidade na zona do depth buffer), 69 draws do lutador 2 com o mesmo ciclo, 28 draws
+   de efeitos.
+3. Brilho: 1280x720 → 320x184 → 160x96 → 80x48 (2 draws por nível) e composição.
+4. HUD: 77 draws e resolve com limpeza → 1F35F000; 2 draws finais → frontbuffer 1F6F8000.
+Conclusão: o jogo é simples na GPU (33 shaders, passes limpos) e o custo todo vinha da
+fidelidade ao EDRAM (transferências entre configurações, dump + resolve). O caminho novo é
+"render targets diretos", não um renderizador por engenharia reversa do motor:
+- Patch 0028 `dbz3_rt_direct`: cada configuração de render target guarda a sua imagem e nunca
+  há transferências entre elas (o jogo restaura cor e profundidade ele próprio); as limpezas
+  por resolve aplicam-se também às imagens irmãs com a mesma base; resolves de profundidade
+  vão direto do depth buffer para as texturas k_24_8 (R32F) e k_8_8_8_8 ([stencil, d_lo,
+  d_mid, d_hi]) do destino, sem dump; atalho de cor passa a aceitar resolves pequenos (brilho).
+- `vulkan_sparse_shared_memory = false` no toml (como RB2 e Skate3).
+- Launcher: interruptor "Render targets diretos" (ligado por omissão).
+Esperado no RP5 com o driver da Qualcomm: transfer (8–9 ms) e resolve (4 ms) quase a zero;
+"outros" (13 ms) deve cair com o fim dos dumps. Risco: partes da imagem a faltar se algum
+passe dependesse do conteúdo transferido (desligar o interruptor confirma).

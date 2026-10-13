@@ -158,6 +158,11 @@ fun SettingsScreen(vm: LauncherViewModel) {
                     checked = c.directResolveFast,
                 ) { on -> vm.updateConfig { it.copy(directResolveFast = on) } }
             }
+            SettingSwitch(
+                stringResource(R.string.settings_rt_direct),
+                stringResource(R.string.settings_rt_direct_sub),
+                checked = c.rtDirect,
+            ) { on -> vm.updateConfig { it.copy(rtDirect = on) } }
             SettingDropdown(
                 title = stringResource(R.string.settings_aa),
                 options = listOf(

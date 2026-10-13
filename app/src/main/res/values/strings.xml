@@ -348,4 +348,6 @@
     <string name="turnip_compat_bc">Decompressed BC textures</string>
     <string name="turnip_compat_depth">Depth as float 32</string>
     <string name="ingame_capture">Capture 2 frames (diagnostic)</string>
+    <string name="settings_rt_direct">Direct render targets</string>
+    <string name="settings_rt_direct_sub">Each pass draws into its own image with no copies between them (less GPU work). Turn off if parts of the image go missing.</string>
 </resources>
