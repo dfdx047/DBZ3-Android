@@ -67,6 +67,17 @@ public class GameActivity extends SDLActivity {
         super.onCreate(savedInstanceState);
 
         requestSixtyHz();
+        // Jogo com carga constante: pede ao sistema para nao deixar a GPU/CPU cair em
+        // estados de poupanca entre frames (buracos de 10-15 ms na GPU, logs de
+        // 2026-10-13). "env:DF_NO_SUSTAINED = 1" no cvars.txt desliga, para A/B.
+        if (!"1".equals(Os.getenv("DF_NO_SUSTAINED"))) {
+            try {
+                getWindow().setSustainedPerformanceMode(true);
+                Log.i(TAG, "Modo de desempenho sustentado: ligado");
+            } catch (RuntimeException e) {
+                Log.w(TAG, "Modo de desempenho sustentado indisponivel", e);
+            }
+        }
 
         // Controles por toque por cima do jogo (se nao foram desligados no launcher).
         mOverlay = new GameOverlay(this);
