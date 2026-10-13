@@ -391,12 +391,14 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
         }
         if (!show) v.releaseAll()
         v.visibility = if (show) View.VISIBLE else View.GONE
-        // Engrenagem e pause ficam sempre (menos com um menu aberto).
-        val buttons = if (menuOpen) View.GONE else View.VISIBLE
+        // Engrenagem e pause ficam sempre (menos com um menu aberto). Teste do
+        // compositor: "env:DF_HIDE_BUTTONS = 1" no cvars.txt esconde-os (o Back abre o menu).
+        val hideAll = android.system.Os.getenv("DF_HIDE_BUTTONS") == "1"
+        val buttons = if (menuOpen || hideAll) View.GONE else View.VISIBLE
         gear?.visibility = buttons
         pauseButton?.visibility = buttons
         // A troca de layout so faz sentido com os controles da tela a mostra.
-        layoutButton?.visibility = if (show) View.VISIBLE else View.GONE
+        layoutButton?.visibility = if (show && !hideAll) View.VISIBLE else View.GONE
     }
 
     override fun onInputDeviceAdded(deviceId: Int) {
