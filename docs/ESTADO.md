@@ -442,3 +442,14 @@ escreve direto na memória do guest, sem dump do EDRAM), hoisting de uploads/car
 para fora dos passes (0003/0007/0020/0026: menos quebras de pass no tiler, ataca os "outros"),
 LOD implícito nos shaders (0018), páginas voláteis (0013/0028/0032), afinidade de threads/ADPF.
 O RB2 usa Turnip v26.0.0-rc08 R8 (K11MCH1) nos 6xx/7xx.
+
+### 2026-10-13 07:41–07:48 — RP5 com Turnip (R5, R6, PurpleVK T30): modos 1–5 sem efeito
+- Tudo com glitches em todos os modos, incluindo sysmem, nolrz/noubwc, flushall/syncdraw e
+  caminhos simples: não é GMEM, LRZ, UBWC nem falta de barreiras. O jogo corre (texturas
+  carregam, resolves normais), a imagem é que sai errada.
+- Diferença entre o Turnip do RP5 (Adreno 650) e o do Odin (830, funciona): só
+  `maxStorageBufferRange` (128 MB contra 2 GB) e sparse binding. Com 128 MB a memória do guest
+  (512 MB) fica partida em 4 storage buffers e cada acesso dos shaders (vertex fetch, memexport)
+  passa por um switch; no Odin é um só buffer. Patch 0025: `dbz3_vk_max_storage_buffer_range_mb`
+  força o valor; modo 6 das correções do Turnip = 512 (um só buffer, fora da especificação, mas o
+  hardware A6xx deve aguentar).

@@ -117,6 +117,7 @@ fun DriversScreen(vm: LauncherViewModel) {
                         3 to stringResource(R.string.turnip_compat_paths),
                         4 to stringResource(R.string.turnip_compat_all),
                         5 to stringResource(R.string.turnip_compat_sync),
+                        6 to stringResource(R.string.turnip_compat_single_buffer),
                     ),
                     selected = vm.turnipCompat,
                     onSelect = vm::setTurnipCompat,

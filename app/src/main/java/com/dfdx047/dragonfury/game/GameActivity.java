@@ -275,6 +275,9 @@ public class GameActivity extends SDLActivity {
      *     BC descomprimidas (como no driver da Qualcomm) e depth em float 32
      *   4 tudo junto (1 + 2 + 3)
      *   5 diagnostico: TU_DEBUG=flushall,syncdraw (se corrigir, falta uma barreira)
+     *   6 memoria do jogo num so storage buffer de 512 MB (como no Turnip dos 7xx/8xx, onde
+     *     funciona); o Turnip dos 6xx diz 128 MB e a memoria fica partida em 4, com um
+     *     switch em cada acesso dos shaders (patch 0025)
      */
     private void applyTurnipCompat() {
         @SuppressWarnings("deprecation")
@@ -290,6 +293,9 @@ public class GameActivity extends SDLActivity {
         if (tu.length() > 0) {
             tu.setLength(tu.length() - 1);
             setEnv("TU_DEBUG", tu.toString());
+        }
+        if (mode == 6) {
+            setEnv("REX_DBZ3_VK_MAX_STORAGE_BUFFER_RANGE_MB", "512");
         }
         if (mode == 3 || mode == 4) {
             setEnv("REX_VULKAN_DYNAMIC_RENDERING", "false");

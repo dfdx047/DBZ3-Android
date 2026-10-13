@@ -346,4 +346,5 @@
     <string name="turnip_compat_paths">Simple emulator paths</string>
     <string name="turnip_compat_all">All together</string>
     <string name="turnip_compat_sync">Diagnostic: full sync (slow)</string>
+    <string name="turnip_compat_single_buffer">Game memory in one block (512 MB)</string>
 </resources>
