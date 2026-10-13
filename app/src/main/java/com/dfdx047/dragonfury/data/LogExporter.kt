@@ -83,6 +83,9 @@ object LogExporter {
             // Capturas de frames (.dfc): so a mais recente, que pode ter dezenas de MB.
             File(AppPaths.logsDir, "capture").listFiles { f -> f.extension == "dfc" }
                 ?.maxByOrNull { it.lastModified() }?.let { putFile("logs/capture/${it.name}", it) }
+            // Tempos por draw de cada captura (pequenos): todos.
+            File(AppPaths.logsDir, "capture").listFiles { f -> f.name.endsWith(".timing.txt") }
+                ?.forEach { putFile("logs/capture/${it.name}", it) }
             putFile("dbz3_user.toml", AppPaths.userToml)
             putFile("cvars.txt", File(AppPaths.appDir, "cvars.txt"))
             File(AppPaths.appDir, "cache").takeIf { it.isDirectory }?.walkTopDown()

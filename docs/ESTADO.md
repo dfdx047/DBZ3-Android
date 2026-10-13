@@ -559,3 +559,16 @@ a cache de pipelines passou a ser lida no arranque (patch 0024).
     para ~25 mudanças reais de render target.
   - Estatística de fins de passe por causa (com diagnóstico ligado, a cada 600 frames:
     "dbz3: fins de passe N/f | causa X/f ...").
+
+### 2026-10-13 20:17 — 0033 no RP5: sem ganho, especiais continuam pretos (patch 0034)
+- Fins de passe por frame: 54 → ~34 (desenho 26 passes): os uploads deixaram de partir passes
+  ("barreira de buffer (upload)" 0/f). Sobram "barreira de imagem" ~24/f e mudanças de render
+  target ~7/f. Mas o tempo de GPU ficou igual (~23 ms, ~42 fps): o custo não estava nos
+  passes partidos.
+- Os especiais continuam pretos: o pixel shader de cópia 6E57A6E305D5D69B é genérico (também
+  desenha os quads do brilho e, provavelmente, os efeitos dos especiais).
+- Patch 0034: `dbz3_rt_elide_restores` e `dbz3_hoist_uploads` passam a desligados por omissão
+  (sem ganho medido; a eliminação de restauros parte os especiais). Novo: **tempo de GPU por
+  draw** durante uma captura (cada draw no seu passe, timestamp antes de cada um); resumo por
+  pixel shader no log ("dbz3: perfil por draw") e detalhe em `<captura>.timing.txt` (vai no
+  "Exportar logs"). Serve para saber que shaders/draws pesam nos 12 ms de desenho.
