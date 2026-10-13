@@ -526,3 +526,19 @@ a cache de pipelines passou a ser lida no arranque (patch 0024).
 - Ainda a 30 fps (frameskip) o jogo "fica ruim": a lógica corre a 60 mas só metade é desenhada;
   o alvo tem de ser 60 desenhados. Caminho: vértices reais + shaders do jogo reescritos à mão
   (ver PLANO_RENDER_NATIVO.md).
+
+### 2026-10-13 19:47 — RP5, driver do sistema, 0031 (atalho de profundidade a funcionar)
+- Luta: GPU ~24–27 ms por frame desenhado: desenho 13–15 ms (26–35 passes), resolve 8–9 ms,
+  transfer 1.6, texturas 2.4 → 0.2 (o atalho de profundidade evita as cargas). Menus: 9–13 ms.
+- Mapa de leitores dos resolves (captura de luta): por lutador o jogo copia profundidade
+  (→1EC2F000) e cor (→1F35F000) e volta a desenhá-las por cima do ecrã (draw de restauro da
+  cor + 2 draws que reescrevem a profundidade via cor em color@1328) depois do passe de
+  512x512. No modo direto esse ecrã não é tocado entretanto: restauro e cópia são inúteis.
+- Patch 0032 `dbz3_rt_elide_restores` (ligado com os render targets diretos):
+  - draws de restauro (ecrã inteiro, opacos, ≤6 índices, que leem uma textura resolvida neste
+    frame do render target onde desenham, sem escritas nele desde o resolve) são ignorados;
+  - resolves que no frame anterior só tiveram restauros como leitores e foram sobrescritos por
+    outro resolve para o mesmo destino no mesmo frame não são feitos; se alguém ler a textura
+    a sério, esse resolve volta a ser feito para sempre (no máximo 1 frame com textura velha).
+  - Esperado na luta: −4 resolves de ecrã inteiro e −6 draws/−2 passes de ecrã inteiro por
+    frame. Log a cada 600 frames: "rt_direct: N resolves eliminados, M restauros ignorados".
