@@ -638,3 +638,17 @@ a cache de pipelines passou a ser lida no arranque (patch 0024).
   `vulkan_require_fill_mode_non_solid` passam a falso por omissão (o SDK já tem caminho sem
   eles) e as verificações de paridade exata do render target cache (formatos 16-bit, transferências
   bit-exatas) passam a avisos em vez de impedir o arranque.
+
+### 2026-10-14 00:10 — render nativo, passo 1: resolve direto na textura (patch 0038)
+- Mali a correr (0037): menus ~20 fps, luta ~10 fps, GPU ~98 ms/frame: **desenho 54 ms**,
+  resolve 18, texturas 15, transfer 10 (atalho dos efeitos desligado nesse teste). No Mali o
+  custo é o desenho (shaders do Xenia pesados para a G57); no 865 são os resolves.
+- 0038: o atalho resolve→textura passa a escrever **diretamente na imagem da textura**
+  (imageStore, sem buffer intermédio nem cópia buffer→imagem) e cobre os casos que ficavam de
+  fora: altura arredondada (320x184 → textura 320x180, 160x96 → 160x90, 80x48 → 80x45),
+  pitch ≠ largura (80 com pitch 96), render target 4x MSAA (média das amostras) e procura do
+  render target pela chave exata (as imagens irmãs do modo direto confundiam o dump). Também a
+  profundidade (k_24_8 → R32F, k_8_8_8_8 → bytes). As texturas candidatas (2D tiled sem mips,
+  RGBA8 ou R32F) são criadas com STORAGE quando o atalho está ligado. Sem STORAGE fica o
+  caminho antigo (buffer + cópia).
+- Esperado: resolves de 8–10 ms para ~2–3 ms no 865; `atalho=` perto de `resolves=` na linha perf.
