@@ -453,3 +453,14 @@ O RB2 usa Turnip v26.0.0-rc08 R8 (K11MCH1) nos 6xx/7xx.
   passa por um switch; no Odin é um só buffer. Patch 0025: `dbz3_vk_max_storage_buffer_range_mb`
   força o valor; modo 6 das correções do Turnip = 512 (um só buffer, fora da especificação, mas o
   hardware A6xx deve aguentar).
+
+### 2026-10-13 07:58 — RP5, Turnip R6, memória num só bloco (modo 6)
+- Funciona sem crash, a 60 fps com 12–15 ms de GPU por frame (no driver da Qualcomm eram ~39).
+- Nas capturas a geometria está certa (cenário e lutadores no sítio); o que está errado são as
+  texturas e as cores: paredes com a textura da relva, prédios em grelha de pontos, lutadores
+  pretos, faixas pretas/amarelas, e no menu retângulos com riscas horizontais (cara de
+  resolve/textura lida com o tiling errado). A correção da memória fica.
+- As correções do Turnip passaram a interruptores independentes (pref `turnip_compat_flags`):
+  1 um só bloco, 2 sysmem, 4 nolrz/noubwc, 8 BC descomprimido, 16 sem dynamic rendering/stencil
+  export, 32 depth float32, 64 flushall/syncdraw. Próximo teste: 1 + atalho de efeitos desligado;
+  1 + BC descomprimido; 1 + o resto.

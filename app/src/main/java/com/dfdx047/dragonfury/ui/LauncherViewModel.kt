@@ -93,10 +93,12 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         private set
     fun setOrientation(v: GameOrientation) { gameOrientation = v; prefs.gameOrientation = v }
 
-    var turnipCompat by mutableStateOf(prefs.turnipCompat)
+    var turnipCompatFlags by mutableStateOf(prefs.turnipCompatFlags)
         private set
-    @JvmName("changeTurnipCompat")
-    fun setTurnipCompat(v: Int) { turnipCompat = v; prefs.turnipCompat = v }
+    fun setTurnipCompatFlag(bit: Int, on: Boolean) {
+        turnipCompatFlags = if (on) turnipCompatFlags or bit else turnipCompatFlags and bit.inv()
+        prefs.turnipCompatFlags = turnipCompatFlags
+    }
 
     var controlStyle by mutableStateOf(prefs.controlStyle)
         private set

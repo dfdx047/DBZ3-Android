@@ -51,7 +51,7 @@ import com.dfdx047.dragonfury.ui.LauncherViewModel
 import com.dfdx047.dragonfury.ui.components.Level
 import com.dfdx047.dragonfury.ui.components.Pill
 import com.dfdx047.dragonfury.ui.components.SectionCard
-import com.dfdx047.dragonfury.ui.components.SettingDropdown
+import com.dfdx047.dragonfury.ui.components.SettingSwitch
 import com.dfdx047.dragonfury.ui.components.SettingSegmented
 import com.dfdx047.dragonfury.ui.components.StatusLine
 import com.dfdx047.dragonfury.ui.components.formatBytes
@@ -106,22 +106,21 @@ fun DriversScreen(vm: LauncherViewModel) {
         item {
             // Testes A/B dos glitches do Turnip nos Adreno 6xx (RP5): cada opcao liga um
             // conjunto de correcoes no arranque do jogo (GameActivity.applyTurnipCompat).
-            SectionCard(stringResource(R.string.turnip_compat_title), Icons.Filled.Build) {
-                SettingDropdown(
-                    title = stringResource(R.string.turnip_compat_mode),
-                    subtitle = stringResource(R.string.turnip_compat_sub),
-                    options = listOf(
-                        0 to stringResource(R.string.off),
-                        1 to stringResource(R.string.turnip_compat_sysmem),
-                        2 to stringResource(R.string.turnip_compat_nolrz),
-                        3 to stringResource(R.string.turnip_compat_paths),
-                        4 to stringResource(R.string.turnip_compat_all),
-                        5 to stringResource(R.string.turnip_compat_sync),
-                        6 to stringResource(R.string.turnip_compat_single_buffer),
-                    ),
-                    selected = vm.turnipCompat,
-                    onSelect = vm::setTurnipCompat,
-                )
+            SectionCard(stringResource(R.string.turnip_compat_title), Icons.Filled.Build, subtitle = stringResource(R.string.turnip_compat_sub)) {
+                listOf(
+                    1 to R.string.turnip_compat_single_buffer,
+                    8 to R.string.turnip_compat_bc,
+                    2 to R.string.turnip_compat_sysmem,
+                    4 to R.string.turnip_compat_nolrz,
+                    16 to R.string.turnip_compat_paths,
+                    32 to R.string.turnip_compat_depth,
+                    64 to R.string.turnip_compat_sync,
+                ).forEach { (bit, label) ->
+                    SettingSwitch(
+                        stringResource(label),
+                        checked = (vm.turnipCompatFlags and bit) != 0,
+                    ) { on -> vm.setTurnipCompatFlag(bit, on) }
+                }
             }
         }
         if (vm.installedDrivers.isNotEmpty()) {

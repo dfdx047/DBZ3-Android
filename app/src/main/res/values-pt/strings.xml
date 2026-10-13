@@ -338,12 +338,12 @@
     <string name="settings_direct_resolve_fast">Atalho dos efeitos: modo rápido</string>
     <string name="settings_direct_resolve_fast_sub">Também pula a cópia dos efeitos para a memória do jogo (só a textura é preenchida). Mais rápido; desligue se algum efeito ficar estranho.</string>
     <string name="turnip_compat_title">Correções do Turnip (Adreno 6xx)</string>
-    <string name="turnip_compat_mode">Modo de compatibilidade</string>
-    <string name="turnip_compat_sub">Para glitches gráficos com o Turnip (ex. Adreno 650). Teste uma opção de cada vez e reabra o jogo. Não muda nada no driver do sistema.</string>
+    <string name="turnip_compat_sub">Para glitches gráficos com o Turnip nos Adreno 6xx (ex. 650). Valem ao reabrir o jogo; combine à vontade. O driver do sistema ignora as de TU_DEBUG.</string>
     <string name="turnip_compat_sysmem">Sem GMEM (TU_DEBUG=sysmem)</string>
     <string name="turnip_compat_nolrz">Sem LRZ e UBWC</string>
-    <string name="turnip_compat_paths">Caminhos simples do emulador</string>
-    <string name="turnip_compat_all">Tudo junto</string>
+    <string name="turnip_compat_paths">Sem dynamic rendering e stencil export</string>
     <string name="turnip_compat_sync">Diagnóstico: sincronização total (lento)</string>
     <string name="turnip_compat_single_buffer">Memória do jogo num só bloco (512 MB)</string>
+    <string name="turnip_compat_bc">Texturas BC descomprimidas</string>
+    <string name="turnip_compat_depth">Depth em float 32</string>
 </resources>

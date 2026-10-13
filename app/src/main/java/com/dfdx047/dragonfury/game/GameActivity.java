@@ -267,43 +267,52 @@ public class GameActivity extends SDLActivity {
 
     /**
      * Correcoes para glitches do Turnip nos Adreno 6xx, escolhidas no launcher (aba
-     * Drivers). Antes do cvars.txt, que pode sobrepor qualquer uma. Variaveis TU_DEBUG
-     * so tem efeito no Turnip; o driver da Qualcomm ignora-as.
-     *   1 TU_DEBUG=sysmem: desenha direto na memoria, sem o modo GMEM (tiles)
-     *   2 TU_DEBUG=nolrz,noubwc: sem LRZ (depth de baixa resolucao) e sem compressao UBWC
-     *   3 caminhos simples do emulador: sem dynamic rendering, sem stencil export, texturas
-     *     BC descomprimidas (como no driver da Qualcomm) e depth em float 32
-     *   4 tudo junto (1 + 2 + 3)
-     *   5 diagnostico: TU_DEBUG=flushall,syncdraw (se corrigir, falta uma barreira)
-     *   6 memoria do jogo num so storage buffer de 512 MB (como no Turnip dos 7xx/8xx, onde
-     *     funciona); o Turnip dos 6xx diz 128 MB e a memoria fica partida em 4, com um
-     *     switch em cada acesso dos shaders (patch 0025)
+     * Drivers) como interruptores independentes (bits da pref "turnip_compat_flags").
+     * Antes do cvars.txt, que pode sobrepor qualquer uma. TU_DEBUG so tem efeito no
+     * Turnip; o driver da Qualcomm ignora-o.
+     *   1  memoria do jogo num so storage buffer de 512 MB (patch 0025): o Turnip dos 6xx
+     *      diz 128 MB e a memoria fica partida em 4 com um switch em cada acesso dos
+     *      shaders; com isto a geometria do RP5 fica certa (2026-10-13 07:58)
+     *   2  TU_DEBUG=sysmem (sem GMEM)
+     *   4  TU_DEBUG=nolrz,noubwc
+     *   8  texturas BC descomprimidas (vulkan_mask_features=textureCompressionBC)
+     *   16 sem dynamic rendering e sem stencil export
+     *   32 depth em float 32 (vulkan_disable_depth_unorm24)
+     *   64 diagnostico: TU_DEBUG=flushall,syncdraw (se corrigir, falta uma barreira)
      */
+    static final int TURNIP_SINGLE_BUFFER = 1, TURNIP_SYSMEM = 2, TURNIP_NOLRZ_UBWC = 4,
+            TURNIP_BC_DECOMPRESS = 8, TURNIP_SIMPLE_PASSES = 16, TURNIP_DEPTH_F32 = 32,
+            TURNIP_FULL_SYNC = 64;
+
     private void applyTurnipCompat() {
         @SuppressWarnings("deprecation")
         SharedPreferences prefs = getSharedPreferences("dragonfury", MODE_MULTI_PROCESS);
-        int mode = prefs.getInt("turnip_compat", 0);
-        if (mode <= 0) {
+        int flags = prefs.getInt("turnip_compat_flags", 0);
+        if (flags == 0) {
             return;
         }
         StringBuilder tu = new StringBuilder();
-        if (mode == 1 || mode == 4) tu.append("sysmem,");
-        if (mode == 2 || mode == 4) tu.append("nolrz,noubwc,");
-        if (mode == 5) tu.append("flushall,syncdraw,");
+        if ((flags & TURNIP_SYSMEM) != 0) tu.append("sysmem,");
+        if ((flags & TURNIP_NOLRZ_UBWC) != 0) tu.append("nolrz,noubwc,");
+        if ((flags & TURNIP_FULL_SYNC) != 0) tu.append("flushall,syncdraw,");
         if (tu.length() > 0) {
             tu.setLength(tu.length() - 1);
             setEnv("TU_DEBUG", tu.toString());
         }
-        if (mode == 6) {
+        if ((flags & TURNIP_SINGLE_BUFFER) != 0) {
             setEnv("REX_DBZ3_VK_MAX_STORAGE_BUFFER_RANGE_MB", "512");
         }
-        if (mode == 3 || mode == 4) {
+        if ((flags & TURNIP_BC_DECOMPRESS) != 0) {
+            setEnv("REX_VULKAN_MASK_FEATURES", "textureCompressionBC");
+        }
+        if ((flags & TURNIP_SIMPLE_PASSES) != 0) {
             setEnv("REX_VULKAN_DYNAMIC_RENDERING", "false");
             setEnv("REX_DBZ3_VK_DISABLE_EXTENSIONS", "VK_EXT_shader_stencil_export");
-            setEnv("REX_VULKAN_MASK_FEATURES", "textureCompressionBC");
+        }
+        if ((flags & TURNIP_DEPTH_F32) != 0) {
             setEnv("REX_VULKAN_DISABLE_DEPTH_UNORM24", "true");
         }
-        Log.i(TAG, "Correcoes do Turnip: modo " + mode + " TU_DEBUG=" + tu);
+        Log.i(TAG, "Correcoes do Turnip: flags " + flags + " TU_DEBUG=" + tu);
     }
 
     /**
