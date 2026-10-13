@@ -663,3 +663,17 @@ a cache de pipelines passou a ser lida no arranque (patch 0024).
 - O resolve continua a ~8 ms no 865 com só ~20 dispatches de compute: suspeita de bolhas (cada
   resolve fecha o passe e espera a GPU esvaziar). 0039: `dbz3_resolve_debug = 1` (cvars.txt)
   faz os resolves sem trabalho nenhum, só para medir quanto deles é custo real.
+
+### 2026-10-14 00:23–00:27 — dbz3_resolve_debug (RP5) e captura no Mali
+- RP5 com `dbz3_resolve_debug = 1` (resolves sem trabalho nenhum): a categoria "resolve"
+  **continua em ~9 ms** (e as texturas voltam a 7 ms porque passam a carregar da memória).
+  Ou seja, os ~8 ms de "resolve" não são os dispatches: são o fim do passe (o tiler grava a
+  cor + profundidade de 1280x720 na memória) e a espera da GPU que o resolve força. Fazer as
+  texturas lerem o render target sem resolve não ganharia nada; o custo é a quebra de passe.
+- Mali, captura com tempo por draw (cada draw no seu passe, por isso inflacionado): o
+  pré-passo 4x MSAA do início do frame (2 draws, PS A4A965C189287B99, pitch 640) custa ~8 ms,
+  e a transferência 4x → 1x que se segue ~9 ms. FXAA (F5F4…) ~5 ms, fundo (CB06…) ~3,7 ms.
+  `dbz3_hoist_uploads` no Mali: sem ganho.
+- 0040: `dbz3_skip_msaa_prepass` (cvars.txt, desligado por omissão) salta o pré-passo 4x
+  (pitch 640) e, com isso, a transferência 4x → 1x. Com render targets diretos a imagem 1x já
+  guarda o frame anterior, que é o que o pré-passo reconstrói. Por validar visualmente.
