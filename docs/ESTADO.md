@@ -633,3 +633,8 @@ a cache de pipelines passou a ser lida no arranque (patch 0024).
   em vertex shaders, que o Budokai 3 não usa; um draw que o peça é ignorado). Objetivo: o caminho
   emulado arrancar no Mali-G57 enquanto o renderizador nativo não está pronto. As texturas BC
   já têm descompressão no SDK quando o driver não as suporta.
+- 23:40, Mali com 0036: passou do vertexPipelineStoresAndAtomics e parou no `fillModeNonSolid`
+  (wireframe, que o Mali não tem). Patch 0037: no Android `vulkan_require_geometry_shader` e
+  `vulkan_require_fill_mode_non_solid` passam a falso por omissão (o SDK já tem caminho sem
+  eles) e as verificações de paridade exata do render target cache (formatos 16-bit, transferências
+  bit-exatas) passam a avisos em vez de impedir o arranque.
