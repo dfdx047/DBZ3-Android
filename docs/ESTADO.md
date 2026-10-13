@@ -515,3 +515,14 @@ mesma base, pitch em tiles, formato e profundidade/cor, mas MSAA diferente (a "l
 caem as outras, incluindo as restaurações profundidade↔cor de ecrã inteiro (2 por lutador),
 que eram o grosso dos 8–9 ms. Nota: "Created 83 graphics pipelines from Vulkan storage" —
 a cache de pipelines passou a ser lida no arranque (patch 0024).
+
+### 2026-10-13 14:09 — RP5, driver do sistema, render targets diretos (0029): imagem OK
+- GPU 27 ms por frame desenhado (eram 39): outros 13 → 0.3, transfer 8–9 → 1.5. Sobram
+  **desenho 14.5 ms** (33 passes, ~420 draws), **resolve 8 ms** e texturas 2.4.
+- O atalho de profundidade nunca se aplicou: `GetResolveInfo` troca o formato de destino dos
+  resolves de profundidade para k_24_8 (22) e eu só aceitava k_8_8_8_8. Patch 0031 corrige e
+  regista o motivo quando o atalho não se aplica. Esperado: resolve 8 → ~2 ms e menos uma
+  carga de 1280x720 por lutador.
+- Ainda a 30 fps (frameskip) o jogo "fica ruim": a lógica corre a 60 mas só metade é desenhada;
+  o alvo tem de ser 60 desenhados. Caminho: vértices reais + shaders do jogo reescritos à mão
+  (ver PLANO_RENDER_NATIVO.md).
