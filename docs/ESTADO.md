@@ -598,3 +598,17 @@ a cache de pipelines passou a ser lida no arranque (patch 0024).
   - Diagnóstico do atalho resolve→textura de cor: motivo por destino ("atalho resolve->textura
     nao aplicado (motivo N) dest=… + texturas existentes nesse endereço"), para saber porque é
     que só 6–12 dos 15–21 resolves usam o atalho.
+
+### 2026-10-13 21:20 — 0035 no RP5 (último teste do caminho emulado): veredito, render nativo
+- Shaders especializados ativos ("sinais de textura como spec constants: true, LOD implicito:
+  true"), sem erros de Vulkan.
+- Luta: **45–52 fps**, GPU 19–22 ms por frame (antes 25–26 ms nas mesmas cenas). O **desenho
+  caiu de ~14 para ~9 ms** (o 0035 funcionou), mas os **resolves continuam em 8–10 ms** (17–21 por
+  frame) e o GPU está a 98–99% a 670 MHz. Só cenas leves chegam a 60 (GPU ~14–15 ms).
+- Diagnóstico do atalho de cor: as primeiras ocorrências de cada destino falham por não existir
+  ainda textura (motivo 6, normal no 1.º frame); os 80x48 por pitch 96 ≠ largura 80 (motivo 3);
+  alguns 1280x720/320x184 vêm de um render target 4x MSAA (motivo 5).
+- **Veredito:** o caminho emulado não chega a 60 fps no 865 com o driver do sistema.
+  Segue-se o renderizador nativo ao nível D3D (ver `PLANO_RENDER_NATIVO.md` e
+  `GUIA_PORT_XBOX360_ANDROID.md`). Resumo para continuar numa conversa nova:
+  `docs/RESUMO_CONTINUACAO.md`.
