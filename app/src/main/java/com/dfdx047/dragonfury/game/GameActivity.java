@@ -59,6 +59,7 @@ public class GameActivity extends SDLActivity {
         // de cada vez que um pipeline faltava (travadinhas), e a sincrona custa
         // menos de 1 ms por frame com a cache do driver. O cvars.txt pode mudar.
         setEnv("REX_DBZ3_ASYNC_SHADERS", "false");
+        applyTurnipCompat();
         applyCvarOverrides(new File(appDir, "cvars.txt"));
         installCustomVulkanDriver(appDir);
         prepareLogFile(appDir);
@@ -262,6 +263,41 @@ public class GameActivity extends SDLActivity {
         // libmain.so depende de librexruntime.so, librexgpu-xenos.so e
         // libc++_shared.so, que o linker do Android carrega sozinho.
         return new String[] {"SDL3", "main"};
+    }
+
+    /**
+     * Correcoes para glitches do Turnip nos Adreno 6xx, escolhidas no launcher (aba
+     * Drivers). Antes do cvars.txt, que pode sobrepor qualquer uma. Variaveis TU_DEBUG
+     * so tem efeito no Turnip; o driver da Qualcomm ignora-as.
+     *   1 TU_DEBUG=sysmem: desenha direto na memoria, sem o modo GMEM (tiles)
+     *   2 TU_DEBUG=nolrz,noubwc: sem LRZ (depth de baixa resolucao) e sem compressao UBWC
+     *   3 caminhos simples do emulador: sem dynamic rendering, sem stencil export, texturas
+     *     BC descomprimidas (como no driver da Qualcomm) e depth em float 32
+     *   4 tudo junto (1 + 2 + 3)
+     *   5 diagnostico: TU_DEBUG=flushall,syncdraw (se corrigir, falta uma barreira)
+     */
+    private void applyTurnipCompat() {
+        @SuppressWarnings("deprecation")
+        SharedPreferences prefs = getSharedPreferences("dragonfury", MODE_MULTI_PROCESS);
+        int mode = prefs.getInt("turnip_compat", 0);
+        if (mode <= 0) {
+            return;
+        }
+        StringBuilder tu = new StringBuilder();
+        if (mode == 1 || mode == 4) tu.append("sysmem,");
+        if (mode == 2 || mode == 4) tu.append("nolrz,noubwc,");
+        if (mode == 5) tu.append("flushall,syncdraw,");
+        if (tu.length() > 0) {
+            tu.setLength(tu.length() - 1);
+            setEnv("TU_DEBUG", tu.toString());
+        }
+        if (mode == 3 || mode == 4) {
+            setEnv("REX_VULKAN_DYNAMIC_RENDERING", "false");
+            setEnv("REX_DBZ3_VK_DISABLE_EXTENSIONS", "VK_EXT_shader_stencil_export");
+            setEnv("REX_VULKAN_MASK_FEATURES", "textureCompressionBC");
+            setEnv("REX_VULKAN_DISABLE_DEPTH_UNORM24", "true");
+        }
+        Log.i(TAG, "Correcoes do Turnip: modo " + mode + " TU_DEBUG=" + tu);
     }
 
     /**

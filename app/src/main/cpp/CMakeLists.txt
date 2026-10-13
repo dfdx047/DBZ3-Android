@@ -65,6 +65,12 @@ set(REXGLUE_OUTPUT_DIR "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}" CACHE STRING "" FORCE
 set(REXGLUE_USE_VULKAN ON CACHE BOOL "" FORCE)
 set(REXGLUE_ENABLE_TRACY OFF CACHE BOOL "" FORCE)
 set(REXGLUE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+# ARMv8.2-A tambem no SDK (runtime, plugin da GPU, terceiros), nao so no jogo: os
+# atomicos LSE em linha substituem as chamadas __aarch64_cas*/ldadd*, que no port do
+# Raging Blast 2 (RB2-Android) custavam varios % das threads do command processor e
+# da UI. Todos os alvos (865, T820, 8 Gen x) sao ARMv8.2.
+string(APPEND CMAKE_C_FLAGS " -march=armv8.2-a")
+string(APPEND CMAKE_CXX_FLAGS " -march=armv8.2-a")
 add_subdirectory("${REXSDK_ROOT}" rexglue-sdk)
 
 #-----------------------------------------------------------------------------

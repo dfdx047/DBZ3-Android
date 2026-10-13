@@ -338,4 +338,12 @@
     <string name="settings_direct_resolve_sub">Copies the full-screen effects straight to the texture, skipping two conversions. Less GPU load.</string>
     <string name="settings_direct_resolve_fast">Effects shortcut: fast mode</string>
     <string name="settings_direct_resolve_fast_sub">Also skips copying the effects into the game memory (only the texture is filled). Faster; turn it off if some effect looks wrong.</string>
+    <string name="turnip_compat_title">Turnip fixes (Adreno 6xx)</string>
+    <string name="turnip_compat_mode">Compatibility mode</string>
+    <string name="turnip_compat_sub">For graphical glitches with Turnip (e.g. Adreno 650). Try one option at a time and reopen the game. Does nothing on the system driver.</string>
+    <string name="turnip_compat_sysmem">No GMEM (TU_DEBUG=sysmem)</string>
+    <string name="turnip_compat_nolrz">No LRZ and UBWC</string>
+    <string name="turnip_compat_paths">Simple emulator paths</string>
+    <string name="turnip_compat_all">All together</string>
+    <string name="turnip_compat_sync">Diagnostic: full sync (slow)</string>
 </resources>

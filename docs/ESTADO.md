@@ -411,3 +411,34 @@ stubs; a interface Compose não foi compilada.
   0023: `dbz3_frameskip` — o jogo corre a 60 mas só 1 em cada N+1 frames é desenhado (draws,
   resolves e queries de oclusão ignorados nos outros, sem apresentação). O launcher põe 1
   quando o limite é 30.
+
+### 2026-10-13 07:18 — RP5, driver do sistema, atalho + modo rápido + 30 FPS
+- Jogo a ~50 fps (só 25 desenhados), GPU 99% a 670 MHz, ~39 ms de GPU por frame desenhado:
+  outros 13, desenho 11, transfer 8–9, resolve 4, texturas 2. Melhor que sem atalho (44 fps), mas
+  o 865 no driver da Qualcomm não chega aos 30 desenhados. Precisa do Turnip.
+
+### 2026-10-13 — RB2-Android (port do Raging Blast 2, mesmo SDK v0.10, BSD-3) e patch 0024
+O RB2 tem 37 patches de desempenho em cima do mesmo SDK. Os que entraram já (patch 0024):
+- **Presenter recompilava o pipeline do efeito final em cada frame** (`swapchain_format` nunca
+  era guardado): esperava pela GPU, destruía e recriava o pipeline (FSR/CAS) a cada frame. No
+  RB2 eram 84% da thread da UI no Adreno. Corrigido (RB2 0002).
+- **Armazenamento de shaders/pipelines nunca era lido no Android** (`fopen("a+")` começa a ler
+  no fim na libc do Android): pipelines compilados a meio do jogo em cada arranque. Seek para o
+  início antes de ler (RB2 0009, só a correção).
+- Interruptores de diagnóstico: `vulkan_disable_depth_unorm24` (RB2 0004), `vulkan_mask_features`
+  (RB2 0036, inclui `textureCompressionBC` = texturas BC descomprimidas como no driver da
+  Qualcomm), e o nosso `dbz3_vk_disable_extensions` (lista de extensões a não ativar).
+- `-march=armv8.2-a` também no SDK (atómicos LSE, CMakeLists da app).
+
+Turnip nos Adreno 6xx: diferenças em relação ao driver da Qualcomm no RP5 — o Turnip tem
+dynamic rendering, `VK_EXT_shader_stencil_export`, texturas BC nativas, GMEM/LRZ/UBWC próprios.
+Launcher, aba Drivers, "Correções do Turnip" (pref `turnip_compat`, aplicado no GameActivity
+antes do cvars.txt): 1 sysmem, 2 nolrz+noubwc, 3 caminhos simples (sem dynamic rendering, sem
+stencil export, BC descomprimido, depth float32), 4 tudo, 5 flushall+syncdraw (diagnóstico de
+barreiras). Testar 4 primeiro; se corrigir, bissetar com 1/2/3.
+
+Próximos do RB2 a portar (maiores): resolve fundido (0021/0022: compute lê o render target e
+escreve direto na memória do guest, sem dump do EDRAM), hoisting de uploads/cargas de texturas
+para fora dos passes (0003/0007/0020/0026: menos quebras de pass no tiler, ataca os "outros"),
+LOD implícito nos shaders (0018), páginas voláteis (0013/0028/0032), afinidade de threads/ADPF.
+O RB2 usa Turnip v26.0.0-rc08 R8 (K11MCH1) nos 6xx/7xx.

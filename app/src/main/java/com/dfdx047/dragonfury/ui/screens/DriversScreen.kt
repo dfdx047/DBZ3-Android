@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
@@ -50,6 +51,7 @@ import com.dfdx047.dragonfury.ui.LauncherViewModel
 import com.dfdx047.dragonfury.ui.components.Level
 import com.dfdx047.dragonfury.ui.components.Pill
 import com.dfdx047.dragonfury.ui.components.SectionCard
+import com.dfdx047.dragonfury.ui.components.SettingDropdown
 import com.dfdx047.dragonfury.ui.components.SettingSegmented
 import com.dfdx047.dragonfury.ui.components.StatusLine
 import com.dfdx047.dragonfury.ui.components.formatBytes
@@ -99,6 +101,26 @@ fun DriversScreen(vm: LauncherViewModel) {
                     }
                 }
                 Text(stringResource(R.string.drivers_restart_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        item {
+            // Testes A/B dos glitches do Turnip nos Adreno 6xx (RP5): cada opcao liga um
+            // conjunto de correcoes no arranque do jogo (GameActivity.applyTurnipCompat).
+            SectionCard(stringResource(R.string.turnip_compat_title), Icons.Filled.Build) {
+                SettingDropdown(
+                    title = stringResource(R.string.turnip_compat_mode),
+                    subtitle = stringResource(R.string.turnip_compat_sub),
+                    options = listOf(
+                        0 to stringResource(R.string.off),
+                        1 to stringResource(R.string.turnip_compat_sysmem),
+                        2 to stringResource(R.string.turnip_compat_nolrz),
+                        3 to stringResource(R.string.turnip_compat_paths),
+                        4 to stringResource(R.string.turnip_compat_all),
+                        5 to stringResource(R.string.turnip_compat_sync),
+                    ),
+                    selected = vm.turnipCompat,
+                    onSelect = vm::setTurnipCompat,
+                )
             }
         }
         if (vm.installedDrivers.isNotEmpty()) {

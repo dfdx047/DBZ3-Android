@@ -54,6 +54,14 @@ class LauncherPrefs(context: Context) {
         get() = enumByKey(prefs.getString(KEY_ORIENTATION, null), GameOrientation.LANDSCAPE) { it.key }
         set(v) = prefs.edit().putString(KEY_ORIENTATION, v.key).apply()
 
+    /**
+     * Correcoes para o Turnip nos Adreno 6xx (0 = desligado, ver TURNIP_COMPAT_* no
+     * GameActivity). O GameActivity le esta chave antes de o driver carregar.
+     */
+    var turnipCompat: Int
+        get() = prefs.getInt(KEY_TURNIP_COMPAT, 0)
+        set(v) = prefs.edit().putInt(KEY_TURNIP_COMPAT, v).apply()
+
     var controlStyle: ControlStyle
         get() = enumByKey(prefs.getString(KEY_CONTROL_STYLE, null), ControlStyle.DRAGON) { it.key }
         set(v) = prefs.edit().putString(KEY_CONTROL_STYLE, v.key).apply()
@@ -114,6 +122,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_THEME = "theme"
         const val KEY_DARK = "dark_mode"
         const val KEY_ORIENTATION = "game_orientation"
+        const val KEY_TURNIP_COMPAT = "turnip_compat"
         const val KEY_CONTROL_STYLE = "control_style"
         const val KEY_DIRECTIONAL = "touch_directional"
         const val KEY_BADGE = "touch_badge"

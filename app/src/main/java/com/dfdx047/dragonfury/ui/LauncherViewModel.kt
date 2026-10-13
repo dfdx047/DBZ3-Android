@@ -93,6 +93,11 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         private set
     fun setOrientation(v: GameOrientation) { gameOrientation = v; prefs.gameOrientation = v }
 
+    var turnipCompat by mutableStateOf(prefs.turnipCompat)
+        private set
+    @JvmName("changeTurnipCompat")
+    fun setTurnipCompat(v: Int) { turnipCompat = v; prefs.turnipCompat = v }
+
     var controlStyle by mutableStateOf(prefs.controlStyle)
         private set
     // JvmName: evita o conflito com o setter privado da propriedade (mesma assinatura JVM).
