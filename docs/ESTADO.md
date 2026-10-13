@@ -401,3 +401,13 @@ stubs; a interface Compose não foi compilada.
 - Próximos ganhos no Odin: atalho a escrever direto na imagem (storage image, ~1 ms);
   o resto (desenho + transferências ≈ 5,4 ms, 84 passes de tiler por frame) é do método de
   emulação do EDRAM e não se corta sem outro caminho de render targets.
+
+### 2026-10-13 02:10 — Retroid Pocket 5 (SD865, Adreno 650)
+- Driver do sistema (Qualcomm 0x802EA000, Vulkan 1.1): entra no jogo, mas com os defeitos do
+  driver Qualcomm antigo e ~22 FPS na luta: 44 ms de GPU por frame = desenho 13,9 + transfer
+  14,5 + resolve 8,8 + texturas 6,8 (atalho desligado nesse teste). Picos de 100–900 ms.
+- Turnip PurpleVK T30 (Vulkan 1.4): imagem com defeitos (não chegou à luta no log).
+- O limite de 30 FPS só atrasava a apresentação: o jogo continuava a desenhar 60 frames/s.
+  0023: `dbz3_frameskip` — o jogo corre a 60 mas só 1 em cada N+1 frames é desenhado (draws,
+  resolves e queries de oclusão ignorados nos outros, sem apresentação). O launcher põe 1
+  quando o limite é 30.

@@ -62,6 +62,9 @@ data class GameConfig(
         "dbz3_hd_rim_light" to rimLight.coerceIn(0.0, 1.0),
         "dbz3_present_dither" to dither,
         "dbz3_frame_cap" to frameCap,
+        // 30 FPS de verdade: o jogo continua a 60 e so metade dos frames e desenhada
+        // (patch 0023). Antes o limite so atrasava a apresentacao e a GPU fazia tudo.
+        "dbz3_frameskip" to if (frameCap in 1..30) 1 else 0,
         "dbz3_show_fps" to showFps,
         "present_letterbox" to letterbox,
         "dbz3_language" to gameLanguage.coerceIn(1, 6),
