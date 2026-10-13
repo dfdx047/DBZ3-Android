@@ -163,6 +163,11 @@ fun SettingsScreen(vm: LauncherViewModel) {
                 stringResource(R.string.settings_rt_direct_sub),
                 checked = c.rtDirect,
             ) { on -> vm.updateConfig { it.copy(rtDirect = on) } }
+            SettingSwitch(
+                stringResource(R.string.settings_spec_shaders),
+                stringResource(R.string.settings_spec_shaders_sub),
+                checked = c.specShaders,
+            ) { on -> vm.updateConfig { it.copy(specShaders = on) } }
             SettingDropdown(
                 title = stringResource(R.string.settings_aa),
                 options = listOf(

@@ -349,4 +349,6 @@
     <string name="ingame_capture">Capturar 2 frames (diagnóstico)</string>
     <string name="settings_rt_direct">Render targets diretos</string>
     <string name="settings_rt_direct_sub">Cada passe desenha na sua própria imagem, sem copiar entre elas (menos trabalho na GPU). Desligue se faltarem partes da imagem.</string>
+    <string name="settings_spec_shaders">Shaders especializados</string>
+    <string name="settings_spec_shaders_sub">Cada shader é compilado já com o formato das suas texturas, sem os ramos e a amostragem extra por pixel (texturas bem mais rápidas). Desligue se aparecerem cores ou texturas erradas.</string>
 </resources>

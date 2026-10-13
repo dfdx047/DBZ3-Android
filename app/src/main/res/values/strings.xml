@@ -350,4 +350,6 @@
     <string name="ingame_capture">Capture 2 frames (diagnostic)</string>
     <string name="settings_rt_direct">Direct render targets</string>
     <string name="settings_rt_direct_sub">Each pass draws into its own image with no copies between them (less GPU work). Turn off if parts of the image go missing.</string>
+    <string name="settings_spec_shaders">Specialized shaders</string>
+    <string name="settings_spec_shaders_sub">Each shader is compiled for the format of its textures, without the extra per-pixel branches and sampling (much faster texturing). Turn off if colors or textures look wrong.</string>
 </resources>

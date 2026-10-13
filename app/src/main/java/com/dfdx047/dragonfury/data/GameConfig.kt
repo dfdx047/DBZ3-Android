@@ -47,6 +47,7 @@ data class GameConfig(
     val directResolve: Int = 1,               // dbz3_direct_resolve_texture 0/1/2 (atalho de efeitos)
     val directResolveFast: Boolean = true,    // dbz3_direct_resolve_skip_memory (modo rapido)
     val rtDirect: Boolean = true,             // dbz3_rt_direct (render targets sem transferencias, patch 0028)
+    val specShaders: Boolean = true,          // dbz3_spec_texture_signs + dbz3_tex_implicit_lod (patch 0035)
 ) {
     fun toToml(): Map<String, Any> = linkedMapOf(
         // "manual": o preset "auto" do PC reescreveria estas opcoes no arranque.
@@ -81,6 +82,8 @@ data class GameConfig(
         "dbz3_direct_resolve_texture" to directResolve.coerceIn(0, 2),
         "dbz3_direct_resolve_skip_memory" to directResolveFast,
         "dbz3_rt_direct" to rtDirect,
+        "dbz3_spec_texture_signs" to specShaders,
+        "dbz3_tex_implicit_lod" to specShaders,
         // Memoria do jogo num buffer normal (sem sparse binding): o RB2-Android e o
         // Skate3-Mobile desligam-no nos Adreno; menos um caminho com bugs de driver.
         "vulkan_sparse_shared_memory" to false,
@@ -139,6 +142,7 @@ data class GameConfig(
                 directResolve = if (int("dbz3_direct_resolve_texture", d.directResolve) == 0) 0 else 1,
                 directResolveFast = bool("dbz3_direct_resolve_skip_memory", d.directResolveFast),
                 rtDirect = bool("dbz3_rt_direct", d.rtDirect),
+                specShaders = bool("dbz3_spec_texture_signs", d.specShaders),
             )
         }
 

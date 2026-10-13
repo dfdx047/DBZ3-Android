@@ -572,3 +572,29 @@ a cache de pipelines passou a ser lida no arranque (patch 0024).
   draw** durante uma captura (cada draw no seu passe, timestamp antes de cada um); resumo por
   pixel shader no log ("dbz3: perfil por draw") e detalhe em `<captura>.timing.txt` (vai no
   "Exportar logs"). Serve para saber que shaders/draws pesam nos 12 ms de desenho.
+
+### 2026-10-13 20:38 — tempo por draw no RP5 e patch 0035 (shaders especializados)
+- Com 0034 (eliminação de restauros desligada): ~50–57 fps em luta normal (GPU 17–19 ms),
+  ~38 fps com especiais/efeitos de ecrã (GPU ~26 ms: desenho 14 ms, resolve 9.6 ms em 21
+  resolves/frame, 10 deles 1280x720; atalho só em 6–12).
+- Tempo por draw (captura): os mais caros são passes de ecrã inteiro com muitas leituras de
+  textura: PS 4DFCBC49057E5721 (desfoque de 9 amostras dependente da profundidade, ~3 ms),
+  PS F5F4D761A981B87D (FXAA, 9 amostras, ~2.5 ms), PS 555EBAAEF8F61839 (13 amostras).
+  O jogo inteiro usa só ~33 shaders.
+- Causa: cada `tfetch` traduzido pelo Xenia lê os sinais da textura das constantes do sistema
+  e decide em tempo de execução, por pixel e por componente: `switch` unsigned / signed /
+  biased / gamma (com a conversão gamma por partes), duas amostragens condicionais (unsigned e
+  signed) e gradientes explícitos (`OpDPdxCoarse` + `Grad`, que em Adreno e Mali corre a uma
+  fração da taxa normal). Medido no PC (tradutor compilado à parte + spirv-opt a simular a
+  especialização): PS 4DFC 1329 → 450 instruções, 20 → 10 amostragens, 52 → 4 ramos;
+  F5F4 1405 → 575; 555E 1764 → 574; shaders de personagem 405 → 258.
+- Patch 0035:
+  - `dbz3_spec_texture_signs` (ligado): os 8 bits de sinais de cada fetch constant passam a
+    specialization constant (SpecId 1000 + índice); o `PipelineDescription` guarda os sinais
+    das texturas usadas (versão do armazenamento de pipelines sobe: o primeiro arranque volta
+    a compilar os pipelines).
+  - `dbz3_tex_implicit_lod` (ligado): `tfetch2D` nos pixel shaders com LOD implícito + Bias.
+  - Opção no launcher: "Shaders especializados" (liga/desliga os dois).
+  - Diagnóstico do atalho resolve→textura de cor: motivo por destino ("atalho resolve->textura
+    nao aplicado (motivo N) dest=… + texturas existentes nesse endereço"), para saber porque é
+    que só 6–12 dos 15–21 resolves usam o atalho.
