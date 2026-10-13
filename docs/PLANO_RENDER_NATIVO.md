@@ -53,3 +53,12 @@ UPnP do Windows). Passos: atualizar `external/dbz3`, regenerar `generated/`, com
 `DBZ3_FULL_SOURCES=ON`, trocar o UPnP do Windows (miniupnpc ou só STUN + porta manual) e o
 clipboard por equivalentes Android. A versão online compara a data de compilação: para jogar
 Android contra PC, as duas compilações têm de vir do mesmo código e ter a mesma verificação.
+
+## Decisão de 2026-10-13, 21:17
+O build com o patch 0035 (shaders especializados) é o último teste do caminho emulado. Se não
+chegar a 60 fps estáveis no RP5 (driver do sistema) e não correr bem no RG Cube, passa-se ao
+renderizador nativo **ao nível D3D**, como o Unleashed Recompiled Android (hooks nas ~42 funções
+da biblioteca D3D do XDK, fila de comandos para uma thread de render Vulkan, resolves sem cópia,
+shaders do jogo traduzidos offline). É o método descrito em `docs/GUIA_PORT_XBOX360_ANDROID.md`,
+pensado para ser reutilizado noutros jogos de Xbox 360. Os hooks ao nível do motor (como o
+Skate 3) ficam só para o que o nível D3D não cobrir.
