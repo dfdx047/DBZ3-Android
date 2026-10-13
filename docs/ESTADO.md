@@ -652,3 +652,14 @@ a cache de pipelines passou a ser lida no arranque (patch 0024).
   RGBA8 ou R32F) são criadas com STORAGE quando o atalho está ligado. Sem STORAGE fica o
   caminho antigo (buffer + cópia).
 - Esperado: resolves de 8–10 ms para ~2–3 ms no 865; `atalho=` perto de `resolves=` na linha perf.
+
+### 2026-10-14 00:07–00:11 — 0038 nos dois aparelhos
+- RP5: ~50 fps em luta (era 45–52 com picos piores), GPU ~19,5 ms: desenho 9, resolve 8,
+  transfer 1,7, texturas 0 (eram 2,4). `atalho=` = `resolves=` (~20/f, todos sem memória do guest).
+  O utilizador nota o jogo mais fluido e sem dessincronização do áudio.
+- RG Cube (Mali-G57): 12–14 fps, GPU 70–83 ms: desenho 47–54, resolve 10–16, transfer 8,7.
+  Ecrã a piscar a preto (já acontecia antes do 0038). 75 fins de passe por frame, 35 por
+  uploads (barreira de buffer) — no Mali os passes custam mais: testar `dbz3_hoist_uploads`.
+- O resolve continua a ~8 ms no 865 com só ~20 dispatches de compute: suspeita de bolhas (cada
+  resolve fecha o passe e espera a GPU esvaziar). 0039: `dbz3_resolve_debug = 1` (cvars.txt)
+  faz os resolves sem trabalho nenhum, só para medir quanto deles é custo real.
