@@ -621,3 +621,11 @@ a cache de pipelines passou a ser lida no arranque (patch 0024).
   (chamadas por frame e argumentos) em `logs/d3d_trace.log`, para confirmar no aparelho.
 - Testado com código sintético no formato do codegen do ReXGlue v0.10; falta correr no
   `generated/` real (PC). Procedimento em `PLANO_RENDER_NATIVO.md`, secção F0.1.
+
+### 2026-10-13 23:18 — primeiro arranque num Mali (Unisoc T770, Mali-G57) e capturas do RP5
+- T770 (GSI TrebleDroid, Android 13): o caminho emulado **nem arranca**. O Xenia exige
+  `vertexPipelineStoresAndAtomics` (escritas em storage buffers no vertex shader, para o
+  memexport) e o driver do Mali-G57 não o tem: "Couldn't choose a compatible Vulkan physical
+  device" → ecrã preto. Confirma o renderizador nativo, que não pode depender dessa feature.
+- RP5: duas capturas (luta) com 33 shaders únicos no total (`dfc_parse --dump-shaders`);
+  é a entrada para a tradução offline dos shaders.
