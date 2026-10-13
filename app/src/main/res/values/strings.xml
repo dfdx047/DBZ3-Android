@@ -347,4 +347,5 @@
     <string name="turnip_compat_single_buffer">Game memory in one block (512 MB)</string>
     <string name="turnip_compat_bc">Decompressed BC textures</string>
     <string name="turnip_compat_depth">Depth as float 32</string>
+    <string name="ingame_capture">Capture 2 frames (diagnostic)</string>
 </resources>

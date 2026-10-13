@@ -99,6 +99,8 @@ interface InGameActions {
     fun isInBattle(): Boolean
     fun applyAppearance()
     fun exitToLauncher()
+    /** Pede ao runtime uma captura de frames (logs/capture/*.dfc) para o renderizador nativo. */
+    fun captureFrames()
 }
 
 /** Painel de vidro fosco por cima do jogo pausado. */
@@ -258,6 +260,14 @@ private fun InGameMenuCard(prefs: LauncherPrefs, actions: InGameActions) {
             Icon(Icons.Filled.PlayArrow, null)
             Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.ingame_resume))
+        }
+        // Captura de frames para o renderizador nativo: o jogo continua ao fechar o menu
+        // e os 2 frames seguintes ficam em logs/capture (entram no "Exportar logs").
+        OutlinedButton(
+            onClick = { actions.captureFrames(); actions.resume() },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.ingame_capture), maxLines = 1)
         }
         // Sair para o launcher: pede confirmacao com um segundo toque.
         var confirmExit by remember { mutableStateOf(false) }

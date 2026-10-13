@@ -80,6 +80,9 @@ object LogExporter {
             put("aparelho.txt", deviceReport())
             put("logcat.txt", run("logcat", "-d", "-v", "threadtime"))
             AppPaths.logsDir.listFiles()?.forEach { putFile("logs/${it.name}", it) }
+            // Capturas de frames (.dfc): so a mais recente, que pode ter dezenas de MB.
+            File(AppPaths.logsDir, "capture").listFiles { f -> f.extension == "dfc" }
+                ?.maxByOrNull { it.lastModified() }?.let { putFile("logs/capture/${it.name}", it) }
             putFile("dbz3_user.toml", AppPaths.userToml)
             putFile("cvars.txt", File(AppPaths.appDir, "cvars.txt"))
             File(AppPaths.appDir, "cache").takeIf { it.isDirectory }?.walkTopDown()

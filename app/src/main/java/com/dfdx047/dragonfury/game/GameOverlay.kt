@@ -288,6 +288,14 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
      * recompilado nao se reinicia dentro do mesmo processo, por isso o processo do
      * jogo termina e o proximo "Jogar" comeca do zero.
      */
+    override fun captureFrames() {
+        try {
+            java.io.File(AppPaths.appDir, "capture.req").writeText("2")
+        } catch (e: Exception) {
+            android.util.Log.w("dbz3", "capture.req", e)
+        }
+    }
+
     override fun exitToLauncher() {
         setScreen(InGameScreen.CLOSED)
         NativeGameState.forceResume()

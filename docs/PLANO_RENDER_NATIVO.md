@@ -24,7 +24,16 @@ renderizador próprio, como no Skate3-Mobile (Buku313) e no UnleashedRecomp.
 5. Alvos: Vulkan 1.1 sem extensões especiais (Mali, Adreno 6xx com driver da Qualcomm, Turnip
    opcional). Depois, se fizer falta, um caminho GLES 3.
 
-## Fases
+## Como se vai fazer (decisão de 2026-10-13, 10:11)
+Sem fases de teste intermédias: escreve-se o renderizador completo e testa-se a build pronta.
+Aparelhos de teste e logs a partir de hoje: **Retroid Pocket 5** (Adreno 650) e **Anbernic RG
+Cube** (Unisoc T820, Mali-G57). O que o renderizador precisa de entrada é uma captura do que o
+jogo manda à GPU; para isso a build atual tem o botão "Capturar 2 frames" no menu do jogo
+(patch 0027: registos, draws, resolves, shaders e memória lida, em `logs/capture/*.dfc`, que vai
+no "Exportar logs"). `tools/dfc_parse.py` imprime o mapa de passes de uma captura. Pedido: uma
+captura no RP5 numa luta e outra no menu principal; a partir daí escreve-se o renderizador.
+
+## Trabalho (ordem interna, sem builds intermédias)
 - F0 — Mapa do render do jogo: que funções desenham personagens, cenário, efeitos, HUD;
   formato dos buffers (AWO/AWG, já estudados no projeto original em
   `docs/07_ports/ESTRUCTURA_DIBUJO_HD.md` e `SESION_DRAW_SEMANTICS`); passes por frame
