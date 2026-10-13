@@ -542,3 +542,20 @@ a cache de pipelines passou a ser lida no arranque (patch 0024).
     a sério, esse resolve volta a ser feito para sempre (no máximo 1 frame com textura velha).
   - Esperado na luta: −4 resolves de ecrã inteiro e −6 draws/−2 passes de ecrã inteiro por
     frame. Log a cada 600 frames: "rt_direct: N resolves eliminados, M restauros ignorados".
+
+### 2026-10-13 19:59 — RP5, driver do sistema, 60 FPS sem frameskip, 0032
+- ~44 fps em luta (era ~37 a 60 sem frameskip), GPU 22.4 ms: desenho 11.8 ms em **54 passes**,
+  resolve 8 ms, transfer 1.7. Eliminação: ~2 resolves e ~10 "restauros" ignorados por frame.
+- **Bug**: nos especiais (Kamehameha, transformação, modo vermelho) o efeito de ecrã inteiro
+  ficava preto. Causa: os efeitos também desenham uma textura do ecrã por cima dele, opacos,
+  mas transformada; a deteção tratava-os como restauros (e a cópia deixava de ser feita).
+- Patch 0033:
+  - restauro só com os 2 pixel shaders de cópia do jogo (`dbz3_rt_restore_shaders`,
+    6E57A6E305D5D69B cor e ADCA7FBBCBF53B57 profundidade, vistos na captura); leituras a sério
+    proíbem a eliminação desse resolve durante 120 frames (600 se já tinha sido eliminado).
+  - **Uploads antes do passe** (`dbz3_hoist_uploads`, do RB2 0003): os uploads da memória
+    partilhada que o passe ainda não leu são gravados antes do início do passe, em vez de o
+    terminar. O RB2 mediu ~84% dos passes de um frame a nascer disto; aqui 54 passes por frame
+    para ~25 mudanças reais de render target.
+  - Estatística de fins de passe por causa (com diagnóstico ligado, a cada 600 frames:
+    "dbz3: fins de passe N/f | causa X/f ...").
