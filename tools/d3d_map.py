@@ -610,6 +610,48 @@ def dump_function(funcs, name):
         print(f"{ins.addr:08X}  {ins.mn:8s} {','.join(ins.ops)}{extra}")
 
 
+def write_dump(funcs, cluster, seeds, out_dir, ctx_insns=8):
+    """Desmontagem de todo o intervalo D3D (e das sementes fora dele), com os
+    sitios de chamada vindos do jogo (instrucoes antes do bl = argumentos)."""
+    lo, hi = cluster[0], cluster[1]
+    in_range = lambda a: lo <= a <= hi  # noqa: E731
+    sites = collections.defaultdict(list)   # callee -> [(caller, idx da chamada)]
+    for f in funcs.values():
+        for site, callee in f.calls:
+            a = name_to_addr(callee)
+            if a is not None and in_range(a) and not in_range(f.addr):
+                sites[a].append((f, site))
+    path = os.path.join(out_dir, "d3d_dump.txt")
+    chosen = sorted(a for a in funcs if in_range(a) or a in seeds)
+    with open(path, "w") as out:
+        out.write(f"# d3d_dump: intervalo 0x{lo:08X}-0x{hi:08X}, {len(chosen)} funcoes\n")
+        for a in chosen:
+            f = funcs[a]
+            outside = sorted(c for c in f.callers if not in_range(c))
+            inside = sorted(c for c in f.callers if in_range(c))
+            out.write(f"\n;==== {f.name} {f.size} B | fora {len(outside)}: "
+                      + " ".join(f"{c:08X}" for c in outside[:12])
+                      + ("…" if len(outside) > 12 else "")
+                      + f" | dentro {len(inside)}: " + " ".join(f"{c:08X}" for c in inside[:12])
+                      + (f" | PM4 {dict(f.type3)}" if f.type3 else "")
+                      + (f" | SETC {dict(f.setconst)}" if f.setconst else "")
+                      + (f" | REG {dict(f.type0)}" if f.type0 else "")
+                      + (f" | IMP {dict(f.imports)}" if f.imports else "") + "\n")
+            calls = dict(f.calls)
+            for ins in f.insns:
+                extra = f"   -> {calls[ins.addr]}" if ins.addr in calls else ""
+                out.write(f"{ins.addr:08X}  {ins.mn:8s} {','.join(ins.ops)}{extra}\n")
+            # ate 4 sitios de chamada vindos do jogo, com as instrucoes anteriores
+            for caller, site in sites.get(a, [])[:4]:
+                idx = next((i for i, ins in enumerate(caller.insns) if ins.addr == site), None)
+                if idx is None:
+                    continue
+                out.write(f";  chamada em {caller.name} @ {site:08X}:\n")
+                for ins in caller.insns[max(0, idx - ctx_insns): idx + 1]:
+                    out.write(f";    {ins.addr:08X}  {ins.mn:8s} {','.join(ins.ops)}\n")
+    return path
+
+
 def main():
     here = os.path.dirname(os.path.abspath(__file__))
     root = os.path.normpath(os.path.join(here, ".."))
@@ -622,6 +664,8 @@ def main():
     ap.add_argument("--max-gap", type=lambda s: int(s, 0), default=0x4000,
                     help="distancia maxima entre sementes do mesmo grupo (bytes)")
     ap.add_argument("--dump", help="imprime a desmontagem de uma funcao (sub_XXXXXXXX ou 0x...)")
+    ap.add_argument("--dump-range", action="store_true",
+                    help="escreve perf/d3d/d3d_dump.txt com a desmontagem de todo o intervalo D3D")
     args = ap.parse_args()
 
     anchors = [name_to_addr(a) for a in (args.anchor or ["sub_82235918", "sub_82231110"])]
@@ -643,6 +687,8 @@ def main():
     print(f"{len(funcs)} funcoes lidas, {len(seeds)} sementes, {n} no relatorio -> {md}")
     if cluster:
         print(f"intervalo D3D provavel: 0x{cluster[0]:08X}-0x{cluster[1]:08X}")
+        if args.dump_range:
+            print("desmontagem ->", write_dump(funcs, cluster, seeds, args.out))
 
 
 if __name__ == "__main__":
