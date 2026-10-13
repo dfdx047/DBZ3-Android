@@ -464,3 +464,17 @@ O RB2 usa Turnip v26.0.0-rc08 R8 (K11MCH1) nos 6xx/7xx.
   1 um só bloco, 2 sysmem, 4 nolrz/noubwc, 8 BC descomprimido, 16 sem dynamic rendering/stencil
   export, 32 depth float32, 64 flushall/syncdraw. Próximo teste: 1 + atalho de efeitos desligado;
   1 + BC descomprimido; 1 + o resto.
+
+### 2026-10-13 — Skate3-Mobile (Buku313) e patch 0026
+- O Skate 3 não usa o caminho de GPU do Xenia em jogo: hooks nas funções de render do jogo leem
+  meshes/texturas/constantes e um renderizador Vulkan próprio desenha a cena (~25k linhas
+  específicas do jogo); o caminho emulado fica desligado. Por isso corre num SD695. Para o DBZ
+  seria um projeto à parte (engenharia reversa do motor do Budokai 3).
+- Portável já: constantes do sistema dos shaders fora do std140. O ReXGlue pôs
+  `user_clip_planes` (vec4[6]) no offset 28 e `texture_swizzled_signs`, `color_exp_bias` e as
+  constantes do EDRAM também desalinhados; só é válido com scalarBlockLayout, que o driver da
+  Qualcomm do RP5 (Vulkan 1.1) não tem — o Skate3 crashava no compilador desse driver. Patch
+  0026: preenchimento para tudo ficar nos alinhamentos do std140 (verificado com offsetof).
+  Pode explicar parte dos defeitos do driver nativo no RP5 (cores, sinais das texturas).
+- Também a considerar: afinidade das threads (CP/GPU nos núcleos grandes, XMA/ficheiros nos
+  pequenos), ThinLTO, `vulkan_spirv_optimize` (SPIRV-Tools antes do driver).
