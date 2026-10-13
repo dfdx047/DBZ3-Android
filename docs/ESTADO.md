@@ -629,3 +629,7 @@ a cache de pipelines passou a ser lida no arranque (patch 0024).
   device" → ecrã preto. Confirma o renderizador nativo, que não pode depender dessa feature.
 - RP5: duas capturas (luta) com 33 shaders únicos no total (`dfc_parse --dump-shaders`);
   é a entrada para a tradução offline dos shaders.
+- Patch 0036: `vertexPipelineStoresAndAtomics` deixa de ser obrigatório (só é usado por memexport
+  em vertex shaders, que o Budokai 3 não usa; um draw que o peça é ignorado). Objetivo: o caminho
+  emulado arrancar no Mali-G57 enquanto o renderizador nativo não está pronto. As texturas BC
+  já têm descompressão no SDK quando o driver não as suporta.
