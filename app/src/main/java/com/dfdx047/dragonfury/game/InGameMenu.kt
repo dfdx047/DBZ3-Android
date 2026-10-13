@@ -99,7 +99,7 @@ interface InGameActions {
     fun isInBattle(): Boolean
     fun applyAppearance()
     fun exitToLauncher()
-    /** Pede ao runtime uma captura de frames (logs/capture/*.dfc) para o renderizador nativo. */
+    /** Pede ao runtime uma captura de frames (logs/capture, ficheiros .dfc) para o renderizador nativo. */
     fun captureFrames()
 }
 
