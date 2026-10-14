@@ -725,3 +725,19 @@ a cache de pipelines passou a ser lida no arranque (patch 0024).
   transições: uso anterior, tamanho, formato e base das texturas mais frequentes).
 - Pedidos do utilizador para depois: modo 30 fps liso (já existe `dbz3_frameskip = 1`: o jogo a
   60, desenha 1 em cada 2), opções para desligar efeitos (bloom etc.) em aparelhos fracos.
+
+### 2026-10-14 02:17–02:22 — 0044 e frameskip no Mali; patch 0045
+- Mali com `dbz3_frameskip = 1`: o contador marca 38–40 (frames do jogo), mas só metade é
+  desenhada (~19 imagens/s); GPU ~51 ms por frame desenhado (desenho ~29, resolve ~15, transfer 3).
+  O "quase 50 fps" visto é o jogo a correr mais perto da velocidade certa, não mais imagens.
+- O diagnóstico de transições do 0044 nunca disparou: as ~15 "barreira de imagem (amostrar)" por
+  frame não vêm das texturas; são os próprios resolves (o render target passa a leitura para o
+  compute do resolve e isso fecha o passe). Fins de passe que sobram ≈ resolves (~16) +
+  mudanças de alvo (~17). RP5 igual: 56–57 fps, GPU 16–17 ms.
+- Linha do tempo da captura de luta (por lutador): resolve da profundidade → 1 draw → cópia da
+  cor → passe 512x512 (pitch 560) → restauro da cor (1 draw) → **restauro da profundidade como
+  cor em color@1328** (2 draws, PS ADCA7FBBCBF53B57, outra configuração de render target) →
+  resto do lutador. Com render targets diretos o passe de 512x512 nunca toca na profundidade de
+  1280x720, por isso esse restauro é inútil e custa 2 mudanças de alvo por lutador.
+- 0045: `dbz3_skip_depth_restore` (cvars.txt, desligado por omissão) salta esses draws
+  (PS ADCA… com base da cor = base da profundidade). Esperado: −6 a −8 fins de passe por frame.
