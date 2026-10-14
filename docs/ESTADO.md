@@ -690,3 +690,24 @@ a cache de pipelines passou a ser lida no arranque (patch 0024).
 - 0041 `dbz3_clear_to_1x` (cvars.txt): esse retângulo passa a ser desenhado direto na imagem
   1x (posições ×2 na memória do guest, RB_SURFACE_INFO 1x com pitch ×2). Sem draw 4x não há
   transferência 4x → 1x. Esperado: −2,5 ms no 865, até −17 ms no Mali.
+
+### 2026-10-14 01:18–01:31 — 0042 a funcionar (Clear direto na imagem 1x) e patch 0043
+- 0041 nunca disparava: exigia ≥84 B no fetch constant 95, mas o D3D declara 48 B (12 dwords)
+  nos draws UP. 0042: sem tocar na memória do guest; só durante o draw do Clear (cor e só
+  profundidade) liga a escala do viewport ×2 e põe RB_SURFACE_INFO a 1x com pitch ×2; os
+  registos são repostos no fim do draw.
+- Resultado: **transfer 1,6 → 0,12 ms no RP5 e 8,7 → 0,8 ms no Mali**. RP5 ~54–55 fps em luta
+  (GPU ~18 ms: desenho 8,8 ms/64 passes, resolve 8,3), raramente abaixo de 50, várias vezes 60.
+  Mali 13–14 fps em luta (GPU ~74 ms: desenho 52 ms/70 passes, resolve 16), menus sem piscar;
+  o HUD ainda pisca durante a luta.
+- Fins de passe por frame em luta: **Mali 73** (uploads 36,5, barreira de imagem 26,7, mudança
+  de render target 6,2), RP5 40–52. Só ~6 são mudanças reais de alvo. No Mali cada fim de passe
+  com o ecrã tocado custa ~0,5 ms (carga + gravação dos tiles de 1280x720): é o grosso do
+  "desenho".
+- 0043:
+  - `dbz3_resolve_early_transition` (ligado): no fim do resolve direto (imageStore) a textura
+    passa logo para leitura; antes a transição ficava para o draw que a amostra e fechava o
+    passe aberto.
+  - Diagnóstico: "barreira de imagem" passa a dizer o destino (amostrar / carga / copia /
+    general / render target).
+  - Testar também com `dbz3_hoist_uploads = true` (uploads da memória partilhada antes do passe).
