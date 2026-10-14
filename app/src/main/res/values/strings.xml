@@ -186,7 +186,7 @@
     <string name="settings_api_note">Android uses Vulkan only (Direct3D 12 is PC-only).</string>
     <string name="settings_resolution">Internal resolution</string>
     <string name="settings_resolution_sub">The game renders at 720p × this value.</string>
-    <string name="settings_resolution_warn">3x and 4x are heavy: expect heat and battery drain.</string>
+    <string name="settings_resolution_warn">3x is heavy: expect heat and battery drain.</string>
     <string name="settings_frame_cap">Frame rate limit</string>
     <string name="settings_show_fps">Show FPS counter</string>
     <string name="settings_image">Image</string>
@@ -224,6 +224,10 @@
     <string name="settings_game_language_sub">Texts and menus (the game has no Portuguese).</string>
     <string name="settings_tag_team">Tag Team mode</string>
     <string name="settings_tag_team_sub">The project\'s team battles (Back = switch).</string>
+    <string name="settings_online">Online</string>
+    <string name="settings_online_sub">ONLINE in Duel (SELECT). Only between devices with the same APK; local Wi-Fi recommended (mobile data usually blocks hosting).</string>
+    <string name="settings_form_select">Starting form</string>
+    <string name="settings_form_select_sub">LT/RT on the select screen choose the transformation you start with (not used online).</string>
     <string name="settings_controls">Controls</string>
     <string name="settings_touch">Touch controls</string>
     <string name="settings_touch_sub">On-screen buttons over the game.</string>
@@ -352,4 +356,25 @@
     <string name="settings_rt_direct_sub">Each pass draws into its own image with no copies between them (less GPU work). Turn off if parts of the image go missing.</string>
     <string name="settings_spec_shaders">Specialized shaders</string>
     <string name="settings_spec_shaders_sub">Each shader is compiled for the format of its textures, without the extra per-pixel branches and sampling (much faster texturing). Turn off if colors or textures look wrong.</string>
+    <string name="tab_performance">Performance</string>
+    <string name="tab_controls">Controls</string>
+    <string name="perf_frameskip">30 FPS mode (frameskip)</string>
+    <string name="perf_frameskip_sub">The game keeps running at normal speed, but only one of every two frames is drawn: about half the GPU work. Recommended for Mali GPUs.</string>
+    <string name="perf_resolution_sub">The game renders at 720p × this value. Only whole multiples work for now (fractional scales like 1.5x are not supported yet).</string>
+    <string name="perf_resolution_mem">2x and 3x need much more GPU memory. On Mali GPUs keep 1x.</string>
+    <string name="perf_effects_title">Game effects</string>
+    <string name="perf_effects_sub">Turning them off helps weak GPUs (such as Mali).</string>
+    <string name="fx_bloom">Bloom (glow)</string>
+    <string name="fx_bloom_sub">The glow around bright areas.</string>
+    <string name="fx_dof">Depth of field</string>
+    <string name="fx_dof_sub">The background blur.</string>
+    <string name="fx_fxaa">Game FXAA</string>
+    <string name="fx_fxaa_sub">The game\'s own edge smoothing (separate from the post anti-aliasing in Image).</string>
+    <string name="fx_needs_rt_direct">These switches need \"Direct render targets\" turned on (GPU optimizations, below).</string>
+    <string name="perf_gpu_title">GPU optimizations</string>
+    <string name="perf_gpu_sub">Leave them on unless something looks wrong.</string>
+    <string name="gpu_notice_title">Before you play</string>
+    <string name="gpu_notice_text">The game was optimized on Qualcomm\'s own driver: Snapdragon 865 and newer run it with the system driver.\n\nThe Turnip driver also works well now, thanks to the new renderer. It is optional, in the Drivers tab.\n\nMali GPUs (e.g. Mali-G57) run it, but slower: turn on 30 FPS mode and turn off the game effects in the Performance tab.</string>
+    <string name="gpu_notice_ok">Got it</string>
+    <string name="about_gpu_notice">Performance tips</string>
 </resources>

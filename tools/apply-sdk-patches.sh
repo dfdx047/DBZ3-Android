@@ -79,5 +79,13 @@ apply_patches() {
 echo "== SDK (external/rexglue-sdk-0.10)"
 apply_patches "$SDK" "$ROOT"/patches/[0-9][0-9][0-9][0-9]-*.patch
 echo "== Jogo (external/dbz3)"
+# Os patches do jogo sao escritos contra o projeto original v1.4.5.1 (origin/master
+# de 2026-10-14). stage_ext.cpp so existe a partir dai.
+if [ ! -f "$ROOT/external/dbz3/src/stage_ext.cpp" ]; then
+  echo "ERRO: external/dbz3 desatualizado (falta src/stage_ext.cpp, v1.4.5.1)." >&2
+  echo "  Atualiza-o para origin/master do projeto original: ver docs/ESTADO.md," >&2
+  echo "  seccao 'Atualizar o external/dbz3'." >&2
+  exit 1
+fi
 apply_patches "$ROOT/external/dbz3" "$ROOT"/patches/game/[0-9][0-9][0-9][0-9]-*.patch
 echo "SDK pronto."

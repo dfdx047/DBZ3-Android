@@ -185,7 +185,7 @@
     <string name="settings_api_note">No Android só há Vulkan (o Direct3D 12 é só no PC).</string>
     <string name="settings_resolution">Resolução interna</string>
     <string name="settings_resolution_sub">O jogo é desenhado em 720p × este valor.</string>
-    <string name="settings_resolution_warn">3x e 4x são pesados: espere calor e gasto de bateria.</string>
+    <string name="settings_resolution_warn">3x é pesado: espere calor e gasto de bateria.</string>
     <string name="settings_frame_cap">Limite de FPS</string>
     <string name="settings_show_fps">Mostrar contador de FPS</string>
     <string name="settings_image">Imagem</string>
@@ -223,6 +223,10 @@
     <string name="settings_game_language_sub">Textos e menus (o jogo não tem português).</string>
     <string name="settings_tag_team">Modo Tag Team</string>
     <string name="settings_tag_team_sub">As batalhas em equipe do projeto (Back = trocar).</string>
+    <string name="settings_online">Online</string>
+    <string name="settings_online_sub">ONLINE no Duelo (SELECT). Só entre aparelhos com o mesmo APK; Wi-Fi local recomendado (dados móveis costumam impedir de hospedar).</string>
+    <string name="settings_form_select">Forma inicial</string>
+    <string name="settings_form_select_sub">LT/RT na tela de seleção escolhem a transformação com que você começa (não vale no online).</string>
     <string name="settings_controls">Controles</string>
     <string name="settings_touch">Controles na tela</string>
     <string name="settings_touch_sub">Botões por cima do jogo.</string>
@@ -351,4 +355,25 @@
     <string name="settings_rt_direct_sub">Cada passe desenha na sua própria imagem, sem copiar entre elas (menos trabalho na GPU). Desligue se faltarem partes da imagem.</string>
     <string name="settings_spec_shaders">Shaders especializados</string>
     <string name="settings_spec_shaders_sub">Cada shader é compilado já com o formato das suas texturas, sem os ramos e a amostragem extra por pixel (texturas bem mais rápidas). Desligue se aparecerem cores ou texturas erradas.</string>
+    <string name="tab_performance">Desempenho</string>
+    <string name="tab_controls">Controles</string>
+    <string name="perf_frameskip">Modo 30 FPS (frameskip)</string>
+    <string name="perf_frameskip_sub">O jogo continua na velocidade normal, mas só um de cada dois quadros é desenhado: cerca de metade do trabalho da GPU. Recomendado para GPUs Mali.</string>
+    <string name="perf_resolution_sub">O jogo é desenhado em 720p × este valor. Por enquanto só valem múltiplos inteiros (escalas fracionadas como 1,5x ainda não são suportadas).</string>
+    <string name="perf_resolution_mem">2x e 3x precisam de muito mais memória da GPU. Em GPUs Mali, mantenha 1x.</string>
+    <string name="perf_effects_title">Efeitos do jogo</string>
+    <string name="perf_effects_sub">Desligar ajuda GPUs mais fracas (como as Mali).</string>
+    <string name="fx_bloom">Brilho (bloom)</string>
+    <string name="fx_bloom_sub">O brilho em volta das áreas claras.</string>
+    <string name="fx_dof">Profundidade de campo</string>
+    <string name="fx_dof_sub">O desfoque do fundo.</string>
+    <string name="fx_fxaa">FXAA do jogo</string>
+    <string name="fx_fxaa_sub">A suavização de bordas do próprio jogo (diferente do anti-aliasing pós em Imagem).</string>
+    <string name="fx_needs_rt_direct">Estes interruptores precisam de \"Render targets diretos\" ligado (Otimizações da GPU, abaixo).</string>
+    <string name="perf_gpu_title">Otimizações da GPU</string>
+    <string name="perf_gpu_sub">Deixe ligadas, a não ser que algo apareça errado.</string>
+    <string name="gpu_notice_title">Antes de jogar</string>
+    <string name="gpu_notice_text">O jogo foi otimizado no driver da própria Qualcomm: Snapdragon 865 ou mais novos rodam com o driver do sistema.\n\nO driver Turnip também funciona bem agora, graças ao novo renderizador. Ele é opcional, na aba Drivers.\n\nGPUs Mali (ex.: Mali-G57) rodam o jogo, mas mais devagar: ligue o modo 30 FPS e desligue os efeitos do jogo na aba Desempenho.</string>
+    <string name="gpu_notice_ok">Entendi</string>
+    <string name="about_gpu_notice">Dicas de desempenho</string>
 </resources>

@@ -423,11 +423,20 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var driverReleasesError by mutableStateOf(false)
         private set
-    var showTurnipNotice by mutableStateOf(isAdreno && !prefs.turnipNoticeShown)
+    /**
+     * Aviso de primeiro arranque (GPUs e drivers). Mostrado uma vez a todos; tambem se
+     * abre pelo Sobre. Substitui o antigo aviso do Turnip (o texto ja fala do Turnip).
+     */
+    var showGpuNotice by mutableStateOf(!prefs.gpuNoticeShown)
         private set
 
-    fun dismissTurnipNotice() {
-        showTurnipNotice = false
+    fun openGpuNotice() {
+        showGpuNotice = true
+    }
+
+    fun dismissGpuNotice() {
+        showGpuNotice = false
+        prefs.gpuNoticeShown = true
         prefs.turnipNoticeShown = true
     }
 
@@ -593,10 +602,17 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     // Fica no fim da classe: as propriedades acima ja tem de estar inicializadas.
     init {
         viewModelScope.launch(Dispatchers.IO) {
-            val c = GameConfig.load()
-            withContext(Dispatchers.Main) { config = c }
+            var c = GameConfig.load()
+            // Render targets diretos: caminho principal de desempenho (e os interruptores
+            // dos efeitos so funcionam com ele). Religa-se uma vez para quem o desligou.
+            if (!prefs.rtDirectMigrated) {
+                c = c.copy(rtDirect = true)
+                prefs.rtDirectMigrated = true
+            }
+            val loaded = c
+            withContext(Dispatchers.Main) { config = loaded }
             // Garante que o toml existe com as opcoes do launcher desde o primeiro arranque.
-            GameConfig.save(c)
+            GameConfig.save(loaded)
         }
         refreshInstall(false)
         refreshMods()

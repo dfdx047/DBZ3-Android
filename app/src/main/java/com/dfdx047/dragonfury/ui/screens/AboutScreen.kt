@@ -74,8 +74,13 @@ fun AboutScreen(vm: LauncherViewModel) {
                 Text(stringResource(R.string.about_check_updates))
             }
         }
-        OutlinedButton(onClick = { vm.exportLogs(context) }, enabled = vm.busy == null) {
-            Text(stringResource(R.string.export_logs))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { vm.openGpuNotice() }) {
+                Text(stringResource(R.string.about_gpu_notice))
+            }
+            OutlinedButton(onClick = { vm.exportLogs(context) }, enabled = vm.busy == null) {
+                Text(stringResource(R.string.export_logs))
+            }
         }
         if (vm.updateState == UpdateState.AVAILABLE) {
             TextButton(onClick = { vm.showUpdateDialog = true }) {

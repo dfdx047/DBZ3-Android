@@ -56,6 +56,34 @@ texturas, drivers, controles por toque e atualizador. Fase 1 (jogo a arrancar e 
 | Patch | Mudança |
 |---|---|
 | 0001-unlock-all-characters | cheat `dbz3_unlock_all_characters = true` (cvars.txt): todos os personagens de fábrica no select, sem mexer no save |
+| 0002-settings-no-char8t | `PathUtf8` com `auto`: o build Android usa `-fno-char8_t` e aí `std::u8string` não existe |
+| 0003-online-android-identity | admissão do ONLINE: no Android a identidade é o hash de `libmain.so` + `librexruntime.so` + `librexgpu-xenos.so` (`REX_NATIVE_LIB_DIR`), não o `/proc/self/exe` (= `app_process` do sistema). Só joga contra o mesmo APK |
+
+Os patches do jogo são escritos contra o projeto original **v1.4.5.1** (origin/master,
+47ada97). O `apply-sdk-patches.sh` e o CMake recusam um `external/dbz3` sem `src/stage_ext.cpp`.
+
+### Atualizar o external/dbz3 (v1.4.5.1)
+
+O codegen não mudou entre 41f03b2 (v1.4.4.5) e 47ada97 (`dbz3_config.toml` e
+`dbz3_manifest.toml` iguais): o `generated/` de uma cópia v1.4.4.5 serve. Se a cópia for mais
+antiga e esses dois ficheiros mudarem, é preciso correr o codegen outra vez.
+
+```fish
+cd ~/AndroidStudioProjects/DBZ3-Android
+md5sum external/dbz3/dbz3_config.toml external/dbz3/dbz3_manifest.toml
+# cópia git: descarta os patches Android (voltam a ser aplicados) e salta para origin/master
+git -C external/dbz3 fetch origin
+git -C external/dbz3 reset --hard origin/master   # o generated/ não é seguido pelo git: fica
+rm -f external/dbz3/.dbz3-android-patches
+md5sum external/dbz3/dbz3_config.toml external/dbz3/dbz3_manifest.toml   # iguais? então não há codegen
+bash tools/sync-upstream-overlay.sh   # ficheiros novos do overlay que não chocam com patches Android
+bash tools/apply-sdk-patches.sh
+```
+
+Sem cópia git: clonar o original para outra pasta, mover o `generated/` antigo para lá e
+substituir `external/dbz3`. Nunca usar `git clean` no `external/dbz3` (apagava o `generated/`).
+O `sync-upstream-overlay.sh` não copia a cache de texturas nova (pack HD em segundo plano da
+v1.4.5) nem o driver SDL novo: chocam com os patches 0010–0044 e 0014 e ficam por portar.
 
 ## Compilar (no PC, CachyOS)
 
@@ -197,6 +225,13 @@ stubs; a interface Compose não foi compilada.
   Adicionado `-Pdf.fullSources=true` (opção `DBZ3_FULL_SOURCES`, desligada por omissão) que as
   compila se existirem em `external/dbz3`. Pode pedir um `external/dbz3` mais recente, novo
   codegen do `generated/` e reaplicar o overlay ao SDK: validar com o PC ligado.
+  **2026-10-14**: o CMake compila sempre a lista completa da v1.4.5.1 (Tag Team, `src/net/*`,
+  campanhas, `stage_ext.cpp`, `novas_mods.cpp`, ecrãs do jogo); `-Pdf.fullSources` ficou sem
+  efeito. Pede o `external/dbz3` em v1.4.5.1 (ver "Atualizar o external/dbz3") e os patches
+  de jogo 0002/0003. Os ecrãs TAG TEAM (menu principal) e ONLINE (menu Duelo / SELECT) são
+  do próprio jogo (ImGui), não do launcher. Online: UDP lockstep, sockets POSIX (já existiam no
+  código original), sem UPnP fora do Windows (fica STUN + código de sala; em dados móveis/CGNAT
+  o anfitrião quase nunca é alcançável: usar Wi-Fi/rede local ou porta reencaminhada).
 - Pedidos para depois: mais proporções de tela e patch de widescreen (RE da câmara/HUD), cheats.
 - Depuração do driver Qualcomm: `tools/gpu-ab.sh <nome> [cvar=valor ...]` (A/B com captura de
   ecrã e logcat em `perf/gpu/<nome>/`).
@@ -756,3 +791,29 @@ a cache de pipelines passou a ser lida no arranque (patch 0024).
   −4 resolves de ecrã inteiro e −4 fins de passe por frame.
 - Guia (GUIA_PORT_XBOX360_ANDROID.md) atualizado: resultados, ordem dos patches por ganho,
   padrões do D3D do XDK (A–D) e o plano da ferramenta.
+
+### 2026-10-14 03:06–03:11 — 0046 nos dois; 865 a 60 fps; patches 0047/0048, launcher, Tag Team/online
+- **RP5: 59,9 fps em luta, GPU ~14,5 ms** (desenho ~7,4 ms/22 passes, resolve ~6,5). Turnip também
+  funciona bem com o caminho novo (teste do utilizador, sem ajustes). **Mali: 22–24 fps**, GPU 42–44
+  ms (desenho ~22,7, resolve 12–14, transfer ~2,1, outros ~3,6). A eliminação apanha ~2 resolves e
+  ~1,7 restauros por frame; especiais sem pretos.
+- Mali, veredito: as texturas não pesam (categoria texturas = 0; as DXT pequenas são descomprimidas
+  uma vez para RGBA8). ASTC/transcoder de BC não mudaria o tempo de GPU. O custo é o desenho com os
+  shaders traduzidos e os fins de passe. Para o Mali: modo 30 fps (frameskip + frame cap 30, ritmo
+  certo) e desligar efeitos.
+- 0047: interruptores de efeitos (`dbz3_fx_bloom`, `dbz3_fx_dof`, `dbz3_fx_fxaa`, ligados por
+  omissão; só com `dbz3_rt_direct`) e os validados passam a ligados por omissão
+  (`dbz3_clear_to_1x`, `dbz3_hoist_uploads`, `dbz3_skip_depth_restore`, `dbz3_rt_elide_restores`).
+- 0048: proporção cortada nos portáteis 16:9 — a janela do SDL não era ecrã inteiro (o jogo cria-a
+  com fullscreen=false para o launcher do PC): superfície e swapchain de 1920x918 num ecrã de
+  1920x1080. No Android a janela passa a ser sempre ecrã inteiro (SDK) e o GameActivity entra em
+  modo imersivo (reforço). Esperado nos logs: "Window size: 1920x1080".
+- Launcher: abas novas **Desempenho** (30 FPS, resolução 1x/2x/3x — só escalas inteiras —, efeitos
+  do jogo, imagem, proporção, otimizações da GPU) e **Controles** (toque + comando físico); aviso de
+  GPU/drivers no primeiro arranque (também no Sobre); interruptores Online e Forma inicial no Jogo.
+- Tag Team e online: o CMake compila sempre a lista completa do projeto original v1.4.5.1 (é
+  preciso atualizar o external/dbz3, ver "Atualizar o external/dbz3"); patches de jogo 0002
+  (char8_t) e 0003 (identidade do online pelas .so do APK: Android só joga com Android com o mesmo
+  APK). Sem UPnP fora do Windows: online por Wi-Fi local ou porta reencaminhada.
+- Fica por portar do upstream: pack HD em segundo plano (v1.4.5/1.4.5.1), que choca com os patches
+  de textura 0010–0044.

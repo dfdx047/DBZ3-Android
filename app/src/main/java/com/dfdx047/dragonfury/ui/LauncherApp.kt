@@ -26,10 +26,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Gamepad
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Texture
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -63,9 +65,11 @@ import androidx.compose.ui.unit.dp
 import com.dfdx047.dragonfury.R
 import com.dfdx047.dragonfury.ui.screens.AboutScreen
 import com.dfdx047.dragonfury.ui.screens.CheatsScreen
+import com.dfdx047.dragonfury.ui.screens.ControlsScreen
 import com.dfdx047.dragonfury.ui.screens.DriversScreen
 import com.dfdx047.dragonfury.ui.screens.HomeScreen
 import com.dfdx047.dragonfury.ui.screens.ModsScreen
+import com.dfdx047.dragonfury.ui.screens.PerformanceScreen
 import com.dfdx047.dragonfury.ui.screens.SettingsScreen
 import com.dfdx047.dragonfury.ui.screens.TexturesScreen
 import com.dfdx047.dragonfury.ui.theme.DfColors
@@ -73,6 +77,8 @@ import com.dfdx047.dragonfury.ui.theme.LogoStyle
 
 enum class LauncherTab(@StringRes val title: Int, val icon: ImageVector) {
     HOME(R.string.tab_home, Icons.Filled.Home),
+    PERFORMANCE(R.string.tab_performance, Icons.Filled.Speed),
+    CONTROLS(R.string.tab_controls, Icons.Filled.Gamepad),
     MODS(R.string.tab_mods, Icons.Filled.Extension),
     TEXTURES(R.string.tab_textures, Icons.Filled.Texture),
     CHEATS(R.string.tab_cheats, Icons.Filled.AutoFixHigh),
@@ -137,7 +143,7 @@ fun LauncherApp(vm: LauncherViewModel) {
         }
     }
 
-    if (vm.showTurnipNotice) TurnipNotice(vm) { tab = LauncherTab.DRIVERS }
+    if (vm.showGpuNotice) GpuNotice(vm, openTab = { tab = it })
     if (vm.showUpdateDialog) UpdateDialog(vm)
 }
 
@@ -231,6 +237,8 @@ private fun TabContent(tab: LauncherTab, vm: LauncherViewModel, goTo: (LauncherT
     Box(Modifier.fillMaxSize()) {
         when (tab) {
             LauncherTab.HOME -> HomeScreen(vm, goTo)
+            LauncherTab.PERFORMANCE -> PerformanceScreen(vm)
+            LauncherTab.CONTROLS -> ControlsScreen(vm)
             LauncherTab.MODS -> ModsScreen(vm)
             LauncherTab.TEXTURES -> TexturesScreen(vm)
             LauncherTab.CHEATS -> CheatsScreen(vm)
@@ -241,21 +249,38 @@ private fun TabContent(tab: LauncherTab, vm: LauncherViewModel, goTo: (LauncherT
     }
 }
 
+/**
+ * Aviso de primeiro arranque (e pelo Sobre): em que GPUs/drivers o jogo foi otimizado
+ * e o que fazer nas Mali. Fechar marca-o como visto.
+ */
 @Composable
-private fun TurnipNotice(vm: LauncherViewModel, openDrivers: () -> Unit) {
+private fun GpuNotice(vm: LauncherViewModel, openTab: (LauncherTab) -> Unit) {
     AlertDialog(
-        onDismissRequest = { vm.dismissTurnipNotice() },
+        onDismissRequest = { vm.dismissGpuNotice() },
         icon = { Icon(Icons.Filled.Memory, null) },
-        title = { Text(stringResource(R.string.turnip_notice_title)) },
-        text = { Text(stringResource(R.string.turnip_notice_text, vm.socName)) },
+        title = { Text(stringResource(R.string.gpu_notice_title)) },
+        text = {
+            Text(
+                stringResource(R.string.gpu_notice_text),
+                modifier = Modifier
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(rememberScrollState()),
+            )
+        },
         confirmButton = {
-            TextButton(onClick = {
-                vm.dismissTurnipNotice()
-                openDrivers()
-            }) { Text(stringResource(R.string.turnip_notice_open)) }
+            TextButton(onClick = { vm.dismissGpuNotice() }) { Text(stringResource(R.string.gpu_notice_ok)) }
         },
         dismissButton = {
-            TextButton(onClick = { vm.dismissTurnipNotice() }) { Text(stringResource(R.string.later)) }
+            Row {
+                TextButton(onClick = {
+                    vm.dismissGpuNotice()
+                    openTab(LauncherTab.DRIVERS)
+                }) { Text(stringResource(R.string.tab_drivers)) }
+                TextButton(onClick = {
+                    vm.dismissGpuNotice()
+                    openTab(LauncherTab.PERFORMANCE)
+                }) { Text(stringResource(R.string.tab_performance)) }
+            }
         },
     )
 }

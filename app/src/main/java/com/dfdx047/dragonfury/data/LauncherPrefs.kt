@@ -108,6 +108,16 @@ class LauncherPrefs(context: Context) {
         get() = prefs.getBoolean(KEY_TURNIP_NOTICE, false)
         set(v) = prefs.edit().putBoolean(KEY_TURNIP_NOTICE, v).apply()
 
+    /** Aviso de primeiro arranque sobre GPUs/drivers (substitui o aviso so do Turnip). */
+    var gpuNoticeShown: Boolean
+        get() = prefs.getBoolean(KEY_GPU_NOTICE, false)
+        set(v) = prefs.edit().putBoolean(KEY_GPU_NOTICE, v).apply()
+
+    /** Migracao unica: liga dbz3_rt_direct para todos (caminho principal de desempenho). */
+    var rtDirectMigrated: Boolean
+        get() = prefs.getBoolean(KEY_RT_DIRECT_MIGRATED, false)
+        set(v) = prefs.edit().putBoolean(KEY_RT_DIRECT_MIGRATED, v).apply()
+
     var checkUpdatesOnStart: Boolean
         get() = prefs.getBoolean(KEY_CHECK_UPDATES, true)
         set(v) = prefs.edit().putBoolean(KEY_CHECK_UPDATES, v).apply()
@@ -133,6 +143,8 @@ class LauncherPrefs(context: Context) {
         const val KEY_TOUCH_HAPTICS = "touch_haptics"
         const val KEY_TOUCH_OPACITY = "touch_opacity"
         const val KEY_TURNIP_NOTICE = "turnip_notice_shown"
+        const val KEY_GPU_NOTICE = "gpu_notice_shown"
+        const val KEY_RT_DIRECT_MIGRATED = "rt_direct_migrated"
         const val KEY_CHECK_UPDATES = "check_updates"
         const val KEY_SKIPPED_UPDATE = "skipped_update"
     }

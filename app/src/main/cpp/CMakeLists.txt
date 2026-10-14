@@ -97,14 +97,26 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 #-----------------------------------------------------------------------------
-# Jogo (mesma lista de fontes do CMakeLists.txt do projeto original, build US)
+# Jogo (mesma lista de fontes do CMakeLists.txt do projeto original v1.4.5.1,
+# build US): inclui Tag Team, online (src/net), campanhas, escenarios de mods e
+# os ecras proprios do jogo. Desde a v1.4.4.5 o main.cpp e o roster_ext.cpp
+# chamam o Tag Team e os paineis diretamente, por isso ja nao sao opcionais.
 #-----------------------------------------------------------------------------
+# O external/dbz3 tem de estar na v1.4.5.1 ou mais nova (stage_ext.cpp nasceu
+# ai). Os patches de patches/game/ sao escritos contra essa versao.
+if(NOT EXISTS "${DBZ3_ROOT}/src/stage_ext.cpp")
+    message(FATAL_ERROR
+        "external/dbz3 desatualizado (falta src/stage_ext.cpp, v1.4.5.1).\n"
+        "Atualiza-o para origin/master do projeto original (ver docs/ESTADO.md,\n"
+        "'Atualizar o external/dbz3') e corre bash tools/apply-sdk-patches.sh.")
+endif()
 set(DBZ3_SOURCES
     ${DBZ3_ROOT}/src/main.cpp
     ${DBZ3_ROOT}/src/hooks.cpp
     ${DBZ3_ROOT}/src/roster_trace.cpp
     ${DBZ3_ROOT}/src/roster_ext.cpp
     ${DBZ3_ROOT}/src/select_ext.cpp
+    ${DBZ3_ROOT}/src/stage_ext.cpp
     ${DBZ3_ROOT}/src/mods.cpp
     ${DBZ3_ROOT}/src/native_mods.cpp
     ${DBZ3_ROOT}/src/region.cpp
@@ -114,34 +126,26 @@ set(DBZ3_SOURCES
     ${DBZ3_ROOT}/src/launcher/mod_pipeline.cpp
     ${DBZ3_ROOT}/src/launcher/i18n.cpp
     ${DBZ3_ROOT}/src/launcher/update_check.cpp
+    ${DBZ3_ROOT}/src/launcher/novas_mods.cpp
     ${DBZ3_ROOT}/src/ingame/menu.cpp
     ${DBZ3_ROOT}/src/ingame/quick_settings.cpp
+    ${DBZ3_ROOT}/src/ingame/game_style.cpp
+    ${DBZ3_ROOT}/src/ingame/native_ui.cpp
+    ${DBZ3_ROOT}/src/ingame/menu_pilot.cpp
+    ${DBZ3_ROOT}/src/ingame/online_panel.cpp
+    ${DBZ3_ROOT}/src/ingame/tagteam_panel.cpp
+    ${DBZ3_ROOT}/src/net/netplay.cpp
+    ${DBZ3_ROOT}/src/net/room.cpp
+    ${DBZ3_ROOT}/src/net/netplay_hooks.cpp
+    ${DBZ3_ROOT}/src/tagteam.cpp
+    ${DBZ3_ROOT}/src/tagteam_slots.cpp
+    ${DBZ3_ROOT}/src/campaigns.cpp
 )
 
-# Fontes que versoes mais novas do projeto original trouxeram (Tag Team, online,
-# campanhas, UI do jogo). So entram se existirem no external/dbz3: com uma copia
-# antiga do projeto o build continua igual. Atualizar o external/dbz3 pede
-# tambem regenerar o generated/ (codegen) e reaplicar o overlay ao SDK.
-# Ainda por validar no Android: ligar com ./gradlew assembleRelease -Pdf.fullSources=true
-option(DBZ3_FULL_SOURCES "Compilar Tag Team, online e campanhas do projeto original" OFF)
-if(DBZ3_FULL_SOURCES)
-foreach(DBZ3_OPTIONAL_SOURCE
-        src/launcher/novas_mods.cpp
-        src/ingame/game_style.cpp
-        src/ingame/native_ui.cpp
-        src/ingame/menu_pilot.cpp
-        src/ingame/online_panel.cpp
-        src/ingame/tagteam_panel.cpp
-        src/net/netplay.cpp
-        src/net/room.cpp
-        src/net/netplay_hooks.cpp
-        src/tagteam.cpp
-        src/tagteam_slots.cpp
-        src/campaigns.cpp)
-    if(EXISTS "${DBZ3_ROOT}/${DBZ3_OPTIONAL_SOURCE}")
-        list(APPEND DBZ3_SOURCES "${DBZ3_ROOT}/${DBZ3_OPTIONAL_SOURCE}")
-    endif()
-endforeach()
+# -Pdf.fullSources / DBZ3_FULL_SOURCES ficou sem efeito (as fontes acima sao
+# sempre compiladas). Lido aqui so para o CMake nao avisar "variavel nao usada".
+if(DEFINED DBZ3_FULL_SOURCES AND NOT DBZ3_FULL_SOURCES)
+    message(STATUS "DBZ3_FULL_SOURCES=OFF ignorado: Tag Team e online sao sempre compilados")
 endif()
 
 # Codigo recompilado do yae3_xenon.xex (define GENERATED_SOURCES).

@@ -11,6 +11,9 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.SurfaceHolder;
+import android.view.Window;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.view.WindowManager;
 
 import org.libsdl.app.SDLActivity;
@@ -67,6 +70,7 @@ public class GameActivity extends SDLActivity {
         Log.i(TAG, "Pasta do jogo: " + appDir.getAbsolutePath() + "/DBZ3");
         super.onCreate(savedInstanceState);
 
+        enterImmersive();
         requestSixtyHz();
         // Jogo com carga constante: pede ao sistema para nao deixar a GPU/CPU cair em
         // estados de poupanca entre frames (buracos de 10-15 ms na GPU, logs de
@@ -83,6 +87,42 @@ public class GameActivity extends SDLActivity {
         // Controles por toque por cima do jogo (se nao foram desligados no launcher).
         mOverlay = new GameOverlay(this);
         mOverlay.onCreate();
+    }
+
+    /**
+     * Ecra inteiro imersivo (sem barra de estado nem de navegacao, por baixo do recorte).
+     * Sem isto o SDL aplicava o estilo "janela" (o jogo cria a janela com fullscreen=false)
+     * e a superficie ficava mais pequena que o ecra: 1920x918 num Retroid Pocket 5 de
+     * 1920x1080 (logs de 2026-10-14), com a imagem cortada/encolhida nos portateis 16:9.
+     * O SDK tambem passou a pedir ecra inteiro no Android; isto fica como reforco (e
+     * repoe as barras escondidas quando a janela volta a ter foco).
+     */
+    @SuppressWarnings("deprecation")
+    private void enterImmersive() {
+        Window window = getWindow();
+        window.clearFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN);
+        window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        WindowManager.LayoutParams params = window.getAttributes();
+        if (params.layoutInDisplayCutoutMode
+                != WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES) {
+            params.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            window.setAttributes(params);
+        }
+        window.setDecorFitsSystemWindows(false);
+        WindowInsetsController controller = window.getInsetsController();
+        if (controller != null) {
+            controller.hide(WindowInsets.Type.systemBars());
+            controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            enterImmersive();
+        }
     }
 
     @Override

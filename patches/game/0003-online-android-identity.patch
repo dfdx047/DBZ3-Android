@@ -1,0 +1,34 @@
+--- a/src/ingame/online_panel.cpp
++++ b/src/ingame/online_panel.cpp
+@@ -6,6 +6,7 @@
+ #include <cfloat>
+ #include <chrono>
+ #include <cstdio>
++#include <cstdlib>
+ #include <cstring>
+ #include <string>
+ #include <vector>
+@@ -455,8 +456,23 @@
+       admission_reason = T::T("Online: solo con la version US del juego.", "Online: US version of the game only.");
+       return false;
+     }
++#if defined(__ANDROID__)
++    // DBZ3-Android: o "executavel" e o app_process do sistema (muda de aparelho para
++    // aparelho). A identidade sao as bibliotecas do APK (REX_NATIVE_LIB_DIR, definido
++    // pelo GameActivity): dois aparelhos com o mesmo APK entendem-se; Android contra PC
++    // nunca (codigo diferente, o lockstep dessincronizava).
++    const char* lib_dir = std::getenv("REX_NATIVE_LIB_DIR");
++    if (!lib_dir || !*lib_dir) {
++      admission_reason = T::T("Online: falta REX_NATIVE_LIB_DIR.", "Online: REX_NATIVE_LIB_DIR is not set.");
++      return false;
++    }
++    const std::filesystem::path libs(lib_dir);
++    std::vector<std::filesystem::path> files = {libs / "libmain.so", libs / "librexruntime.so",
++                                                libs / "librexgpu-xenos.so"};
++#else
+     const std::filesystem::path exe = rex::filesystem::GetExecutablePath();
+     std::vector<std::filesystem::path> files = {exe};
++#endif
+ #ifdef _WIN32
+     files.push_back(exe.parent_path() / "rexruntime.dll");
+     files.push_back(exe.parent_path() / "rexgpu-xenos.dll");

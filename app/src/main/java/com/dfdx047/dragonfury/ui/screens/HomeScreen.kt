@@ -181,8 +181,11 @@ fun HomeScreen(vm: LauncherViewModel, goTo: (LauncherTab) -> Unit) {
 
         SectionCard(stringResource(R.string.quick_links_title), Icons.Filled.SportsEsports) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                FilledTonalButton(onClick = { goTo(LauncherTab.SETTINGS) }, modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.tab_settings))
+                FilledTonalButton(onClick = { goTo(LauncherTab.PERFORMANCE) }, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.tab_performance))
+                }
+                FilledTonalButton(onClick = { goTo(LauncherTab.CONTROLS) }, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.tab_controls))
                 }
                 FilledTonalButton(onClick = { goTo(LauncherTab.DRIVERS) }, modifier = Modifier.weight(1f)) {
                     Text(stringResource(R.string.tab_drivers))

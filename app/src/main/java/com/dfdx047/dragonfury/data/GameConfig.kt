@@ -16,7 +16,7 @@ import java.io.File
  */
 data class GameConfig(
     // Desempenho / imagem
-    val resolutionScale: Int = 1,             // dbz3_resolution_scale 1-4 (720p x N)
+    val resolutionScale: Int = 1,             // dbz3_resolution_scale 1-3 (720p x N; so escalas inteiras)
     val presentEffect: String = "fsr",        // dbz3_present_effect bilinear|cas|fsr
     val fsrRender: String = "native",         // dbz3_fsr_render native|quality|balanced|performance|ultra_performance
     val fsrSharpness: Double = 0.2,           // dbz3_fsr_sharpness 0-2 (0 = mais nitido)
@@ -26,12 +26,14 @@ data class GameConfig(
     val anisotropic: Int = 5,                 // dbz3_anisotropic 0-5 (5 = 16x)
     val rimLight: Double = 1.0,               // dbz3_hd_rim_light 0-1 (brilho HD)
     val dither: Boolean = false,              // dbz3_present_dither
-    val frameCap: Int = 60,                   // dbz3_frame_cap (30 ou 60)
+    val frameCap: Int = 60,                   // dbz3_frame_cap (30 ou 60) + dbz3_frameskip (30 = 1)
     val showFps: Boolean = false,             // dbz3_show_fps
     val letterbox: Boolean = true,            // present_letterbox (16:9 com barras / esticar)
     // Jogo
     val gameLanguage: Int = 1,                // dbz3_language 1 EN, 2 JP, 3 DE, 4 FR, 5 ES, 6 IT
     val tagTeam: Boolean = true,              // dbz3_tag_team_enabled
+    val online: Boolean = true,               // dbz3_online_enabled (ONLINE no Duelo/SELECT)
+    val formSelect: Boolean = true,           // dbz3_form_select_enabled (LT/RT escolhem a forma inicial)
     val texturePacksOn: Boolean = true,       // dbz3_texture_packs_on
     // Audio
     val masterVolume: Double = 1.0,           // dbz3_master_volume
@@ -48,12 +50,18 @@ data class GameConfig(
     val directResolveFast: Boolean = true,    // dbz3_direct_resolve_skip_memory (modo rapido)
     val rtDirect: Boolean = true,             // dbz3_rt_direct (render targets sem transferencias, patch 0028)
     val specShaders: Boolean = true,          // dbz3_spec_texture_signs + dbz3_tex_implicit_lod (patch 0035)
+    // Efeitos do jogo (patch 0047; so atuam com dbz3_rt_direct). Desligar ajuda GPUs fracos (Mali).
+    val fxBloom: Boolean = true,              // dbz3_fx_bloom
+    val fxDof: Boolean = true,                // dbz3_fx_dof (profundidade de campo)
+    val fxFxaa: Boolean = true,               // dbz3_fx_fxaa (FXAA do proprio jogo, nao o dbz3_fxaa)
 ) {
     fun toToml(): Map<String, Any> = linkedMapOf(
         // "manual": o preset "auto" do PC reescreveria estas opcoes no arranque.
         "dbz3_quality_preset" to "manual",
         "dbz3_input_backend" to "sdl",
-        "dbz3_resolution_scale" to resolutionScale.coerceIn(1, 4),
+        // So escalas inteiras: o renderizador nao suporta 1.5x. 4x ficou de fora (memoria
+        // demais para um telemovel: o buffer de resolves escalados e 512 MB x escala^2).
+        "dbz3_resolution_scale" to resolutionScale.coerceIn(1, MAX_RESOLUTION_SCALE),
         "dbz3_present_effect" to presentEffect,
         "dbz3_fsr_render" to fsrRender,
         "dbz3_fsr_sharpness" to fsrSharpness.coerceIn(0.0, 2.0),
@@ -71,6 +79,8 @@ data class GameConfig(
         "present_letterbox" to letterbox,
         "dbz3_language" to gameLanguage.coerceIn(1, 6),
         "dbz3_tag_team_enabled" to tagTeam,
+        "dbz3_online_enabled" to online,
+        "dbz3_form_select_enabled" to formSelect,
         "dbz3_texture_packs_on" to texturePacksOn,
         "dbz3_master_volume" to masterVolume.coerceIn(0.0, 1.0),
         "dbz3_mute" to mute,
@@ -84,6 +94,9 @@ data class GameConfig(
         "dbz3_rt_direct" to rtDirect,
         "dbz3_spec_texture_signs" to specShaders,
         "dbz3_tex_implicit_lod" to specShaders,
+        "dbz3_fx_bloom" to fxBloom,
+        "dbz3_fx_dof" to fxDof,
+        "dbz3_fx_fxaa" to fxFxaa,
         // Memoria do jogo num buffer normal (sem sparse binding): o RB2-Android e o
         // Skate3-Mobile desligam-no nos Adreno; menos um caminho com bugs de driver.
         "vulkan_sparse_shared_memory" to false,
@@ -93,6 +106,7 @@ data class GameConfig(
         val EFFECTS = listOf("bilinear", "cas", "fsr")
         val FSR_RENDER = listOf("native", "quality", "balanced", "performance", "ultra_performance")
         val FXAA = listOf("none", "fxaa", "fxaa_extreme")
+        const val MAX_RESOLUTION_SCALE = 3
 
         fun load(file: File = AppPaths.userToml): GameConfig {
             val m = try {
@@ -114,7 +128,7 @@ data class GameConfig(
                 else -> def
             }
             return GameConfig(
-                resolutionScale = int("dbz3_resolution_scale", d.resolutionScale).coerceIn(1, 4),
+                resolutionScale = int("dbz3_resolution_scale", d.resolutionScale).coerceIn(1, MAX_RESOLUTION_SCALE),
                 // fsr3/dlss vindos do PC caem para o FSR 1, que funciona no Vulkan.
                 presentEffect = str("dbz3_present_effect", d.presentEffect).let { if (it in EFFECTS) it else "fsr" },
                 fsrRender = str("dbz3_fsr_render", d.fsrRender).let { if (it in FSR_RENDER) it else "native" },
@@ -130,6 +144,8 @@ data class GameConfig(
                 letterbox = bool("present_letterbox", d.letterbox),
                 gameLanguage = int("dbz3_language", d.gameLanguage),
                 tagTeam = bool("dbz3_tag_team_enabled", d.tagTeam),
+                online = bool("dbz3_online_enabled", d.online),
+                formSelect = bool("dbz3_form_select_enabled", d.formSelect),
                 texturePacksOn = bool("dbz3_texture_packs_on", d.texturePacksOn),
                 masterVolume = dbl("dbz3_master_volume", d.masterVolume),
                 mute = bool("dbz3_mute", d.mute),
@@ -143,6 +159,9 @@ data class GameConfig(
                 directResolveFast = bool("dbz3_direct_resolve_skip_memory", d.directResolveFast),
                 rtDirect = bool("dbz3_rt_direct", d.rtDirect),
                 specShaders = bool("dbz3_spec_texture_signs", d.specShaders),
+                fxBloom = bool("dbz3_fx_bloom", d.fxBloom),
+                fxDof = bool("dbz3_fx_dof", d.fxDof),
+                fxFxaa = bool("dbz3_fx_fxaa", d.fxFxaa),
             )
         }
 
