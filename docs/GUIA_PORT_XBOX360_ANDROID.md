@@ -384,7 +384,8 @@ sem resolve. Detetar com a captura: se aparecer PM4 que não veio de uma funçã
 7. Se ainda não chegar: renderizador nativo (secção 8), com o caminho emulado como reserva.
 8. Afinar por gama (secção 9); medir sempre com o mesmo cenário e o mesmo aparelho.
 
-### 10.1 Ferramenta (objetivo depois do DBZ3)
+### 10.1 Ferramenta: OptXbox (https://github.com/dfdx047/Optxbox)
+Começou como CLI em Python (`timeline`, `analyze`, `perf`, `compare`, `cvars`, `d3dmap`), sem dependências.
 Quase todo o trabalho manual deste port foi: capturar → ler a linha do tempo → reconhecer um
 padrão → escrever um interruptor → medir. Automatizável:
 - análise da captura que lista os padrões 7.1 encontrados (hashes do Clear do XDK, color base =
