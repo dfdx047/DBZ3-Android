@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="df_orange">#FF8A1F</color>
+    <color name="df_orange_deep">#E0560B</color>
+    <color name="df_yellow">#FFC94A</color>
+    <color name="df_blue">#1E5BFF</color>
+    <color name="df_blue_deep">#0B2A8C</color>
+    <color name="df_star_red">#D7261E</color>
+    <color name="df_background">#FFF7EE</color>
+    <color name="df_icon_background">#0B1A4A</color>
+</resources>

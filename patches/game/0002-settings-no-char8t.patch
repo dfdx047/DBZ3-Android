@@ -1,0 +1,13 @@
+--- a/src/launcher/settings.cpp
++++ b/src/launcher/settings.cpp
+@@ -2186,7 +2186,9 @@
+ 
+ // UTF-8 text of a path: path::string() throws on names outside the Windows code page.
+ std::string PathUtf8(const std::filesystem::path& p) {
+-  const std::u8string s = p.u8string();
++  // DBZ3-Android: `auto` em vez de std::u8string. O build Android compila com
++  // -fno-char8_t (ai u8string() devolve std::string e std::u8string nao existe).
++  const auto s = p.u8string();
+   return std::string(s.begin(), s.end());
+ }
+ 

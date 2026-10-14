@@ -65,6 +65,12 @@ set(REXGLUE_OUTPUT_DIR "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}" CACHE STRING "" FORCE
 set(REXGLUE_USE_VULKAN ON CACHE BOOL "" FORCE)
 set(REXGLUE_ENABLE_TRACY OFF CACHE BOOL "" FORCE)
 set(REXGLUE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+# ARMv8.2-A tambem no SDK (runtime, plugin da GPU, terceiros), nao so no jogo: os
+# atomicos LSE em linha substituem as chamadas __aarch64_cas*/ldadd*, que no port do
+# Raging Blast 2 (RB2-Android) custavam varios % das threads do command processor e
+# da UI. Todos os alvos (865, T820, 8 Gen x) sao ARMv8.2.
+string(APPEND CMAKE_C_FLAGS " -march=armv8.2-a")
+string(APPEND CMAKE_CXX_FLAGS " -march=armv8.2-a")
 add_subdirectory("${REXSDK_ROOT}" rexglue-sdk)
 
 #-----------------------------------------------------------------------------
@@ -91,14 +97,26 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 #-----------------------------------------------------------------------------
-# Jogo (mesma lista de fontes do CMakeLists.txt do projeto original, build US)
+# Jogo (mesma lista de fontes do CMakeLists.txt do projeto original v1.4.5.1,
+# build US): inclui Tag Team, online (src/net), campanhas, escenarios de mods e
+# os ecras proprios do jogo. Desde a v1.4.4.5 o main.cpp e o roster_ext.cpp
+# chamam o Tag Team e os paineis diretamente, por isso ja nao sao opcionais.
 #-----------------------------------------------------------------------------
+# O external/dbz3 tem de estar na v1.4.5.1 ou mais nova (stage_ext.cpp nasceu
+# ai). Os patches de patches/game/ sao escritos contra essa versao.
+if(NOT EXISTS "${DBZ3_ROOT}/src/stage_ext.cpp")
+    message(FATAL_ERROR
+        "external/dbz3 desatualizado (falta src/stage_ext.cpp, v1.4.5.1).\n"
+        "Atualiza-o para origin/master do projeto original (ver docs/ESTADO.md,\n"
+        "'Atualizar o external/dbz3') e corre bash tools/apply-sdk-patches.sh.")
+endif()
 set(DBZ3_SOURCES
     ${DBZ3_ROOT}/src/main.cpp
     ${DBZ3_ROOT}/src/hooks.cpp
     ${DBZ3_ROOT}/src/roster_trace.cpp
     ${DBZ3_ROOT}/src/roster_ext.cpp
     ${DBZ3_ROOT}/src/select_ext.cpp
+    ${DBZ3_ROOT}/src/stage_ext.cpp
     ${DBZ3_ROOT}/src/mods.cpp
     ${DBZ3_ROOT}/src/native_mods.cpp
     ${DBZ3_ROOT}/src/region.cpp
@@ -108,9 +126,27 @@ set(DBZ3_SOURCES
     ${DBZ3_ROOT}/src/launcher/mod_pipeline.cpp
     ${DBZ3_ROOT}/src/launcher/i18n.cpp
     ${DBZ3_ROOT}/src/launcher/update_check.cpp
+    ${DBZ3_ROOT}/src/launcher/novas_mods.cpp
     ${DBZ3_ROOT}/src/ingame/menu.cpp
     ${DBZ3_ROOT}/src/ingame/quick_settings.cpp
+    ${DBZ3_ROOT}/src/ingame/game_style.cpp
+    ${DBZ3_ROOT}/src/ingame/native_ui.cpp
+    ${DBZ3_ROOT}/src/ingame/menu_pilot.cpp
+    ${DBZ3_ROOT}/src/ingame/online_panel.cpp
+    ${DBZ3_ROOT}/src/ingame/tagteam_panel.cpp
+    ${DBZ3_ROOT}/src/net/netplay.cpp
+    ${DBZ3_ROOT}/src/net/room.cpp
+    ${DBZ3_ROOT}/src/net/netplay_hooks.cpp
+    ${DBZ3_ROOT}/src/tagteam.cpp
+    ${DBZ3_ROOT}/src/tagteam_slots.cpp
+    ${DBZ3_ROOT}/src/campaigns.cpp
 )
+
+# -Pdf.fullSources / DBZ3_FULL_SOURCES ficou sem efeito (as fontes acima sao
+# sempre compiladas). Lido aqui so para o CMake nao avisar "variavel nao usada".
+if(DEFINED DBZ3_FULL_SOURCES AND NOT DBZ3_FULL_SOURCES)
+    message(STATUS "DBZ3_FULL_SOURCES=OFF ignorado: Tag Team e online sao sempre compilados")
+endif()
 
 # Codigo recompilado do yae3_xenon.xex (define GENERATED_SOURCES).
 include("${DBZ3_GENERATED}/sources.cmake")
@@ -126,7 +162,22 @@ set_source_files_properties(${GENERATED_SOURCES} PROPERTIES
 add_library(main SHARED ${DBZ3_SOURCES} ${GENERATED_SOURCES})
 
 # Hooks especificos do port Android (desempenho). Ver android_hooks.cpp.
-target_sources(main PRIVATE "${CMAKE_CURRENT_LIST_DIR}/android_hooks.cpp")
+target_sources(main PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/android_hooks.cpp"
+    # Estado do combate para os controles por toque (JNI, ver NativeGameState.kt).
+    "${CMAKE_CURRENT_LIST_DIR}/game_state_jni.cpp"
+)
+
+# Rastreio das funcoes D3D candidatas (tools/d3d_map.py + tools/d3d_trace_gen.py).
+option(DBZ3_D3D_TRACE "Hooks de rastreio da biblioteca D3D (logs/d3d_trace.log)" OFF)
+if(DBZ3_D3D_TRACE)
+    if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/d3d_trace_hooks.cpp")
+        target_sources(main PRIVATE "${CMAKE_CURRENT_LIST_DIR}/d3d_trace_hooks.cpp")
+    else()
+        message(FATAL_ERROR "DBZ3_D3D_TRACE ligado mas falta d3d_trace_hooks.cpp: corre "
+            "python3 tools/d3d_map.py && python3 tools/d3d_trace_gen.py")
+    endif()
+endif()
 
 # O imgui.h vem com o SDK instalado no PC; aqui apontamos para o submodulo.
 # (O codigo do ImGui em si ja esta dentro do librexruntime.so.)
@@ -134,6 +185,8 @@ target_include_directories(main PRIVATE
     "${DBZ3_ROOT}"
     "${DBZ3_GENERATED}"
     "${REXSDK_ROOT}/thirdparty/imgui"
+    # rex/hash.h (usado pelos ecras do jogo da v1.4.5.1, ex. native_ui.cpp) inclui <xxhash.h>.
+    "${REXSDK_ROOT}/thirdparty/xxHash"
 )
 
 target_compile_options(main PRIVATE

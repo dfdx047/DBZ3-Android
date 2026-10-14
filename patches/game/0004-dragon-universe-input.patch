@@ -1,0 +1,90 @@
+diff --git a/src/campaigns.cpp b/src/campaigns.cpp
+index 676cba3..77c041e 100644
+--- a/src/campaigns.cpp
++++ b/src/campaigns.cpp
+@@ -268,8 +268,18 @@ REX_HOOK_RAW(sub_820AAD30) {
+ // haciendo lo mismo que el juego al tocar una marca de combate (0x821C4B90 / 0x821C5040): marca
+ // tocada en +232, escena lanzada, mapa al estado 7 (entrar en un evento) y la tarea a su manejador.
+ // Solo US (las direcciones del mapa estan medidas en la US).
++// DBZ3-Android: ultimo instante (ms do steady_clock) em que o jogo correu este estado, ou seja,
++// o jogador esta a voar pelo mapa do Dragon Universe. O byte de ecra 0x824BA110 pode continuar a 5
++// ("menu principal") durante o Dragon Universe, por isso os filtros do menu principal
++// (online_panel.cpp / netplay_hooks.cpp) e os controles por toque (game_state_jni.cpp) usam
++// isto para saber que nao estao num menu nem numa luta.
++std::atomic<int64_t> g_dbz3_map_fly_ms{0};
++
+ REX_HOOK_RAW(sub_821C4DA0) {
+   using namespace dbz3::campaigns;
++  g_dbz3_map_fly_ms.store(std::chrono::duration_cast<std::chrono::milliseconds>(
++                              std::chrono::steady_clock::now().time_since_epoch()).count(),
++                          std::memory_order_relaxed);
+   // Desde 2026-10-11 las marcas de las historias de mod son como las del juego (icono 1, letrero y
+   // punto en el minimapa) y se tocan volando hasta ellas; el toque solo queda para pruebas.
+   // DBZ3_AUTO_TOUCH=N: las N primeras marcas (sin numero, todas)
+diff --git a/src/ingame/online_panel.cpp b/src/ingame/online_panel.cpp
+index 7922b6d..cd1b5b6 100644
+--- a/src/ingame/online_panel.cpp
++++ b/src/ingame/online_panel.cpp
+@@ -52,6 +52,8 @@ bool dbz3_select_live();   // select_ext.cpp: la rueda de personajes esta en mar
+ bool dbz3_select_to_stage();   // los dos confirmaron: escenario (misma pantalla 14)
+ void dbz3_select_reset_flow();
+ 
++extern std::atomic<int64_t> g_dbz3_map_fly_ms;   // campaigns.cpp (DBZ3-Android)
++
+ namespace dbz3::campaigns {
+ void Trace(uint8_t* base);   // campaigns.cpp
+ }
+@@ -183,9 +185,21 @@ std::atomic<uint32_t> g_main_obj{0};        // objeto del menu principal (+150 =
+ 
+ int GameScreen() { return g_screen.load(); }
+ uint32_t MainMenuObj() { return NowMs() - g_real_main_at.load() < 500 ? g_main_obj.load() : 0; }
++// DBZ3-Android: o Dragon Universe entra pela fila 0 do menu principal e o byte de ecra pode ficar a
++// 5 la dentro (roda, mapa, cenas). So e o menu principal de verdade se o proprio menu correu ha
++// pouco (sub_8218C5D8, todos os frames enquanto se ve) e ninguem esta a voar pelo mapa. Senao, no
++// mapa: palancas a 0 (so cima/baixo, como cruceta de 120 ms), X abria o TAG TEAM (que bloqueia o
++// mando) e a fila TAG TEAM falsa comia os botoes.
++bool MainMenuLive() {
++  if (g_screen.load() != kMainMenuScreen) return false;
++  const int64_t now = NowMs();
++  if (now - g_dbz3_map_fly_ms.load(std::memory_order_relaxed) < 1000) return false;
++  return now - g_real_main_at.load() < 1000;
++}
+ bool MenuRowsTracked() {
+   const int sc = g_screen.load();
+-  return sc == kMainMenuScreen || (sc == kDuelMenuScreen && !dbz3_select_live() && !dbz3_select_to_stage());
++  return (sc == kMainMenuScreen && MainMenuLive()) ||
++         (sc == kDuelMenuScreen && !dbz3_select_live() && !dbz3_select_to_stage());
+ }
+ void NotePad2(bool connected) { g_pad2 = connected; }
+ bool Pad2Connected() { return g_pad2.load(); }
+@@ -233,8 +247,10 @@ uint16_t DuelMenuFilter(uint8_t* base, uint16_t real) {
+     return uint16_t(real & ~mask);
+   };
+   // la rueda de personajes tambien es la pantalla 14: se distingue por su logica (select_ext.cpp)
+-  const int screen = (g_screen.load() == kDuelMenuScreen && (dbz3_select_live() || dbz3_select_to_stage())) ? -2
+-                                                                                                  : g_screen.load();
++  int screen = (g_screen.load() == kDuelMenuScreen && (dbz3_select_live() || dbz3_select_to_stage())) ? -2
++                                                                                            : g_screen.load();
++  if (screen == kMainMenuScreen && !MainMenuLive()) screen = -3;   // DBZ3-Android: Dragon Universe
++
+   // menu principal (7 filas, recuerda la ultima): se sigue igual para el piloto de TAG TEAM
+   // con la ultima fila (Dragon Arena), abajo pasa a TAG TEAM (el juego no lo ve); arriba vuelve,
+   // abajo da la vuelta a la primera fila y A abre la pantalla TAG TEAM
+@@ -330,7 +346,7 @@ void OnlineTick(uint8_t* base, uint16_t p1_buttons) {
+   g_screen = screen;
+   g_battle = battle;
+   if ((p1_buttons & kX) && !(g_prev_select & kX) && !battle && s.link() != Link::kPlaying) {
+-    if (screen == kMainMenuScreen && REXCVAR_GET(dbz3_tag_team_enabled)) {
++    if (screen == kMainMenuScreen && MainMenuLive() && REXCVAR_GET(dbz3_tag_team_enabled)) {   // DBZ3-Android
+       TagTeamOpen();
+     }
+   }
+@@ -421,7 +437,7 @@ void OnlinePanel::OnDraw(ImGuiIO& io) {
+       if (Pad() & 0x4000) g_close_req = true;
+     }
+     if (!g_battle.load() && !TagTeamWanted() && !TagTeamGate() && s.link() == Link::kIdle) {
+-      if (screen == kMainMenuScreen && REXCVAR_GET(dbz3_tag_team_enabled)) {
++      if (screen == kMainMenuScreen && MainMenuLive() && REXCVAR_GET(dbz3_tag_team_enabled)) {   // DBZ3-Android
+         TagTeamRow(io, g_tag_focus.load());   // US y EU: los menus son iguales
+       }
+       if (screen == kDuelMenuScreen && REXCVAR_GET(dbz3_online_enabled) && !dbz3_select_live() && !dbz3_select_to_stage()) {
