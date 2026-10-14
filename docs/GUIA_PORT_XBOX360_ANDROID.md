@@ -121,8 +121,10 @@ testado em aparelho, está dito.
 ### 2.4 DBZ3 (este port) — o que medimos
 - RP5 (SD865, Adreno 650), driver do sistema, luta 1280x720:
   - de início ~39–44 ms de GPU por frame (desenho, transfers, resolves, texturas);
-  - com render targets diretos, atalho de profundidade e de cor: 17–19 ms em luta normal
-    (~50–57 fps), ~26 ms com especiais (~38 fps). Resolves ainda ~5–10 ms.
+  - 2026-10-14, patches 0028–0045 no caminho emulado: **59–60 fps** em luta, GPU ~16 ms
+    (desenho ~7,5 ms em ~23 passes, resolve ~8 ms, transfer 0,1).
+- RG Cube (Unisoc T770, Mali-G57), driver do sistema: de 12–14 fps (GPU 70–83 ms) para
+  **20–24 fps** em luta (GPU 41–47 ms: desenho ~24, resolve ~12, transfer ~2,7).
 - Turnip no Adreno 650: geometria certa só com a memória do guest num único storage buffer de
   512 MB (fora da especificação), texturas sempre erradas. Abandonado.
 - O frame do jogo: ~400 draws e ~30 shaders; cadeia de brilho 1280→320x184→160x96→80x48;
@@ -131,8 +133,8 @@ testado em aparelho, está dito.
   porque cada leitura de textura traduzida pelo Xenia carrega ramos por píxel (sinal da
   textura, gamma, amostragem signed) e gradientes explícitos. Patch 0035 especializa isso
   (1329 → 450 instruções no shader de desfoque).
-
----
+- Em GPUs tiler (Adreno e Mali) o custo dominante acabou por ser o **número de passes**: cada
+  fim de passe grava e volta a carregar a cor + profundidade de 1280x720 (~0,5 ms no G57).
 
 ## 3. Porque é que a emulação da GPU é cara em telemóveis
 
@@ -247,29 +249,50 @@ O que procurar numa captura:
 
 ## 7. Fase 2 — tirar o máximo do caminho emulado
 
-Ordem aproximada por ganho medido (DBZ3 = patches deste repo; RB2 = patches lá):
+Ordem por ganho medido no DBZ3 (patches deste repo; RB2 = patches lá):
 
-1. **Render targets diretos** (DBZ3 0028/0029): cada render target fica na sua imagem; só se
-   transfere entre imagens com a mesma base/pitch/formato e MSAA diferente.
-2. **Resolve direto para textura** (DBZ3 0028/0031, RB2 0021/0022): o resolve escreve a textura
-   que o jogo vai ler (compute do render target → buffer → imagem), sem passar pela memória do
-   guest quando ninguém a lê do CPU. Hoje cobre 6–12 dos 15–21 resolves do DBZ3; o patch 0035
-   regista porque os outros ficam de fora.
-3. **Shaders especializados** (DBZ3 0035, RB2 0018): sinais das texturas como specialization
-   constants e LOD implícito. Ganho por confirmar no aparelho.
-4. **Pipelines e shaders guardados e lidos** (correção do `a+`), compilação assíncrona.
-5. **Uploads antes do passe** (RB2 0003/0007/0010/0020): no RB2 eram ~84% dos passes; no DBZ3
-   não mudou o tempo de GPU (desligado por omissão).
-6. **Páginas voláteis** em vez de proteção de memória (RB2 0013/0028/0032), custo de CPU do CP.
-7. **Resolução interna** abaixo de 100% para GPUs fracos + FSR1/bilinear no presenter.
-8. **Frameskip** (DBZ3 0023): último recurso para manter a velocidade do jogo; a 30 fps um jogo
-   de luta fica mau.
+1. **Render targets diretos** (0028/0029): cada configuração de render target fica na sua
+   imagem; nunca há transferências entre configurações (o jogo restaura cor e profundidade ele
+   próprio).
+2. **Resolve direto para a imagem da textura** (0038, imageStore num compute; RB2 0021/0022):
+   sem memória do guest quando ninguém a lê do CPU.
+3. **Shaders especializados** (0035, RB2 0018): sinais das texturas como specialization
+   constants e LOD implícito. Desenho 14 → 9 ms no 865.
+4. **Clear() do D3D direto na imagem 1x** (0041/0042): ver padrão A abaixo. Mali −8 ms.
+5. **Uploads antes do passe** (`dbz3_hoist_uploads`, RB2 0003) **+ transição antecipada das
+   texturas resolvidas** (0043/0044): no Mali os fins de passe caíram de 73 para ~33 por frame
+   e o desenho de 52 para 29 ms. Isoladamente, cada um não mostrava ganho: partem os mesmos
+   passes, só juntos é que se vê.
+6. **Restauros inúteis com render targets diretos** (0045/0046): ver padrões B e C.
+7. Pipelines e shaders guardados e lidos (correção do `a+`), compilação assíncrona.
+8. Resolução interna abaixo de 100% para GPUs fracos + FSR1/bilinear no presenter.
+9. **Frameskip** (`dbz3_frameskip = 1`): o jogo a 60, desenha 1 em cada 2. Só fica liso se o GPU
+   desenhar um frame em menos de 33 ms.
 
-O que **não** resultou no DBZ3: eliminar resolves/restauros "redundantes" por heurística (0032)
-— os efeitos dos especiais usam o mesmo shader de cópia e ficaram pretos.
+Diagnóstico que fez a diferença: a linha "fins de passe N/f" com a causa de cada fim de passe
+(upload, barreira de imagem por destino, mudança de render target). Sem ela andámos às cegas.
 
-Limite deste caminho, medido: 865 com driver do sistema ~17–26 ms por frame no DBZ3; RB2 ~12 ms
-num 8 Gen 2 com Turnip.
+### 7.1 Padrões do D3D do XDK (devem repetir-se noutros jogos)
+- **A. Clear() = retângulo 4x MSAA de meia largura.** VS 1E6883FCCDE1F688 (posição + cor de
+  vf95, stride 28 B, PA_CL_VTE_CNTL = 0x300) e PS A4A965C189287B99 (`oC0 = r0`), RECTLIST de 3
+  vértices num render target 4x com pitch 640 (= 1280 a 1x no EDRAM); um draw de cor e um só
+  de profundidade (RB_MODECONTROL 5) com os mesmos vértices. O fetch constant declara 48 B nos
+  draws UP (não confiar no tamanho). Solução: só durante o draw, escala do viewport ×2 e
+  RB_SURFACE_INFO a 1x com pitch ×2; repor os registos no fim (o D3D só reenvia blocos sujos).
+  Os hashes vêm do XDK, por isso devem ser os mesmos noutros jogos com a mesma versão do D3D.
+- **B. Restauro da profundidade via cor.** Depois de um passe que no EDRAM pisa a zona da
+  profundidade, o jogo copia a profundidade (resolve 24_8) e desenha-a de volta como cor na
+  base da profundidade (color base = depth base). Com render targets diretos é inútil.
+- **C. Cópia + restauro da cor.** Resolve da cor → passe noutro render target → draw de cópia
+  identidade (VS de passagem, retângulo (0,0)-(L,0)-(0,A), UV 0/1, PS `oC0 = tfetch`) de volta.
+  Com render targets diretos é inútil, mas os efeitos de ecrã usam o mesmo PS com vértices
+  transformados: o teste tem de olhar para os vértices, não só para o shader.
+- **D. Resolves sem leitor.** Um resolve sobrescrito por outro para o mesmo destino no mesmo
+  frame sem ninguém o ler pelo meio pode ser saltado (decidido a partir do frame anterior; se
+  alguém o ler a sério volta a ser feito).
+
+Limite medido deste caminho: 865 com driver do sistema ~16 ms por frame no DBZ3 (60 fps);
+G57 ~41–47 ms.
 
 ---
 
@@ -353,12 +376,22 @@ sem resolve. Detetar com a captura: se aparecer PM4 que não veio de uma funçã
 2. Shell Android deste repo (launcher, drivers, logs, captura) + Fase 0 completa.
 3. Primeiro arranque no aparelho mais fraco do alvo; tirar log de 5 min e duas capturas (menu e
    jogo).
-4. Mapa do frame (`dfc_parse.py`), tempo por draw, shaders desmontados.
-5. Decidir o caminho (secção 4). Se nativo: tabela de funções D3D (8.1) antes de escrever código
-   de render.
-6. Renderizador nativo com o caminho emulado como reserva e um interruptor para comparar os dois
-   lado a lado.
-7. Afinar por gama (secção 9); medir sempre com o mesmo cenário e o mesmo aparelho.
+4. Mapa do frame (`dfc_parse.py`), tempo por draw, shaders desmontados (`xdisasm`), mapa D3D
+   (`tools/d3d_map.py`).
+5. Ligar os patches genéricos da Fase 2 (1–6) e procurar os padrões 7.1 A–D pelos hashes e pela
+   linha do tempo da captura.
+6. Ler "fins de passe" por causa e atacar a maior; repetir.
+7. Se ainda não chegar: renderizador nativo (secção 8), com o caminho emulado como reserva.
+8. Afinar por gama (secção 9); medir sempre com o mesmo cenário e o mesmo aparelho.
+
+### 10.1 Ferramenta (objetivo depois do DBZ3)
+Quase todo o trabalho manual deste port foi: capturar → ler a linha do tempo → reconhecer um
+padrão → escrever um interruptor → medir. Automatizável:
+- análise da captura que lista os padrões 7.1 encontrados (hashes do Clear do XDK, color base =
+  depth base, cópias identidade, resolves sem leitor) e quantos passes cada um custa;
+- relatório "fins de passe" + categorias de GPU num só ecrã, por aparelho;
+- gerador do cvars.txt com os interruptores que se aplicam ao jogo;
+- mapa D3D automático (`d3d_map.py`) para os hooks do renderizador nativo.
 
 ---
 

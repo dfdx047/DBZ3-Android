@@ -741,3 +741,18 @@ a cache de pipelines passou a ser lida no arranque (patch 0024).
   1280x720, por isso esse restauro é inútil e custa 2 mudanças de alvo por lutador.
 - 0045: `dbz3_skip_depth_restore` (cvars.txt, desligado por omissão) salta esses draws
   (PS ADCA… com base da cor = base da profundidade). Esperado: −6 a −8 fins de passe por frame.
+
+### 2026-10-14 02:32–02:36 — 0045 a funcionar; patch 0046
+- **RP5: 59–60 fps em luta** (GPU ~16 ms: desenho 7,5 ms/23 passes, resolve ~8). **Mali: 20–24 fps**
+  (GPU 41–47 ms, desenho 21–28, resolve 11–15, transfer 2,7). Fins de passe 37 → 28/f nos dois.
+  Visualmente sem problemas na profundidade.
+- Leitores dos resolves (captura de luta): as cópias de profundidade dos lutadores 1 e 2 só eram
+  lidas pelo restauro via cor (agora saltado); a do 3.º alimenta o desfoque 4DFC/555E/FXAA. As
+  cópias de cor 1 e 2 só são lidas pelo draw de restauro (VS B4ED697CB92C1759 de passagem, PS
+  6E57 `oC0 = tfetch`, vértices (0,0,0,0)(1280,0,1,0)(0,720,0,1)).
+- 0046: o restauro (0032, `dbz3_rt_elide_restores`) passa a exigir cópia identidade nos vértices
+  (`dbz3_rt_restore_identity_only`, ligado): os especiais usam o mesmo PS com vértices
+  transformados e já não contam como restauro. Com `dbz3_rt_elide_restores = true` esperam-se
+  −4 resolves de ecrã inteiro e −4 fins de passe por frame.
+- Guia (GUIA_PORT_XBOX360_ANDROID.md) atualizado: resultados, ordem dos patches por ganho,
+  padrões do D3D do XDK (A–D) e o plano da ferramenta.
