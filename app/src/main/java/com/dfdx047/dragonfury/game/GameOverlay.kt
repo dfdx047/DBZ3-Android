@@ -67,6 +67,8 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
     /** Modo automatico: os controles estao a mostra (ultimo input foi toque). */
     private var autoShown = true
     private var inBattle = false
+    /** A voar pelo mapa do Dragon Universe (tem prioridade sobre a luta e os menus). */
+    private var onMap = false
 
     private val attachRunnable = Runnable { attachPad() }
     private var gpuStats: GpuStatsSampler? = null
@@ -93,6 +95,13 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
         engine.pauseQuickMenu = prefs.pauseOnMenus
         engine.onBattleChanged = { battle ->
             inBattle = battle
+            view?.let {
+                it.releaseAll()
+                it.layout = currentLayout()
+            }
+        }
+        engine.onMapChanged = { map ->
+            onMap = map
             view?.let {
                 it.releaseAll()
                 it.layout = currentLayout()
@@ -156,11 +165,24 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
             },
         )
 
-        // Trocar a mao entre o layout de luta e o de menus (ao lado da engrenagem). A troca
-        // automatica seguinte volta a mandar.
+        // Trocar a mao entre os layouts (ao lado da engrenagem): menus -> luta -> mapa -> menus.
+        // A troca automatica seguinte volta a mandar.
         val lb = roundButton(R.drawable.ic_btn_layout, R.string.ingame_switch_layout) {
-            inBattle = !inBattle
-            engine.diag?.invoke("botao de troca -> " + if (inBattle) "luta" else "menus")
+            when (currentLayoutKind()) {
+                LayoutKind.MENU -> {
+                    inBattle = true
+                    onMap = false
+                }
+                LayoutKind.GAMEPLAY -> {
+                    inBattle = false
+                    onMap = true
+                }
+                LayoutKind.MAP -> {
+                    inBattle = false
+                    onMap = false
+                }
+            }
+            engine.diag?.invoke("botao de troca -> " + currentLayoutKind().name)
             view?.let {
                 it.releaseAll()
                 it.layout = currentLayout()
@@ -215,7 +237,13 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
         }
     }
 
-    private fun currentLayout() = ControlLayoutStore.load(if (inBattle) LayoutKind.GAMEPLAY else LayoutKind.MENU)
+    private fun currentLayout() = ControlLayoutStore.load(currentLayoutKind())
+
+    override fun currentLayoutKind(): LayoutKind = when {
+        onMap -> LayoutKind.MAP
+        inBattle -> LayoutKind.GAMEPLAY
+        else -> LayoutKind.MENU
+    }
 
     private fun ensurePad() {
         if (!DragonFuryPad.isAttached() && SystemClock.uptimeMillis() - startedAt > 1500) attachPad()

@@ -51,6 +51,17 @@ object NativeGameState {
         }
     }
 
+    /** 1 = a voar pelo mapa do Dragon Universe, 0 = nao, -1 = desconhecido. */
+    fun mapFlag(): Int {
+        if (!available) return -1
+        return try {
+            nativeMapFlag()
+        } catch (e: UnsatisfiedLinkError) {
+            // libmain.so antiga sem esta funcao: so desliga a deteccao do mapa.
+            -1
+        }
+    }
+
     /** Linha de diagnostico da deteccao luta/menus (bandeira, configuracao, posicoes). */
     fun battleDebug(): String? {
         if (!available) return null
@@ -96,6 +107,7 @@ object NativeGameState {
 
     @JvmStatic
     private external fun nativeFightFlag(): Int
+    @JvmStatic private external fun nativeMapFlag(): Int
     @JvmStatic private external fun nativeBattleDebug(): String
     @JvmStatic private external fun nativeDumpFight(path: String, kind: Int, ms: Long): Boolean
 

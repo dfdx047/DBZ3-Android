@@ -40,5 +40,7 @@ object AppPaths {
     val activeDriverDir: File get() = File(appDir, "driver")
     val controlsFile: File get() = File(internalDir, "controls/layout_v2.json")
     val controlsMenuFile: File get() = File(internalDir, "controls/layout_menu_v2.json")
+    /** Voo livre pelo mapa do Dragon Universe. */
+    val controlsMapFile: File get() = File(internalDir, "controls/layout_map_v1.json")
     val updatesDir: File get() = File(cacheDir, "updates")
 }

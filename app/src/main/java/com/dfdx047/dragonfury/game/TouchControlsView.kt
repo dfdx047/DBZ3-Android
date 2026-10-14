@@ -131,10 +131,13 @@ class TouchControlsView(context: Context) : View(context) {
     private fun alphaOf(e: ControlElement, base: Float): Int =
         (255 * base * e.opacity * (if (editMode) 1f else globalOpacity)).toInt().coerceIn(0, 255)
 
-    /** Visivel agora: escondido pelo usuario ou pelo tipo de direcional escolhido. */
+    /**
+     * Visivel agora: escondido pelo usuario ou pelo tipo de direcional escolhido. No layout
+     * do mapa (voo livre, precisa do analogico) cada um so depende do proprio "visivel".
+     */
     private fun isShown(e: ControlElement): Boolean = e.visible && when (e.kind) {
-        ElementKind.STICK -> directional == Directional.STICK
-        ElementKind.DPAD -> directional == Directional.DPAD
+        ElementKind.STICK -> layout.map || directional == Directional.STICK
+        ElementKind.DPAD -> layout.map || directional == Directional.DPAD
         ElementKind.BUTTON -> true
     }
 

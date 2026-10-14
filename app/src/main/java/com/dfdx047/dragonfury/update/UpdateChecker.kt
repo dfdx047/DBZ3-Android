@@ -15,16 +15,22 @@ data class UpdateInfo(
     val title: String,
     val changelogPt: String,
     val changelogEn: String,
+    val changelogEs: String,
     val pageUrl: String,
     val apkUrl: String?,
     val apkSize: Long,
 ) {
-    fun changelog(portuguese: Boolean) = if (portuguese) changelogPt.ifBlank { changelogEn } else changelogEn.ifBlank { changelogPt }
+    /** language = codigo ISO do idioma do app ("pt", "es", "en"...); cai para o ingles. */
+    fun changelog(language: String) = when (language) {
+        "pt" -> changelogPt.ifBlank { changelogEn }
+        "es" -> changelogEs.ifBlank { changelogEn }
+        else -> changelogEn.ifBlank { changelogPt }
+    }
 }
 
 /**
  * Verifica a ultima release do repositorio no GitHub. O texto da release pode
- * trazer o changelog nos dois idiomas, em secoes "## PT" e "## EN" (ou
+ * trazer o changelog nos dois idiomas, em secoes "## PT", "## EN" e "## ES" (ou
  * "## Português" / "## English"); sem secoes, o mesmo texto serve aos dois.
  */
 object UpdateChecker {
@@ -39,7 +45,7 @@ object UpdateChecker {
         val tag = r.optString("tag_name").removePrefix("v").removePrefix("V")
         if (tag.isBlank() || !isNewer(tag, currentVersion())) return null
         val body = r.optString("body")
-        val (pt, en) = splitChangelog(body)
+        val (pt, en, es) = splitChangelog(body)
         val assets = r.optJSONArray("assets")
         var apkUrl: String? = null
         var apkSize = 0L
@@ -53,12 +59,13 @@ object UpdateChecker {
                 }
             }
         }
-        return UpdateInfo(tag, r.optString("name").ifBlank { tag }, pt, en, r.optString("html_url"), apkUrl, apkSize)
+        return UpdateInfo(tag, r.optString("name").ifBlank { tag }, pt, en, es, r.optString("html_url"), apkUrl, apkSize)
     }
 
-    fun splitChangelog(body: String): Pair<String, String> {
+    fun splitChangelog(body: String): Triple<String, String, String> {
         val pt = StringBuilder()
         val en = StringBuilder()
+        val es = StringBuilder()
         var current: StringBuilder? = null
         var sawHeader = false
         for (line in body.lines()) {
@@ -68,12 +75,13 @@ object UpdateChecker {
                 when {
                     title == "pt" || title.startsWith("portugu") || title == "pt-br" -> { current = pt; sawHeader = true; continue }
                     title == "en" || title.startsWith("english") || title.startsWith("ingl") -> { current = en; sawHeader = true; continue }
+                    title == "es" || title.startsWith("espa") -> { current = es; sawHeader = true; continue }
                 }
             }
             current?.appendLine(line)
         }
-        if (!sawHeader) return body.trim() to body.trim()
-        return pt.toString().trim() to en.toString().trim()
+        if (!sawHeader) return Triple(body.trim(), body.trim(), body.trim())
+        return Triple(pt.toString().trim(), en.toString().trim(), es.toString().trim())
     }
 
     /** Compara "1.2.3" com sufixos opcionais ("1.2.3-beta" < "1.2.3"). */

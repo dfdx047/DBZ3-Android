@@ -18,6 +18,7 @@
 #include <jni.h>
 
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -25,6 +26,10 @@
 #include <mutex>
 
 std::atomic<uint8_t*> g_dragonfury_guest_base{nullptr};
+
+// Ultima vez (ms do steady_clock) que o jogo correu o estado "voar pelo mapa" do Dragon
+// Universe (sub_821C4DA0). Definido no campaigns.cpp do jogo (patches/game/0004).
+extern std::atomic<int64_t> g_dbz3_map_fly_ms;
 
 namespace {
 
@@ -79,6 +84,13 @@ FightPositions ReadFight(const uint8_t* base) {
     f.has_camera = f.fx * f.fx + f.fz * f.fz > 1.0f;
   }
   return f;
+}
+
+// A voar pelo mapa do Dragon Universe agora (o estado do mapa correu ha menos de [ms]).
+bool MapFlying(int64_t ms) {
+  const int64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          std::chrono::steady_clock::now().time_since_epoch()).count();
+  return now - g_dbz3_map_fly_ms.load(std::memory_order_relaxed) < ms;
 }
 
 struct Tracker {
@@ -215,7 +227,18 @@ extern "C" JNIEXPORT jint JNICALL
 Java_com_dfdx047_dragonfury_game_NativeGameState_nativeFightFlag(JNIEnv*, jclass) {
   const uint8_t* base = g_dragonfury_guest_base.load(std::memory_order_acquire);
   if (!base) return -1;
+  // No mapa do Dragon Universe nao ha luta, mesmo que o bloco da ultima batalha ainda
+  // tenha posicoes (ponteiro velho depois de um combate da historia).
+  if (MapFlying(500)) return 0;
   return (LoadU32(base, kFightFlag) != 0 || ReadFight(base).active) ? 1 : 0;
+}
+
+// Voo livre pelo mapa do Dragon Universe: 1 = a voar, 0 = nao, -1 = sem jogo. Os
+// controles por toque passam para o layout do mapa (analogico + comando completo).
+extern "C" JNIEXPORT jint JNICALL
+Java_com_dfdx047_dragonfury_game_NativeGameState_nativeMapFlag(JNIEnv*, jclass) {
+  if (!g_dragonfury_guest_base.load(std::memory_order_acquire)) return -1;
+  return MapFlying(500) ? 1 : 0;
 }
 
 // Diagnostico do lado do P1: grava os blocos dos dois lutadores (e o inicio da

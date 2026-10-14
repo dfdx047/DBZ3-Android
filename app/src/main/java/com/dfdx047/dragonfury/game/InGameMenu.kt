@@ -97,6 +97,8 @@ interface InGameActions {
     fun openPortMenu()
     fun openPortOptions()
     fun isInBattle(): Boolean
+    /** Layout dos controles por toque em uso agora (luta, menus ou mapa do Dragon Universe). */
+    fun currentLayoutKind(): LayoutKind = if (isInBattle()) LayoutKind.GAMEPLAY else LayoutKind.MENU
     fun applyAppearance()
     fun exitToLauncher()
     /** Pede ao runtime uma captura de frames (logs/capture, ficheiros .dfc) para o renderizador nativo. */
@@ -111,7 +113,7 @@ fun InGameOverlay(screen: InGameScreen, prefs: LauncherPrefs, actions: InGameAct
         InGameScreen.EDITOR -> ControlsEditor(
             prefs,
             overGame = true,
-            initialKind = if (actions.isInBattle()) LayoutKind.GAMEPLAY else LayoutKind.MENU,
+            initialKind = actions.currentLayoutKind(),
         ) { actions.closeEditor() }
         InGameScreen.MENU -> Box(
             Modifier

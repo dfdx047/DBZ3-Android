@@ -162,6 +162,7 @@ fun ControlsEditor(
                 listOf(
                     LayoutKind.GAMEPLAY to stringResource(R.string.settings_touch_layout_battle),
                     LayoutKind.MENU to stringResource(R.string.settings_touch_layout_menu),
+                    LayoutKind.MAP to stringResource(R.string.settings_touch_layout_map),
                 ).forEach { (k, label) ->
                     FilterChip(
                         selected = kind == k,

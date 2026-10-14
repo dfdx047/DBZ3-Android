@@ -84,6 +84,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         return when {
             tag.startsWith("pt") -> AppLanguage.PORTUGUESE
             tag.startsWith("en") -> AppLanguage.ENGLISH
+            tag.startsWith("es") -> AppLanguage.SPANISH
             else -> AppLanguage.SYSTEM
         }
     }

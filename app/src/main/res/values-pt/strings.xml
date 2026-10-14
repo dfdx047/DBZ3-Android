@@ -250,7 +250,7 @@
     <string name="dark_light">Claro</string>
     <string name="dark_dark">Escuro</string>
     <string name="settings_language">Idioma do app</string>
-    <string name="settings_language_sub">Sistema: português se o celular estiver em português, inglês nos outros casos.</string>
+    <string name="settings_language_sub">Sistema: segue o idioma do celular (português ou espanhol), inglês nos outros casos.</string>
     <string name="lang_system">Sistema</string>
     <string name="settings_check_updates">Procurar atualizações ao abrir</string>
     <string name="editor_title">Layout dos controles</string>
@@ -325,6 +325,7 @@
     <string name="settings_touch_mode_sub">Automático: aparecem quando você toca na tela e somem quando usa um comando.</string>
     <string name="settings_touch_layout_menu">Menus</string>
     <string name="settings_touch_layout_battle">Luta</string>
+    <string name="settings_touch_layout_map">Mapa (voo)</string>
     <string name="editor_layout">Layout</string>
     <string name="export_logs">Exportar logs</string>
     <string name="busy_exporting_logs">Juntando os logs</string>

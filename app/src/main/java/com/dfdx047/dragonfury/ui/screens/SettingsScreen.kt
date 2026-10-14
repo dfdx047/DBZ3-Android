@@ -117,6 +117,7 @@ fun SettingsScreen(vm: LauncherViewModel) {
                     AppLanguage.SYSTEM to stringResource(R.string.lang_system),
                     AppLanguage.PORTUGUESE to "Português",
                     AppLanguage.ENGLISH to "English",
+                    AppLanguage.SPANISH to "Español",
                 ),
                 selected = vm.appLanguage,
                 onSelect = vm::setLanguage,

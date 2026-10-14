@@ -289,7 +289,7 @@ private fun GpuNotice(vm: LauncherViewModel, openTab: (LauncherTab) -> Unit) {
 private fun UpdateDialog(vm: LauncherViewModel) {
     val info = vm.updateInfo ?: return
     val context = LocalContext.current
-    val portuguese = context.resources.configuration.locales[0].language == "pt"
+    val language = context.resources.configuration.locales[0].language
     AlertDialog(
         onDismissRequest = { vm.showUpdateDialog = false },
         title = { Text(stringResource(R.string.update_title, info.version)) },
@@ -310,7 +310,7 @@ private fun UpdateDialog(vm: LauncherViewModel) {
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 ) {
                     Text(
-                        info.changelog(portuguese).ifBlank { stringResource(R.string.update_no_changelog) },
+                        info.changelog(language).ifBlank { stringResource(R.string.update_no_changelog) },
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(12.dp),
                     )

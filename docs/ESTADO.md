@@ -817,3 +817,23 @@ a cache de pipelines passou a ser lida no arranque (patch 0024).
   APK). Sem UPnP fora do Windows: online por Wi-Fi local ou porta reencaminhada.
 - Fica por portar do upstream: pack HD em segundo plano (v1.4.5/1.4.5.1), que choca com os patches
   de textura 0010–0044.
+
+### 2026-10-14 — controles no Dragon Universe (voo livre pelo mapa)
+- Queixa: na luta os controles funcionam, no mapa do Dragon Universe não (analógico, LB/RB, X).
+- Causa provável (código do projeto original v1.4.4.5+, compilado no Android desde hoje): o hook de
+  `XamInputGetState` (`netplay_hooks.cpp`) trata o byte de ecrã `0x824BA110 == 5` como "menu
+  principal". O Dragon Universe entra pela fila 0 desse menu e o byte pode ficar a 5 lá dentro; aí
+  `MenuRowsTracked()` punha **as palancas a 0** (só cima/baixo do analógico passavam, como cruceta,
+  cortada a 120 ms por `DuelMenuFilter`), **X abria o painel TAG TEAM** (que bloqueia o comando) e a
+  fila TAG TEAM falsa podia comer os botões. Afeta comando físico e virtual (é depois do SDL).
+- Patch de jogo 0004: `campaigns.cpp` anota a hora do estado "voar pelo mapa" (`sub_821C4DA0`,
+  `g_dbz3_map_fly_ms`); `online_panel.cpp` só trata o ecrã 5 como menu principal se o próprio menu
+  (`sub_8218C5D8`) correu há < 1 s e ninguém voa pelo mapa (`MainMenuLive()`): filtros, X → TAG TEAM e
+  a fila TAG TEAM. Fora disso o mando chega ao jogo sem mexer. Luta e Duelo não mudam.
+- Controles por toque: terceiro layout **Mapa (voo)** (analógico sempre, A/B/X/Y, LB/RB/LT/RT,
+  Back/Start; D-pad escondido), trocado sozinho por `nativeMapFlag` (histerese ~1,5 s); a deteção de
+  luta devolve 0 no mapa (ponteiro velho da última batalha). Editor com os três; botão de troca
+  menus → luta → mapa.
+- Por testar: voar com o analógico físico (RP5/Odin) e com o da tela; LB/RB/LT/RT e X no mapa; menu
+  principal: fila TAG TEAM e X → TAG TEAM continuam a funcionar (se não, `sub_8218C5D8` não corre
+  todos os frames e é preciso afinar `MainMenuLive`).

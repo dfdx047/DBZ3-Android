@@ -58,6 +58,16 @@ class HelperEngine {
      */
     var onBattleChanged: ((Boolean) -> Unit)? = null
 
+    /**
+     * Voo livre pelo mapa do Dragon Universe (layout do mapa: analogico e comando completo).
+     * Entra logo e so sai depois de [MAP_DELAY_TICKS] ticks fora do mapa (cenas e dialogos
+     * curtos por cima do mapa nao trocam o layout). Chamado na thread principal.
+     */
+    var onMapChanged: ((Boolean) -> Unit)? = null
+    @Volatile var onMap = false
+        private set
+    private var offMapTicks = 0
+
     /** Diagnostico (so com "Diagnostico de desempenho"): recebe linhas para logs/controles.log. */
     @Volatile var diag: ((String) -> Unit)? = null
     /** Ficheiro para os blocos dos lutadores (diagnostico do lado), ou null. */
@@ -147,7 +157,10 @@ class HelperEngine {
     private fun step() {
         paused = NativeGameState.syncPause(menuOpen, pauseQuickMenu)
         side = NativeGameState.p1Side()
-        if (!paused) trackBattle(NativeGameState.fightFlag())
+        if (!paused) {
+            trackBattle(NativeGameState.fightFlag())
+            trackMap(NativeGameState.mapFlag())
+        }
         diag?.let { d ->
             if (++diagTicks >= 30) {
                 diagTicks = 0
@@ -155,7 +168,7 @@ class HelperEngine {
                 val line = NativeGameState.battleDebug() ?: ""
                 if (line != diagLast) {
                     diagLast = line
-                    d("$line layout=${if (inBattle) "luta" else "menus"}${if (paused) " (pausa)" else ""}")
+                    d("$line layout=${if (onMap) "mapa" else if (inBattle) "luta" else "menus"}${if (paused) " (pausa)" else ""}")
                 }
             }
         }
@@ -205,6 +218,24 @@ class HelperEngine {
         }
     }
 
+    private fun trackMap(flag: Int) {
+        if (flag < 0) return
+        val next = when {
+            flag == 1 -> {
+                offMapTicks = 0
+                true
+            }
+            onMap && ++offMapTicks < MAP_DELAY_TICKS -> true
+            else -> false
+        }
+        if (next != onMap) {
+            onMap = next
+            android.util.Log.i("DragonFury", "controles: mapa " + if (next) "sim" else "nao")
+            diag?.invoke("troca -> " + if (next) "mapa" else "fora do mapa")
+            mainHandler.post { onMapChanged?.invoke(next) }
+        }
+    }
+
     /** FORWARD/BACKWARD -> RIGHT/LEFT conforme o lado do P1 (esquerda se desconhecido). */
     private fun resolveRelative(inputs: Set<PadInput>): Set<PadInput> {
         if (PadInput.FORWARD !in inputs && PadInput.BACKWARD !in inputs) return inputs
@@ -243,6 +274,8 @@ class HelperEngine {
     companion object {
         /** 1,5 s a 60 Hz (pedido do usuario: no maximo ~2 s). */
         const val MENU_DELAY_TICKS = 90
+        /** ~1,5 s fora do estado de voo antes de sair do layout do mapa. */
+        const val MAP_DELAY_TICKS = 90
     }
 
     private fun keyFor(i: PadInput): Int? = when (i) {

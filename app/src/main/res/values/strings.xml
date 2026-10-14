@@ -251,7 +251,7 @@
     <string name="dark_light">Light</string>
     <string name="dark_dark">Dark</string>
     <string name="settings_language">App language</string>
-    <string name="settings_language_sub">System: Portuguese if the phone is in Portuguese, English otherwise.</string>
+    <string name="settings_language_sub">System: follows the phone language (Portuguese or Spanish), English otherwise.</string>
     <string name="lang_system">System</string>
     <string name="settings_check_updates">Check for updates on start</string>
     <string name="editor_title">Touch layout</string>
@@ -326,6 +326,7 @@
     <string name="settings_touch_mode_sub">Automatic: they show up when you touch the screen and hide when you use a controller.</string>
     <string name="settings_touch_layout_menu">Menus</string>
     <string name="settings_touch_layout_battle">Battle</string>
+    <string name="settings_touch_layout_map">Map (flight)</string>
     <string name="editor_layout">Layout</string>
     <string name="export_logs">Export logs</string>
     <string name="busy_exporting_logs">Collecting logs</string>

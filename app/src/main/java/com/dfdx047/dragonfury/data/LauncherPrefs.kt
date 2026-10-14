@@ -5,7 +5,7 @@ import android.content.SharedPreferences
 
 enum class ThemeMode(val key: String) { DRAGON("dragon"), MATERIAL_YOU("material_you") }
 enum class DarkMode(val key: String) { SYSTEM("system"), LIGHT("light"), DARK("dark") }
-enum class AppLanguage(val tag: String) { SYSTEM(""), PORTUGUESE("pt"), ENGLISH("en") }
+enum class AppLanguage(val tag: String) { SYSTEM(""), PORTUGUESE("pt"), ENGLISH("en"), SPANISH("es") }
 
 /** Orientacao do jogo. Os valores sao lidos tambem pelo GameActivity (Java). */
 enum class GameOrientation(val key: String) { LANDSCAPE("landscape"), REVERSE("reverse"), AUTO("auto") }

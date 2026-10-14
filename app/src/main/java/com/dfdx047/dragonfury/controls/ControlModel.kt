@@ -66,12 +66,24 @@ data class ControlElement(
 )
 
 /**
- * [menu] = layout dos menus do jogo (D-pad, A/B/X/Y com o simbolo do comando, LB/RB e
- * Start); o outro e o da luta. O GameOverlay troca sozinho entre os dois.
+ * [menu] = layout fora da luta (A/B/X/Y com o simbolo do comando); [map] = o do voo livre
+ * pelo mapa do Dragon Universe (comando completo: analogico, A/B/X/Y, LB/RB/LT/RT, Start e
+ * Back; tambem tem [menu] = true). O outro e o da luta. O GameOverlay troca sozinho.
  */
-data class ControlLayout(val elements: List<ControlElement>, val version: Int = 1, val menu: Boolean = false)
+data class ControlLayout(
+    val elements: List<ControlElement>,
+    val version: Int = 1,
+    val menu: Boolean = false,
+    val map: Boolean = false,
+) {
+    val kind: LayoutKind get() = when {
+        map -> LayoutKind.MAP
+        menu -> LayoutKind.MENU
+        else -> LayoutKind.GAMEPLAY
+    }
+}
 
-enum class LayoutKind { GAMEPLAY, MENU }
+enum class LayoutKind { GAMEPLAY, MENU, MAP }
 
 /**
  * Acoes do Budokai 3 (Xbox 360): X soco, Y chute, A defesa, B ki. Os gatilhos
@@ -148,8 +160,44 @@ object GameActions {
         )
     }
 
-    fun defaultLayout(kind: LayoutKind): ControlLayout =
-        if (kind == LayoutKind.MENU) defaultMenuLayout() else defaultLayout()
+    /**
+     * Voo livre pelo mapa do Dragon Universe: o jogo pede o analogico (movimento com
+     * velocidade) e os botoes do comando sem traducao de luta, por isso e um comando
+     * completo com os rotulos classicos. O D-pad vem escondido (o analogico aparece
+     * sempre neste layout, seja qual for o direcional escolhido).
+     */
+    fun defaultMapLayout(): ControlLayout {
+        fun pad(id: String, input: PadInput, x: Float, y: Float, size: Float) =
+            ControlElement(id, ElementKind.BUTTON, ControlAction.Press(setOf(input)), ControlIcon.MACRO,
+                classicLabel(input, false), x, y, size)
+        val cx = 0.875f
+        val cy = 0.68f
+        return ControlLayout(
+            listOf(
+                ControlElement("stick", ElementKind.STICK, ControlAction.Press(emptySet()), ControlIcon.MACRO, "", 0.15f, 0.66f, 150f),
+                ControlElement("dpad", ElementKind.DPAD, ControlAction.Press(emptySet()), ControlIcon.MACRO, "D-pad", 0.15f, 0.66f, 150f,
+                    visible = false),
+                pad("u_x", PadInput.X, cx - 0.075f, cy, 60f),
+                pad("u_y", PadInput.Y, cx, cy - 0.18f, 60f),
+                pad("u_b", PadInput.B, cx + 0.075f, cy, 60f),
+                pad("u_a", PadInput.A, cx, cy + 0.18f, 60f),
+                pad("u_lb", PadInput.LB, 0.70f, 0.46f, 50f),
+                pad("u_lt", PadInput.LT, 0.72f, 0.26f, 50f),
+                pad("u_rb", PadInput.RB, 0.95f, 0.40f, 50f),
+                pad("u_rt", PadInput.RT, 0.85f, 0.26f, 50f),
+                ControlElement("u_back", ElementKind.BUTTON, ControlAction.Press(setOf(PadInput.BACK)), ControlIcon.BACK, "BACK", 0.33f, 0.09f, 42f),
+                ControlElement("u_start", ElementKind.BUTTON, ControlAction.Press(setOf(PadInput.START)), ControlIcon.START, "START", 0.67f, 0.09f, 42f),
+            ),
+            menu = true,
+            map = true,
+        )
+    }
+
+    fun defaultLayout(kind: LayoutKind): ControlLayout = when (kind) {
+        LayoutKind.MENU -> defaultMenuLayout()
+        LayoutKind.MAP -> defaultMapLayout()
+        LayoutKind.GAMEPLAY -> defaultLayout()
+    }
 
     /** Rotulo do comando classico (Xbox / PlayStation) para uma entrada. */
     fun classicLabel(input: PadInput, playstation: Boolean): String = when (input) {
@@ -177,21 +225,24 @@ object GameActions {
 /** Gravacao do layout em JSON (pasta interna da app). */
 object ControlLayoutStore {
 
-    private fun file(kind: LayoutKind) =
-        if (kind == LayoutKind.MENU) AppPaths.controlsMenuFile else AppPaths.controlsFile
+    private fun file(kind: LayoutKind) = when (kind) {
+        LayoutKind.MENU -> AppPaths.controlsMenuFile
+        LayoutKind.MAP -> AppPaths.controlsMapFile
+        LayoutKind.GAMEPLAY -> AppPaths.controlsFile
+    }
 
     fun load(kind: LayoutKind = LayoutKind.GAMEPLAY): ControlLayout {
         val f = file(kind)
         if (!f.isFile) return GameActions.defaultLayout(kind)
         return try {
-            fromJson(JSONObject(f.readText())).copy(menu = kind == LayoutKind.MENU)
+            fromJson(JSONObject(f.readText())).copy(menu = kind != LayoutKind.GAMEPLAY, map = kind == LayoutKind.MAP)
         } catch (e: Exception) {
             GameActions.defaultLayout(kind)
         }
     }
 
     fun save(layout: ControlLayout) {
-        val f = file(if (layout.menu) LayoutKind.MENU else LayoutKind.GAMEPLAY)
+        val f = file(layout.kind)
         f.parentFile?.mkdirs()
         val tmp = java.io.File(f.parentFile, f.name + ".tmp")
         tmp.writeText(toJson(layout).toString(2))
@@ -204,6 +255,7 @@ object ControlLayoutStore {
     fun reset() {
         AppPaths.controlsFile.delete()
         AppPaths.controlsMenuFile.delete()
+        AppPaths.controlsMapFile.delete()
     }
 
     private fun inputsToJson(s: Set<PadInput>) = JSONArray().apply { s.forEach { put(it.name) } }
