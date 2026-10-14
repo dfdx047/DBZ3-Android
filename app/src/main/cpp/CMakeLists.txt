@@ -185,6 +185,8 @@ target_include_directories(main PRIVATE
     "${DBZ3_ROOT}"
     "${DBZ3_GENERATED}"
     "${REXSDK_ROOT}/thirdparty/imgui"
+    # rex/hash.h (usado pelos ecras do jogo da v1.4.5.1, ex. native_ui.cpp) inclui <xxhash.h>.
+    "${REXSDK_ROOT}/thirdparty/xxHash"
 )
 
 target_compile_options(main PRIVATE
