@@ -711,3 +711,17 @@ a cache de pipelines passou a ser lida no arranque (patch 0024).
   - Diagnóstico: "barreira de imagem" passa a dizer o destino (amostrar / carga / copia /
     general / render target).
   - Testar também com `dbz3_hoist_uploads = true` (uploads da memória partilhada antes do passe).
+
+### 2026-10-14 02:00–02:04 — 0043 + dbz3_hoist_uploads (patch 0044)
+- **Mali: desenho 52 → 29 ms, passes 70 → 33, 13 → 19–20 fps em luta** (até ~30 em cenas leves);
+  o HUD deixou de piscar; o menu ainda pisca preto às vezes. Fins de passe 73 → ~37/f: os uploads
+  passaram de 36,5 para ~0,1/f (`dbz3_hoist_uploads` funciona agora). Resolve continua ~16 ms.
+- **RP5: 54–60 fps em luta** (GPU 14,6–17,3 ms: desenho ~8 ms/30 passes, resolve 6–8 ms).
+- Sobram ~22 "barreira de imagem (amostrar)" por frame que a transição antecipada não apanhou,
+  e ~5,5 "(render target)" que são na verdade mudanças de alvo (a barreira do alvo novo fecha o
+  passe antigo antes de o código contar a mudança).
+- 0044: transição antecipada também no caminho de resolve por cópia de buffer
+  (`Dbz3CopyToResolveTexture`); diagnóstico "dbz3: transicoes para leitura no draw" (a cada 3000
+  transições: uso anterior, tamanho, formato e base das texturas mais frequentes).
+- Pedidos do utilizador para depois: modo 30 fps liso (já existe `dbz3_frameskip = 1`: o jogo a
+  60, desenha 1 em cada 2), opções para desligar efeitos (bloom etc.) em aparelhos fracos.
