@@ -1,0 +1,795 @@
+diff --git a/include/rex/graphics/vulkan/command_processor.h b/include/rex/graphics/vulkan/command_processor.h
+index 8ea3b09..5f35549 100644
+--- a/include/rex/graphics/vulkan/command_processor.h
++++ b/include/rex/graphics/vulkan/command_processor.h
+@@ -812,6 +812,15 @@ class VulkanCommandProcessor : public CommandProcessor {
+   const VulkanRenderTargetCache::Framebuffer* current_framebuffer_;
+   bool in_render_pass_ = false;
+   size_t render_pass_begin_position_ = SIZE_MAX;
++  // DBZ3-Android (dbz3_tight_render_area): area realmente desenhada no passe atual (uniao dos
++  // scissors / retangulos dos draws). No fim do passe a renderArea gravada no buffer diferido
++  // passa a ser esta, em vez da imagem inteira do render target (1280x2048 para um ecra de
++  // 1280x720): num GPU de tiles a carga/gravacao dos tiles e proporcional a renderArea.
++  bool dbz3_area_active_ = false;
++  bool dbz3_area_has_ = false;
++  int32_t dbz3_area_x0_ = 0, dbz3_area_y0_ = 0, dbz3_area_x1_ = 0, dbz3_area_y1_ = 0;
++  void Dbz3AreaAdd(int32_t x0, int32_t y0, int32_t x1, int32_t y1);
++  void Dbz3AreaApplyBeforePassEnd();
+   std::vector<std::pair<uint32_t, uint32_t>> pass_shared_memory_reads_;
+   bool pass_shared_memory_reads_overflow_ = false;
+ 
+diff --git a/include/rex/graphics/vulkan/deferred_command_buffer.h b/include/rex/graphics/vulkan/deferred_command_buffer.h
+index e67335c..6235309 100644
+--- a/include/rex/graphics/vulkan/deferred_command_buffer.h
++++ b/include/rex/graphics/vulkan/deferred_command_buffer.h
+@@ -37,6 +37,9 @@ class DeferredCommandBuffer {
+   // e mover os comandos escritos desde tail_start para destination (<= tail_start), mantendo
+   // a ordem. Os comandos levam o proprio tamanho e nenhum offset absoluto.
+   size_t Position() const { return command_stream_.size(); }
++  // DBZ3-Android: renderArea do primeiro inicio de passe (BeginRenderPass/BeginRendering)
++  // gravado a partir de 'position', para a ajustar antes da execucao; nullptr se nao houver.
++  VkRect2D* Dbz3FindBeginRenderArea(size_t position);
+   void MoveTailTo(size_t tail_start, size_t destination) {
+     std::rotate(command_stream_.begin() + std::ptrdiff_t(destination),
+                 command_stream_.begin() + std::ptrdiff_t(tail_start), command_stream_.end());
+diff --git a/include/rex/ui/surface_android.h b/include/rex/ui/surface_android.h
+index f921b7e..770b0ff 100644
+--- a/include/rex/ui/surface_android.h
++++ b/include/rex/ui/surface_android.h
+@@ -17,8 +17,11 @@ namespace ui {
+ 
+ class AndroidNativeWindowSurface final : public Surface {
+  public:
+-  explicit AndroidNativeWindowSurface(ANativeWindow* window, SDL_Window* sdl_window)
+-      : window_(window), sdl_window_(sdl_window) {}
++  // DBZ3-Android: a superficie guarda a sua propria referencia ao ANativeWindow. O SDL
++  // liberta a dele no surfaceDestroyed (thread Java), antes de a thread da UI desligar o
++  // presenter; sem esta referencia o GetSizeImpl lia uma janela ja libertada.
++  explicit AndroidNativeWindowSurface(ANativeWindow* window, SDL_Window* sdl_window);
++  ~AndroidNativeWindowSurface() override;
+   TypeIndex GetType() const override { return kTypeIndex_AndroidNativeWindow; }
+   ANativeWindow* window() const { return window_; }
+ 
+diff --git a/src/graphics/pipeline/render_target/cache.cpp b/src/graphics/pipeline/render_target/cache.cpp
+index f5b6412..0192f58 100644
+--- a/src/graphics/pipeline/render_target/cache.cpp
++++ b/src/graphics/pipeline/render_target/cache.cpp
+@@ -54,6 +54,12 @@ REXCVAR_DEFINE_STRING(dbz3_rt_restore_shaders, "6E57A6E305D5D69B,ADCA7FBBCBF53B5
+ REXCVAR_DEFINE_BOOL(dbz3_rt_restore_identity_only, true, "GPU",
+                     "DBZ3-Android: so conta como restauro um draw cujos vertices sao uma copia "
+                     "identidade de ecra inteiro");
++// DBZ3-Android: a eliminacao de resolves de PROFUNDIDADE errava de vez em quando (o jogo lia
++// a copia da profundidade nesse frame: "eliminado mas lido a serio" 7x num Mali e 18x num
++// Exynos em ~4 min, 2026-10-14) e esse frame saia com a profundidade velha nos efeitos
++// (piscada). Desligado: so os resolves de cor podem ser eliminados.
++REXCVAR_DEFINE_BOOL(dbz3_rt_elide_depth_resolves, false, "GPU",
++                    "DBZ3-Android: permite eliminar tambem resolves de profundidade");
+ REXCVAR_DEFINE_BOOL(dbz3_rt_elide_restores, true, "GPU",
+                     "DBZ3-Android: com dbz3_rt_direct, ignora os restauros de ecra inteiro e os "
+                     "resolves que so serviam para eles")
+@@ -1486,7 +1492,8 @@ bool RenderTargetCache::Dbz3ShouldElideResolve(uint32_t dest_base, RenderTargetK
+   auto forbidden_it = dbz3_forbidden_.find(id);
+   const bool forbidden =
+       forbidden_it != dbz3_forbidden_.end() && forbidden_it->second > dbz3_frame_number_;
+-  rec.skipped = dbz3_elidable_.count(id) && !forbidden;
++  rec.skipped = dbz3_elidable_.count(id) && !forbidden &&
++                (!source.is_depth || REXCVAR_GET(dbz3_rt_elide_depth_resolves));
+   dbz3_frame_resolves_.push_back(rec);
+   if (rec.skipped) ++dbz3_elided_;
+   return rec.skipped;
+diff --git a/src/graphics/vulkan/command_processor.cpp b/src/graphics/vulkan/command_processor.cpp
+index eaa14f2..d204390 100644
+--- a/src/graphics/vulkan/command_processor.cpp
++++ b/src/graphics/vulkan/command_processor.cpp
+@@ -10,6 +10,7 @@
+  */
+ 
+ #include <algorithm>
++#include <cmath>
+ #include <cstdlib>
+ #include <array>
+ #include <cstdint>
+@@ -78,6 +79,9 @@ REXCVAR_DEFINE_BOOL(vulkan_dynamic_rendering, true, "GPU/Vulkan",
+ 
+ REXCVAR_DECLARE(double, dbz3_rim_light_scale);  // src/graphics/command_processor.cpp
+ 
++REXCVAR_DEFINE_BOOL(dbz3_tight_render_area, true, "GPU/Vulkan",
++                    "DBZ3-Android: renderArea de cada passe = area desenhada (nao a imagem toda "
++                    "do render target, 1280x2048): menos carga/gravacao de tiles em Mali/Adreno");
+ REXCVAR_DEFINE_BOOL(dbz3_fx_dof, true, "GPU",
+                     "DBZ3-Android: profundidade de campo do jogo (desligar ajuda GPUs fracos)");
+ REXCVAR_DEFINE_BOOL(dbz3_fx_fxaa, true, "GPU",
+@@ -113,7 +117,25 @@ void Dbz3NoteRenderPassEnd(const char* file, uint32_t line) {
+   ++dbz3_pass_ends::g_total;
+ }
+ 
++// DBZ3-Android: numero do frame (conta as trocas) e ultimo frame (+1) em que apareceram o FXAA
++// e a cadeia de brilho do jogo. Usados pelos interruptores de efeitos (dbz3_fx_*) para so
++// mexer em resolves/render targets pequenos nos frames que tem esses efeitos.
++uint64_t g_dbz3_frame_index = 0;
++uint64_t g_dbz3_fxaa_frame = 0;
++uint64_t g_dbz3_bloom_frame = 0;
++
++bool Dbz3FxaaOffKeepsScreen() {
++  return !REXCVAR_GET(dbz3_fx_fxaa) && g_dbz3_fxaa_frame &&
++         g_dbz3_frame_index <= g_dbz3_fxaa_frame + 2;
++}
++
++bool Dbz3BloomSkipsSmallTargets() {
++  return !REXCVAR_GET(dbz3_fx_bloom) && g_dbz3_bloom_frame &&
++         g_dbz3_frame_index <= g_dbz3_bloom_frame + 2;
++}
++
+ void Dbz3PassEndsFrame() {
++  ++g_dbz3_frame_index;
+   if (++dbz3_pass_ends::g_frames < 600) {
+     return;
+   }
+@@ -134,6 +156,51 @@ void Dbz3PassEndsFrame() {
+   dbz3_pass_ends::g_frames = 0;
+ }
+ 
++void VulkanCommandProcessor::Dbz3AreaAdd(int32_t x0, int32_t y0, int32_t x1, int32_t y1) {
++  if (!dbz3_area_active_ || x1 <= x0 || y1 <= y0) {
++    return;
++  }
++  if (!dbz3_area_has_) {
++    dbz3_area_has_ = true;
++    dbz3_area_x0_ = x0;
++    dbz3_area_y0_ = y0;
++    dbz3_area_x1_ = x1;
++    dbz3_area_y1_ = y1;
++    return;
++  }
++  dbz3_area_x0_ = std::min(dbz3_area_x0_, x0);
++  dbz3_area_y0_ = std::min(dbz3_area_y0_, y0);
++  dbz3_area_x1_ = std::max(dbz3_area_x1_, x1);
++  dbz3_area_y1_ = std::max(dbz3_area_y1_, y1);
++}
++
++void VulkanCommandProcessor::Dbz3AreaApplyBeforePassEnd() {
++  const bool active = dbz3_area_active_;
++  dbz3_area_active_ = false;
++  if (!active || !dbz3_area_has_ || !in_render_pass_ || !current_framebuffer_ ||
++      render_pass_begin_position_ == SIZE_MAX) {
++    return;
++  }
++  VkRect2D* area = deferred_command_buffer_.Dbz3FindBeginRenderArea(render_pass_begin_position_);
++  if (!area) {
++    return;
++  }
++  const int32_t fb_w = int32_t(current_framebuffer_->host_extent.width);
++  const int32_t fb_h = int32_t(current_framebuffer_->host_extent.height);
++  // Alinhado a 32 pixeis (tiles do Mali 16x16, bins do Adreno multiplos de 32).
++  const int32_t x0 = std::clamp(dbz3_area_x0_ & ~31, 0, fb_w);
++  const int32_t y0 = std::clamp(dbz3_area_y0_ & ~31, 0, fb_h);
++  const int32_t x1 = std::clamp((dbz3_area_x1_ + 31) & ~31, 0, fb_w);
++  const int32_t y1 = std::clamp((dbz3_area_y1_ + 31) & ~31, 0, fb_h);
++  if (x1 <= x0 || y1 <= y0) {
++    return;
++  }
++  area->offset.x = x0;
++  area->offset.y = y0;
++  area->extent.width = uint32_t(x1 - x0);
++  area->extent.height = uint32_t(y1 - y0);
++}
++
+ namespace dbz3_frameskip {
+ bool g_skip_frame = false;
+ uint32_t g_counter = 0;
+@@ -2637,7 +2704,13 @@ static void Dbz3LogGuestPerformanceVulkan() {
+       frozen_ms = 0.0;
+       frozen_stats.Clear();
+     }
+-    if (frame_ms > 34.0 && hitches_logged < 300) {
++    // DBZ3-Android: em aparelhos que correm abaixo de 30 fps todos os frames passavam dos 34 ms
++    // e as 300 linhas acabavam nos primeiros segundos. So conta como travao um frame bem acima
++    // da media recente.
++    static double dbz3_frame_avg_ms = 16.7;
++    const bool dbz3_is_hitch = frame_ms > 34.0 && frame_ms > dbz3_frame_avg_ms * 1.8;
++    dbz3_frame_avg_ms += (std::min(frame_ms, 250.0) - dbz3_frame_avg_ms) * 0.05;
++    if (dbz3_is_hitch && hitches_logged < 300) {
+       ++hitches_logged;
+       REXGPU_INFO("dbz3: tiron {:.0f} ms (vulkan cp_wait {:.1f} ms) | {}", frame_ms,
+                   double(cp_now - cp_last_frame) / 1000.0, format_stats(frame_stats));
+@@ -3583,6 +3656,7 @@ void VulkanCommandProcessor::SubmitBarriersAndEnterRenderTargetCacheRenderPass(
+ 
+   if (in_render_pass_) {
+     Dbz3NoteRenderPassEnd("mudanca_de_render_target", 0);
++    Dbz3AreaApplyBeforePassEnd();
+     if (use_dynamic_rendering) {
+       deferred_command_buffer_.CmdVkEndRendering();
+     } else {
+@@ -3640,6 +3714,9 @@ void VulkanCommandProcessor::SubmitBarriersAndEnterRenderTargetCacheRenderPass(
+                                                   VK_SUBPASS_CONTENTS_INLINE);
+   }
+   in_render_pass_ = true;
++  // Passe dos draws do jogo: a renderArea e ajustada no fim a area desenhada.
++  dbz3_area_active_ = REXCVAR_GET(dbz3_tight_render_area);
++  dbz3_area_has_ = false;
+ }
+ 
+ void VulkanCommandProcessor::SubmitBarriersAndEnterRenderTargetCacheRenderPass(
+@@ -3663,6 +3740,7 @@ void VulkanCommandProcessor::SubmitBarriersAndEnterRenderTargetCacheRenderPass(
+ 
+   if (in_render_pass_) {
+     Dbz3NoteRenderPassEnd("mudanca_de_render_target", 0);
++    Dbz3AreaApplyBeforePassEnd();
+     if (use_dynamic_rendering) {
+       deferred_command_buffer_.CmdVkEndRendering();
+     } else {
+@@ -3738,6 +3816,9 @@ void VulkanCommandProcessor::SubmitBarriersAndEnterRenderTargetCacheRenderPass(
+                                                   VK_SUBPASS_CONTENTS_INLINE);
+   }
+   in_render_pass_ = true;
++  // Passes de transferencia/limpeza do render target cache: renderArea inteira.
++  dbz3_area_active_ = false;
++  dbz3_area_has_ = false;
+ }
+ 
+ void VulkanCommandProcessor::NoteSharedMemoryRead(uint32_t start, uint32_t length) {
+@@ -3771,6 +3852,7 @@ void VulkanCommandProcessor::EndRenderPass(const char* reason_file, uint32_t rea
+     return;
+   }
+   Dbz3NoteRenderPassEnd(reason_file, reason_line);
++  Dbz3AreaApplyBeforePassEnd();
+   render_pass_begin_position_ = SIZE_MAX;
+   if (current_render_pass_ == VK_NULL_HANDLE) {
+     deferred_command_buffer_.CmdVkEndRendering();
+@@ -4338,6 +4420,25 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
+   // - brilho (bloom): cadeia 320x184 -> 80x48 (PS 555EBAAEF8F61839, PS CB0605B416DF85B8 em
+   //   render targets de pitch 320) e a composicao aditiva da textura pequena no ecra (PS
+   //   6E57A6E305D5D69B com mistura nao opaca e textura de largura <= 160).
++  //
++  // 2026-10-14 (capturas do Mali-G77 e do Xclipse 960): o resolve que alimenta o FXAA (cor do
++  // ecra -> textura) tem LIMPEZA da cor; sem o draw do FXAA o ecra ficava limpo (preto) quando
++  // era copiado para o frontbuffer. Com o FXAA desligado essa limpeza e saltada no resolve
++  // (VulkanRenderTargetCache::Resolve, Dbz3FxaaOffKeepsScreen). No brilho, alem dos draws da
++  // cadeia, saltam-se todos os draws e resolves em render targets pequenos (pitch <= 320) nos
++  // frames que tem a cadeia (Dbz3BloomSkipsSmallTargets): menos ~8 passes e ~8 resolves.
++  if (REXCVAR_GET(dbz3_rt_direct) && Dbz3BloomSkipsSmallTargets()) {
++    const auto fx_surface = regs.Get<reg::RB_SURFACE_INFO>();
++    const uint32_t fx_width = uint32_t(fx_surface.surface_pitch)
++                              << uint32_t(fx_surface.msaa_samples >= xenos::MsaaSamples::k4X);
++    if (fx_width && fx_width <= 320) {
++      // A propria cadeia (PS 555E...) e desenhada nestes alvos: mantem a detecao viva.
++      if (pixel_shader && pixel_shader->ucode_data_hash() == UINT64_C(0x555EBAAEF8F61839)) {
++        g_dbz3_bloom_frame = g_dbz3_frame_index + 1;
++      }
++      return true;
++    }
++  }
+   if (pixel_shader && REXCVAR_GET(dbz3_rt_direct) &&
+       (!REXCVAR_GET(dbz3_fx_dof) || !REXCVAR_GET(dbz3_fx_fxaa) || !REXCVAR_GET(dbz3_fx_bloom))) {
+     const uint64_t fx_ps = pixel_shader->ucode_data_hash();
+@@ -4346,11 +4447,14 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
+     if (!REXCVAR_GET(dbz3_fx_dof) && fx_ps == UINT64_C(0x4DFCBC49057E5721) && fx_opaque) {
+       fx_skip = true;
+     } else if (!REXCVAR_GET(dbz3_fx_fxaa) && fx_ps == UINT64_C(0xF5F4D761A981B87D) && fx_opaque) {
++      g_dbz3_fxaa_frame = g_dbz3_frame_index + 1;
+       fx_skip = true;
+     } else if (!REXCVAR_GET(dbz3_fx_bloom)) {
+       const uint32_t fx_pitch = regs.Get<reg::RB_SURFACE_INFO>().surface_pitch;
+-      if (fx_ps == UINT64_C(0x555EBAAEF8F61839) ||
+-          (fx_ps == UINT64_C(0xCB0605B416DF85B8) && fx_pitch == 320)) {
++      if (fx_ps == UINT64_C(0x555EBAAEF8F61839)) {
++        g_dbz3_bloom_frame = g_dbz3_frame_index + 1;
++        fx_skip = true;
++      } else if (fx_ps == UINT64_C(0xCB0605B416DF85B8) && fx_pitch == 320) {
+         fx_skip = true;
+       } else if (fx_ps == UINT64_C(0x6E57A6E305D5D69B) && !fx_opaque &&
+                  !pixel_shader->texture_bindings().empty()) {
+@@ -4415,6 +4519,7 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
+     }
+   } dbz3_reg_restore;
+   dbz3_reg_restore.rf = register_file_;
++  bool dbz3_clear_redirected = false;
+   if (REXCVAR_GET(dbz3_clear_to_1x) && REXCVAR_GET(dbz3_rt_direct) &&
+       prim_type == xenos::PrimitiveType::kRectangleList && index_count == 3 &&
+       vertex_shader->ucode_data_hash() == UINT64_C(0x1E6883FCCDE1F688) &&
+@@ -4438,6 +4543,7 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
+       dbz3_reg_restore.Set(XE_GPU_REG_PA_CL_VTE_CNTL, vte.value);
+       dbz3_reg_restore.Set(XE_GPU_REG_PA_CL_VPORT_XSCALE, two_bits);
+       dbz3_reg_restore.Set(XE_GPU_REG_PA_CL_VPORT_YSCALE, two_bits);
++      dbz3_clear_redirected = true;
+       static uint32_t dbz3_clear_logged = 0;
+       if (dbz3_clear_logged < 6) {
+         ++dbz3_clear_logged;
+@@ -4455,6 +4561,48 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
+       }
+     }
+   }
++  // DBZ3-Android (dbz3_tight_render_area): o Clear() do D3D usa um scissor de 8192x8192; a
++  // area real do retangulo vem dos 3 vertices (posicao em pixeis, viewport desligado). Sem
++  // isto o passe da cena teria a renderArea da imagem toda (1280x2048).
++  bool dbz3_rect_bounds_valid = false;
++  int32_t dbz3_rect_bounds[4] = {};
++  if (REXCVAR_GET(dbz3_tight_render_area) && prim_type == xenos::PrimitiveType::kRectangleList &&
++      index_count == 3 && vertex_shader->ucode_data_hash() == UINT64_C(0x1E6883FCCDE1F688) &&
++      !vertex_shader->vertex_bindings().empty() && regs[XE_GPU_REG_PA_SC_WINDOW_OFFSET] == 0) {
++    const auto& vb = vertex_shader->vertex_bindings()[0];
++    const xenos::xe_gpu_vertex_fetch_t vf = regs.GetVertexFetch(vb.fetch_constant);
++    const uint32_t stride = vb.stride_words * 4;
++    const uint8_t* data = vf.type == xenos::FetchConstantType::kVertex && stride >= 8
++                              ? memory_->TranslatePhysical(uint32_t(vf.address) << 2)
++                              : nullptr;
++    if (data && (vf.endian == xenos::Endian::k8in32 || vf.endian == xenos::Endian::kNone)) {
++      float min_x = 1e9f, min_y = 1e9f, max_x = -1e9f, max_y = -1e9f;
++      bool sane = true;
++      for (uint32_t v = 0; v < 3 && sane; ++v) {
++        float xy[2];
++        for (uint32_t c = 0; c < 2; ++c) {
++          uint32_t bits;
++          std::memcpy(&bits, data + v * stride + c * 4, 4);
++          if (vf.endian == xenos::Endian::k8in32) bits = rex::byte_swap(bits);
++          std::memcpy(&xy[c], &bits, 4);
++          sane = sane && std::isfinite(xy[c]) && xy[c] > -64.0f && xy[c] < 8256.0f;
++        }
++        min_x = std::min(min_x, xy[0]);
++        max_x = std::max(max_x, xy[0]);
++        min_y = std::min(min_y, xy[1]);
++        max_y = std::max(max_y, xy[1]);
++      }
++      if (sane) {
++        // RECTLIST: o 4.o canto e implicito, os 3 vertices ja dao os limites.
++        const float scale = dbz3_clear_redirected ? 2.0f : 1.0f;
++        dbz3_rect_bounds[0] = int32_t(std::floor(min_x * scale)) - 1;
++        dbz3_rect_bounds[1] = int32_t(std::floor(min_y * scale)) - 1;
++        dbz3_rect_bounds[2] = int32_t(std::ceil(max_x * scale)) + 1;
++        dbz3_rect_bounds[3] = int32_t(std::ceil(max_y * scale)) + 1;
++        dbz3_rect_bounds_valid = true;
++      }
++    }
++  }
+   // DBZ3-Android (dbz3_rt_direct): restauro de ecra inteiro que nao muda nada.
+   if (pixel_shader && !memexport_used_pixel && !memexport_used_vertex) {
+     uint32_t sampled_bases[32];
+@@ -4940,6 +5088,22 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
+       render_target_cache_->last_update_render_pass(),
+       render_target_cache_->last_update_framebuffer());
+ 
++  // DBZ3-Android (dbz3_tight_render_area): acumula a area deste draw (scissor, ou o
++  // retangulo do Clear()) para a renderArea do passe.
++  if (dbz3_area_active_) {
++    int32_t ax0 = dynamic_scissor_.offset.x;
++    int32_t ay0 = dynamic_scissor_.offset.y;
++    int32_t ax1 = ax0 + int32_t(dynamic_scissor_.extent.width);
++    int32_t ay1 = ay0 + int32_t(dynamic_scissor_.extent.height);
++    if (dbz3_rect_bounds_valid) {
++      ax0 = std::max(ax0, dbz3_rect_bounds[0] * int32_t(draw_resolution_scale_x));
++      ay0 = std::max(ay0, dbz3_rect_bounds[1] * int32_t(draw_resolution_scale_y));
++      ax1 = std::min(ax1, dbz3_rect_bounds[2] * int32_t(draw_resolution_scale_x));
++      ay1 = std::min(ay1, dbz3_rect_bounds[3] * int32_t(draw_resolution_scale_y));
++    }
++    Dbz3AreaAdd(ax0, ay0, ax1, ay1);
++  }
++
+   // Draw.
+   if (primitive_processing_result.index_buffer_type ==
+           PrimitiveProcessor::ProcessedIndexBufferType::kNone ||
+@@ -5805,6 +5969,14 @@ void VulkanCommandProcessor::CheckSubmissionFenceAndDeviceLoss(uint64_t await_su
+     VkResult wait_result =
+         dfn.vkWaitForFences(device, uint32_t(await_submission - submission_completed_),
+                             submissions_in_flight_fences_.data(), VK_TRUE, UINT64_MAX);
++    // DBZ3-Android: o Turnip sobre o KGSL (e alguns drivers Mali) podem devolver VK_TIMEOUT
++    // numa espera sem limite. Tratar isso como falha fazia o Xenia reutilizar recursos ainda
++    // em uso pela GPU (imagem corrompida/piscadas). Repete a espera.
++    for (uint32_t dbz3_retry = 0; wait_result == VK_TIMEOUT && dbz3_retry < 64; ++dbz3_retry) {
++      wait_result =
++          dfn.vkWaitForFences(device, uint32_t(await_submission - submission_completed_),
++                              submissions_in_flight_fences_.data(), VK_TRUE, UINT64_MAX);
++    }
+     if (wait_result == VK_SUCCESS) {
+       fences_awaited += await_submission - submission_completed_;
+     } else {
+diff --git a/src/graphics/vulkan/deferred_command_buffer.cpp b/src/graphics/vulkan/deferred_command_buffer.cpp
+index beeb581..c73a547 100644
+--- a/src/graphics/vulkan/deferred_command_buffer.cpp
++++ b/src/graphics/vulkan/deferred_command_buffer.cpp
+@@ -441,4 +441,22 @@ void* DeferredCommandBuffer::WriteCommand(Command command, size_t arguments_size
+   return command_stream_.data() + (offset + kCommandHeaderSizeElements);
+ }
+ 
++VkRect2D* DeferredCommandBuffer::Dbz3FindBeginRenderArea(size_t position) {
++  size_t i = position;
++  // So os primeiros comandos depois da posicao (timestamps do perfil e o inicio do passe).
++  for (uint32_t guard = 0; guard < 8 && i + kCommandHeaderSizeElements <= command_stream_.size();
++       ++guard) {
++    const CommandHeader& header = *reinterpret_cast<const CommandHeader*>(command_stream_.data() + i);
++    uintmax_t* args = command_stream_.data() + i + kCommandHeaderSizeElements;
++    if (header.command == Command::kVkBeginRendering) {
++      return &reinterpret_cast<ArgsVkBeginRendering*>(args)->render_area;
++    }
++    if (header.command == Command::kVkBeginRenderPass) {
++      return &reinterpret_cast<ArgsVkBeginRenderPass*>(args)->render_area;
++    }
++    i += kCommandHeaderSizeElements + header.arguments_size_elements;
++  }
++  return nullptr;
++}
++
+ }  // namespace rex::graphics::vulkan
+diff --git a/src/graphics/vulkan/render_target_cache.cpp b/src/graphics/vulkan/render_target_cache.cpp
+index a2cde17..9d5e601 100644
+--- a/src/graphics/vulkan/render_target_cache.cpp
++++ b/src/graphics/vulkan/render_target_cache.cpp
+@@ -1145,6 +1145,40 @@ void VulkanRenderTargetCache::EndSubmission() {
+   }
+ }
+ 
++// DBZ3-Android: interruptores de efeitos (command_processor.cpp).
++bool Dbz3FxaaOffKeepsScreen();
++bool Dbz3BloomSkipsSmallTargets();
++extern uint64_t g_dbz3_frame_index;
++
++// DBZ3-Android (dbz3_direct_resolve_skip_memory): destinos de resolves feitos so na textura,
++// sem escrita na memoria do guest. Se outra textura (que o atalho nao encontrou) for carregada
++// da memoria desse intervalo logo a seguir, leria conteudo velho (piscada preta/lixo): esse
++// destino passa a ter sempre o resolve completo.
++namespace {
++struct Dbz3SkippedMemoryRange {
++  uint32_t start;
++  uint32_t length;
++  uint32_t dest_base;
++  uint64_t frame;
++};
++std::vector<Dbz3SkippedMemoryRange> g_dbz3_skipped_memory;
++std::vector<uint32_t> g_dbz3_need_memory;
++}  // namespace
++
++void Dbz3NoteTextureLoadFromMemory(uint32_t start, uint32_t length) {
++  for (const Dbz3SkippedMemoryRange& r : g_dbz3_skipped_memory) {
++    if (start < r.start + r.length && r.start < start + length &&
++        g_dbz3_frame_index <= r.frame + 2 &&
++        std::find(g_dbz3_need_memory.begin(), g_dbz3_need_memory.end(), r.dest_base) ==
++            g_dbz3_need_memory.end()) {
++      g_dbz3_need_memory.push_back(r.dest_base);
++      REXGPU_INFO("dbz3: textura {:08X} lida da memoria depois de um resolve so para textura em "
++                  "{:08X}; esse destino passa a ter o resolve completo",
++                  start, r.dest_base);
++    }
++  }
++}
++
+ bool VulkanRenderTargetCache::Resolve(const memory::Memory& memory,
+                                       VulkanSharedMemory& shared_memory,
+                                       VulkanTextureCache& texture_cache,
+@@ -1202,6 +1236,19 @@ bool VulkanRenderTargetCache::Resolve(const memory::Memory& memory,
+     return true;
+   }
+ 
++  // DBZ3-Android (dbz3_fx_bloom desligado): resolves de render targets pequenos (pitch <= 320,
++  // a cadeia de brilho 320x184 -> 80x48) nos frames com a cadeia. Ninguem le estes destinos com
++  // a composicao do brilho saltada; cada um fechava um passe.
++  if (Dbz3BloomSkipsSmallTargets()) {
++    const uint32_t src_pitch_tiles = resolve_info.IsCopyingDepth()
++                                         ? uint32_t(resolve_info.depth_edram_info.pitch_tiles)
++                                         : uint32_t(resolve_info.color_edram_info.pitch_tiles);
++    if (src_pitch_tiles && src_pitch_tiles <= 4 && !resolve_info.IsClearingDepth() &&
++        !resolve_info.IsClearingColor()) {
++      return true;
++    }
++  }
++
+   const ui::vulkan::VulkanDevice* const vulkan_device = command_processor_.GetVulkanDevice();
+   const ui::vulkan::VulkanDevice::Functions& dfn = vulkan_device->functions();
+   const VkDevice device = vulkan_device->device();
+@@ -1233,7 +1280,9 @@ bool VulkanRenderTargetCache::Resolve(const memory::Memory& memory,
+   // mesmo endereco (ou o CPU) o veriam, e no Budokai 3 ninguem le estes destinos
+   // de outra forma (logs de 2026-10-12/13).
+   if (resolve_info.copy_dest_extent_length && !draw_resolution_scaled &&
+-      rex::cvar::GetFlagByName("dbz3_direct_resolve_skip_memory") == "true") {
++      rex::cvar::GetFlagByName("dbz3_direct_resolve_skip_memory") == "true" &&
++      std::find(g_dbz3_need_memory.begin(), g_dbz3_need_memory.end(),
++                resolve_info.copy_dest_base) == g_dbz3_need_memory.end()) {
+     uint32_t dump_base, dump_row_length_used, dump_rows, dump_pitch;
+     resolve_info.GetCopyEdramTileSpan(dump_base, dump_row_length_used, dump_rows, dump_pitch);
+     GetResolveCopyRectanglesToDump(dump_base, dump_row_length_used, dump_rows, dump_pitch,
+@@ -1242,6 +1291,21 @@ bool VulkanRenderTargetCache::Resolve(const memory::Memory& memory,
+       written_address_out = resolve_info.copy_dest_extent_start;
+       written_length_out = resolve_info.copy_dest_extent_length;
+       copied = true;
++      bool found = false;
++      for (Dbz3SkippedMemoryRange& r : g_dbz3_skipped_memory) {
++        if (r.dest_base == resolve_info.copy_dest_base) {
++          r.start = resolve_info.copy_dest_extent_start;
++          r.length = resolve_info.copy_dest_extent_length;
++          r.frame = g_dbz3_frame_index;
++          found = true;
++          break;
++        }
++      }
++      if (!found && g_dbz3_skipped_memory.size() < 64) {
++        g_dbz3_skipped_memory.push_back({resolve_info.copy_dest_extent_start,
++                                         resolve_info.copy_dest_extent_length,
++                                         resolve_info.copy_dest_base, g_dbz3_frame_index});
++      }
+     }
+   }
+   if (resolve_info.copy_dest_extent_length && !copied) {
+@@ -1396,6 +1460,18 @@ bool VulkanRenderTargetCache::Resolve(const memory::Memory& memory,
+     copied = true;
+   }
+ 
++  // DBZ3-Android (dbz3_fx_fxaa desligado): o ultimo resolve do frame copia o ecra para a
++  // textura que o FXAA le e LIMPA a cor; o FXAA voltava a desenhar o ecra a partir dessa
++  // textura. Sem o FXAA o ecra tem de ficar como esta para o resolve do frontbuffer, por isso
++  // a limpeza da cor e saltada (o frame seguinte comeca com o Clear() do D3D, que cobre tudo).
++  if (resolve_info.IsClearingColor() && Dbz3FxaaOffKeepsScreen() &&
++      resolve_info.color_edram_info.base_tiles == 0 &&
++      resolve_info.color_edram_info.msaa_samples == xenos::MsaaSamples::k1X &&
++      uint32_t(resolve_info.coordinate_info.width_div_8) * 8 >= 1280 &&
++      resolve_info.height_div_8 * 8 >= 720) {
++    resolve_info.rb_copy_control.color_clear_enable = 0;
++  }
++
+   // Clearing.
+   bool cleared = false;
+   bool clear_depth = resolve_info.IsClearingDepth();
+diff --git a/src/graphics/vulkan/texture_cache.cpp b/src/graphics/vulkan/texture_cache.cpp
+index 0df2069..f4c9f09 100644
+--- a/src/graphics/vulkan/texture_cache.cpp
++++ b/src/graphics/vulkan/texture_cache.cpp
+@@ -1334,8 +1334,14 @@ bool VulkanTextureCache::EnsureScaledResolveMemoryCommitted(uint32_t start_unsca
+   return EnsureScaledResolveBufferAllocated(start_scaled, length_scaled);
+ }
+ 
++void Dbz3NoteTextureLoadFromMemory(uint32_t start, uint32_t length);  // render_target_cache.cpp
++
+ bool VulkanTextureCache::LoadTextureDataFromResidentMemoryImpl(Texture& texture, bool load_base,
+                                                                bool load_mips) {
++  if (load_base) {
++    Dbz3NoteTextureLoadFromMemory(uint32_t(texture.key().base_page) << 12,
++                                  texture.GetGuestBaseSize());
++  }
+   dbz3_hitch::Scope dbz3_scope(dbz3_hitch::kTextureLoad);
+   dbz3_gpuprof::Zone<DeferredCommandBuffer> dbz3_zone(command_processor_.deferred_command_buffer(),
+                                                       dbz3_gpuprof::kTexture);
+diff --git a/src/ui/surface_android.cpp b/src/ui/surface_android.cpp
+index 5c712dc..5477780 100644
+--- a/src/ui/surface_android.cpp
++++ b/src/ui/surface_android.cpp
+@@ -14,6 +14,20 @@
+ namespace rex {
+ namespace ui {
+ 
++AndroidNativeWindowSurface::AndroidNativeWindowSurface(ANativeWindow* window,
++                                                       SDL_Window* sdl_window)
++    : window_(window), sdl_window_(sdl_window) {
++  if (window_) {
++    ANativeWindow_acquire(window_);
++  }
++}
++
++AndroidNativeWindowSurface::~AndroidNativeWindowSurface() {
++  if (window_) {
++    ANativeWindow_release(window_);
++  }
++}
++
+ bool AndroidNativeWindowSurface::GetSizeImpl(uint32_t& width_out, uint32_t& height_out) const {
+   if (window_) {
+     const int32_t w = ANativeWindow_getWidth(window_);
+diff --git a/src/ui/vulkan/vulkan_device.cpp b/src/ui/vulkan/vulkan_device.cpp
+index 71d10e2..edd4628 100644
+--- a/src/ui/vulkan/vulkan_device.cpp
++++ b/src/ui/vulkan/vulkan_device.cpp
+@@ -61,6 +61,14 @@ REXCVAR_DEFINE_INT32(dbz3_vk_max_storage_buffer_range_mb, 0, "UI/Vulkan",
+                      "DBZ3-Android: maxStorageBufferRange forcado em MB (0 = do driver)")
+     .range(0, 2048);
+ 
++// DBZ3-Android: no Turnip dos Adreno 6xx o driver diz 128 MB (limite das vistas de 8 bits),
++// e com a memoria partida em 4 buffers a imagem saia com geometria/texturas erradas (RP5,
++// 2026-10-13; Moto g53/SD480+, 2026-10-14). Os shaders do Xenia so fazem acessos de 32 bits,
++// e um so buffer de 512 MB funcionou no RP5. Ligado: aplica-se sozinho no Turnip quando o
++// driver diz menos de 512 MB (a pref "memoria num so bloco" do launcher continua a valer).
++REXCVAR_DEFINE_BOOL(dbz3_vk_turnip_single_shared_buffer, true, "UI/Vulkan",
++                    "DBZ3-Android: no Turnip, memoria do guest num so storage buffer de 512 MB");
++
+ namespace rex {
+ namespace ui {
+ namespace vulkan {
+@@ -664,6 +672,15 @@ std::unique_ptr<VulkanDevice> VulkanDevice::CreateIfSupported(
+   XE_UI_VULKAN_LIMIT(maxImageDimensionCube)
+   XE_UI_VULKAN_LIMIT(maxImageArrayLayers)
+   XE_UI_VULKAN_LIMIT(maxStorageBufferRange)
++  if (REXCVAR_GET(dbz3_vk_max_storage_buffer_range_mb) <= 0 &&
++      REXCVAR_GET(dbz3_vk_turnip_single_shared_buffer) && ext_1_2_KHR_driver_properties &&
++      properties_1_2_KHR_driver_properties.driverID == VK_DRIVER_ID_MESA_TURNIP &&
++      properties.limits.maxStorageBufferRange < (uint32_t(512) << 20)) {
++    device->properties_.maxStorageBufferRange = uint32_t(512) << 20;
++    REXLOG_INFO("dbz3: Turnip com maxStorageBufferRange {}: memoria do guest num so buffer de "
++                "512 MB",
++                properties.limits.maxStorageBufferRange);
++  }
+   if (REXCVAR_GET(dbz3_vk_max_storage_buffer_range_mb) > 0) {
+     device->properties_.maxStorageBufferRange =
+         uint32_t(std::min<uint64_t>(uint64_t(REXCVAR_GET(dbz3_vk_max_storage_buffer_range_mb)) << 20,
+diff --git a/src/ui/vulkan/vulkan_instance.cpp b/src/ui/vulkan/vulkan_instance.cpp
+index 17415b0..2da6869 100644
+--- a/src/ui/vulkan/vulkan_instance.cpp
++++ b/src/ui/vulkan/vulkan_instance.cpp
+@@ -28,6 +28,7 @@
+ #if REX_PLATFORM_ANDROID && defined(REX_HAS_ADRENOTOOLS)
+ #include <dlfcn.h>
+ 
++#include <cstdio>
+ #include <cstdlib>
+ 
+ #include <adrenotools/driver.h>
+@@ -45,6 +46,80 @@ namespace vulkan {
+ // define REX_VULKAN_DRIVER_DIR e REX_VULKAN_DRIVER_NAME; sem essas variaveis usa-se
+ // o driver do sistema. Devolve nullptr se nao houver driver alternativo ou se
+ // ele falhar a carregar (e entao tambem se usa o do sistema).
++// Estado do driver alternativo para o launcher (aba Drivers): logs/vulkan_driver_status.txt
++// com "ok|falhou <driver> <detalhe>". So na primeira tentativa do processo.
++static void Dbz3WriteDriverStatus(bool ok, const std::string& driver, const std::string& detail) {
++  static bool written = false;
++  if (written) {
++    return;
++  }
++  written = true;
++  const char* app_dir = std::getenv("REX_APP_DIR");
++  if (!app_dir || !*app_dir) {
++    return;
++  }
++  std::string path = std::string(app_dir) + "/logs/vulkan_driver_status.txt";
++  if (FILE* f = std::fopen(path.c_str(), "w")) {
++    std::fprintf(f, "%s\n%s\n%s\n", ok ? "ok" : "falhou", driver.c_str(), detail.c_str());
++    std::fclose(f);
++  }
++}
++
++// DBZ3-Android: um driver alternativo pode carregar (dlopen) mas nao servir para esta GPU
++// (ex.: um Turnip so de A7xx num Adreno 8xx, ou qualquer Turnip num Mali): o jogo ficava sem
++// GPU ("Couldn't choose a compatible Vulkan physical device") e o ecra preto. Cria-se uma
++// instancia de teste e so se aceita o driver se tiver pelo menos uma GPU.
++static bool Dbz3ProbeCustomVulkanDriver(void* handle, std::string& detail) {
++  auto gipa = reinterpret_cast<PFN_vkGetInstanceProcAddr>(dlsym(handle, "vkGetInstanceProcAddr"));
++  if (!gipa) {
++    detail = "sem vkGetInstanceProcAddr";
++    return false;
++  }
++  auto create_instance =
++      reinterpret_cast<PFN_vkCreateInstance>(gipa(VK_NULL_HANDLE, "vkCreateInstance"));
++  if (!create_instance) {
++    detail = "sem vkCreateInstance";
++    return false;
++  }
++  VkApplicationInfo app_info = {};
++  app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
++  app_info.pApplicationName = "Dragon Fury (teste do driver)";
++  app_info.apiVersion = VK_MAKE_API_VERSION(0, 1, 1, 0);
++  VkInstanceCreateInfo create_info = {};
++  create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
++  create_info.pApplicationInfo = &app_info;
++  VkInstance instance = VK_NULL_HANDLE;
++  const VkResult create_result = create_instance(&create_info, nullptr, &instance);
++  if (create_result != VK_SUCCESS || instance == VK_NULL_HANDLE) {
++    detail = "vkCreateInstance falhou (" + std::to_string(int(create_result)) + ")";
++    return false;
++  }
++  auto destroy_instance =
++      reinterpret_cast<PFN_vkDestroyInstance>(gipa(instance, "vkDestroyInstance"));
++  auto enumerate =
++      reinterpret_cast<PFN_vkEnumeratePhysicalDevices>(gipa(instance, "vkEnumeratePhysicalDevices"));
++  auto get_properties = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties>(
++      gipa(instance, "vkGetPhysicalDeviceProperties"));
++  uint32_t count = 0;
++  VkResult enum_result = enumerate ? enumerate(instance, &count, nullptr) : VK_ERROR_UNKNOWN;
++  bool ok = (enum_result == VK_SUCCESS || enum_result == VK_INCOMPLETE) && count > 0;
++  if (ok && get_properties) {
++    std::vector<VkPhysicalDevice> devices(count);
++    if (enumerate(instance, &count, devices.data()) >= 0 && count) {
++      VkPhysicalDeviceProperties properties;
++      get_properties(devices[0], &properties);
++      detail = properties.deviceName;
++    }
++  } else if (!ok) {
++    detail = "o driver nao encontrou nenhuma GPU compativel (resultado " +
++             std::to_string(int(enum_result)) + ", " + std::to_string(count) + " GPUs)";
++  }
++  if (destroy_instance) {
++    destroy_instance(instance, nullptr);
++  }
++  return ok;
++}
++
+ static void* Dbz3OpenCustomVulkanDriver() {
+   const char* driver_dir = std::getenv("REX_VULKAN_DRIVER_DIR");
+   const char* driver_name = std::getenv("REX_VULKAN_DRIVER_NAME");
+@@ -60,16 +135,39 @@ static void* Dbz3OpenCustomVulkanDriver() {
+   if (hook_dir_slash.back() != '/') {
+     hook_dir_slash += '/';
+   }
++  // Uma tentativa por processo: se falhou uma vez (ou nao serve para esta GPU), as
++  // instancias seguintes vao direto para o driver do sistema.
++  static int dbz3_custom_state = 0;  // 0 por testar, 1 bom, -1 mau
++  if (dbz3_custom_state < 0) {
++    return nullptr;
++  }
+   void* handle = adrenotools_open_libvulkan(RTLD_NOW, ADRENOTOOLS_DRIVER_CUSTOM, nullptr,
+                                             hook_dir_slash.c_str(), driver_dir_slash.c_str(),
+                                             driver_name, nullptr, nullptr);
+   const char* error = handle ? nullptr : dlerror();
+-  if (handle) {
+-    REXLOG_INFO("Vulkan: a usar o driver alternativo {}{}", driver_dir_slash, driver_name);
+-  } else {
++  if (!handle) {
++    dbz3_custom_state = -1;
+     REXLOG_ERROR("Vulkan: o driver alternativo {}{} falhou a carregar ({}); a usar o do sistema",
+                  driver_dir_slash, driver_name, error ? error : "sem detalhe");
++    Dbz3WriteDriverStatus(false, driver_name,
++                          std::string("nao carregou: ") + (error ? error : "sem detalhe"));
++    return nullptr;
++  }
++  if (dbz3_custom_state == 0) {
++    std::string detail;
++    if (!Dbz3ProbeCustomVulkanDriver(handle, detail)) {
++      // Sem dlclose: alguns drivers nao suportam ser descarregados. Fica so sem uso.
++      dbz3_custom_state = -1;
++      REXLOG_ERROR("Vulkan: o driver alternativo {} nao serve para esta GPU ({}); a usar o do "
++                   "sistema",
++                   driver_name, detail);
++      Dbz3WriteDriverStatus(false, driver_name, detail);
++      return nullptr;
++    }
++    dbz3_custom_state = 1;
++    Dbz3WriteDriverStatus(true, driver_name, detail);
+   }
++  REXLOG_INFO("Vulkan: a usar o driver alternativo {}{}", driver_dir_slash, driver_name);
+   return handle;
+ }
+ #endif
+diff --git a/src/ui/vulkan/vulkan_submission_tracker.cpp b/src/ui/vulkan/vulkan_submission_tracker.cpp
+index 07a07b2..8c78fe0 100644
+--- a/src/ui/vulkan/vulkan_submission_tracker.cpp
++++ b/src/ui/vulkan/vulkan_submission_tracker.cpp
+@@ -119,8 +119,13 @@ bool VulkanSubmissionTracker::AwaitSubmissionCompletion(uint64_t submission_inde
+       assert_true(pending_pair.first > submission_completed_on_gpu_);
+       if (pending_pair.first <= submission_index) {
+         // Wait if requested.
+-        if (dfn.vkWaitForFences(device, 1, &pending_pair.second, VK_TRUE, UINT64_MAX) ==
+-            VK_SUCCESS) {
++        // DBZ3-Android: repete se o driver devolver VK_TIMEOUT numa espera sem limite
++        // (Turnip/KGSL).
++        VkResult dbz3_wait = VK_TIMEOUT;
++        for (uint32_t dbz3_retry = 0; dbz3_wait == VK_TIMEOUT && dbz3_retry < 64; ++dbz3_retry) {
++          dbz3_wait = dfn.vkWaitForFences(device, 1, &pending_pair.second, VK_TRUE, UINT64_MAX);
++        }
++        if (dbz3_wait == VK_SUCCESS) {
+           break;
+         }
+       }
+diff --git a/src/ui/window_sdl.cpp b/src/ui/window_sdl.cpp
+index f89e2c5..5ac422d 100644
+--- a/src/ui/window_sdl.cpp
++++ b/src/ui/window_sdl.cpp
+@@ -509,9 +509,27 @@ void WindowSDL::HandleWindowEvent(SDL_Event& event) {
+       OnPaint(true);
+       break;
+     case SDL_EVENT_WINDOW_MINIMIZED:
++#if REX_PLATFORM_ANDROID
++      // DBZ3-Android: a app foi para segundo plano. O Android destroi a superficie
++      // (surfaceDestroyed) e, ao voltar, cria outra com outro ANativeWindow. O presenter
++      // continuava preso a VkSurfaceKHR da janela antiga: imagem preta com som ao voltar.
++      // Desliga-se ja do presenter; o RESTORED liga-o a janela nova.
++      REXLOG_INFO("dbz3: segundo plano: superficie de apresentacao desligada");
++      OnSurfaceChanged(false);
++#endif
+       OnMinimized(destruction_receiver);
+       break;
+     case SDL_EVENT_WINDOW_RESTORED:
++#if REX_PLATFORM_ANDROID
++      // O SDL so manda o RESTORED (nativeResume) depois do surfaceCreated/surfaceChanged,
++      // por isso a propriedade do ANativeWindow ja aponta para a janela nova.
++      OnSurfaceChanged(true);
++      REXLOG_INFO("dbz3: primeiro plano: superficie de apresentacao {}",
++                  HasSurface() ? "recriada" : "indisponivel");
++      if (HasSurface()) {
++        OnPaint(true);
++      }
++#endif
+       OnRestored(destruction_receiver);
+       break;
+     case SDL_EVENT_WINDOW_CLOSE_REQUESTED:

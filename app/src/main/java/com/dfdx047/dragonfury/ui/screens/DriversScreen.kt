@@ -90,6 +90,13 @@ fun DriversScreen(vm: LauncherViewModel) {
                     if (active == null) stringResource(R.string.driver_current_system) else stringResource(R.string.driver_current, active),
                     style = MaterialTheme.typography.bodyLarge,
                 )
+                vm.activeDriverStatus?.let { st ->
+                    if (st.ok) {
+                        StatusLine(stringResource(R.string.driver_status_ok, st.detail), Level.OK)
+                    } else {
+                        StatusLine(stringResource(R.string.driver_status_failed, st.detail), Level.ERROR)
+                    }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { vm.useSystemDriver() }, enabled = active != null) {
                         Text(stringResource(R.string.drivers_use_system))

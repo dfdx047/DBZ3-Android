@@ -3,6 +3,25 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.3.1 — 2026-10-15
+
+### Fixes
+- Returning from the background no longer leaves a black screen (the Vulkan surface is recreated on
+  the new Android window).
+- Launch orientation is respected: SDL no longer overrides it with "full sensor" (landscape /
+  reversed / automatic landscape).
+- Turning FXAA off no longer gives a black screen; turning bloom off also skips the bloom render
+  targets and copies.
+- Fewer black flashes: depth copies are never skipped, and fast resolves fall back to a full resolve
+  when another texture reads that memory.
+- Turnip: guest memory in a single 512 MB buffer automatically on Adreno 6xx; a custom driver that
+  can't drive this GPU falls back to the system driver (shown in the Drivers tab); drivers packaged
+  with extra libraries now load.
+
+### Performance
+- Render passes only load/store the area actually drawn (1280x720 instead of the whole 1280x2048
+  EDRAM image): much less memory traffic on tiled GPUs (Mali, Adreno).
+
 ## 0.3.0 — 2026-10-14
 
 ### Performance

@@ -254,6 +254,17 @@ public class GameActivity extends SDLActivity {
         }
     }
 
+    /**
+     * O SDL chama isto quando cria a janela do jogo e pedia SCREEN_ORIENTATION_FULL_USER (janela
+     * redimensionavel, sem SDL_HINT_ORIENTATIONS): no logcat de 2026-10-14 "setOrientation()
+     * requestedOrientation=13". Isso apagava a escolha do launcher e o jogo seguia o sensor ate ao
+     * modo retrato. Aqui reaplica-se sempre a orientacao do launcher.
+     */
+    @Override
+    public void setOrientationBis(int w, int h, boolean resizable, String hint) {
+        runOnUiThread(this::applyOrientation);
+    }
+
     /** Orientacao escolhida no launcher: paisagem, paisagem invertida ou automatica. */
     private void applyOrientation() {
         @SuppressWarnings("deprecation")
@@ -263,11 +274,14 @@ public class GameActivity extends SDLActivity {
         if ("reverse".equals(mode)) {
             orientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE;
         } else if ("auto".equals(mode)) {
+            // Paisagem pelo sensor (normal ou invertida), nunca retrato.
             orientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
         } else {
             orientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
         }
-        setRequestedOrientation(orientation);
+        if (getRequestedOrientation() != orientation) {
+            setRequestedOrientation(orientation);
+        }
     }
 
     /**
@@ -404,27 +418,57 @@ public class GameActivity extends SDLActivity {
      */
     private void installCustomVulkanDriver(File appDir) {
         File internalDir = new File(getFilesDir(), "driver");
-        File[] candidates = new File(appDir, "driver").listFiles(
-                (dir, name) -> name.endsWith(".so"));
+        File activeDir = new File(appDir, "driver");
+        File[] candidates = activeDir.listFiles((dir, name) -> name.endsWith(".so"));
         if (candidates == null || candidates.length == 0) {
             deleteRecursively(internalDir);
             return;
         }
+        // Biblioteca principal: a que o launcher marcou (.library, do meta.json do pacote).
+        // Os pacotes de drivers da Qualcomm trazem mais .so (dependencias), que tem de ir
+        // todas para a mesma pasta interna.
         File source = candidates[0];
-        File target = new File(internalDir, source.getName());
+        File libraryName = new File(activeDir, ".library");
+        if (libraryName.isFile()) {
+            try {
+                String name = new String(Files.readAllBytes(libraryName.toPath())).trim();
+                File named = new File(activeDir, name);
+                if (named.isFile()) {
+                    source = named;
+                }
+            } catch (IOException e) {
+                Log.w(TAG, "Nao foi possivel ler " + libraryName, e);
+            }
+        }
         try {
-            if (!target.isFile() || target.length() != source.length()
-                    || target.lastModified() != source.lastModified()) {
+            boolean changed = false;
+            for (File lib : candidates) {
+                File copy = new File(internalDir, lib.getName());
+                if (!copy.isFile() || copy.length() != lib.length()
+                        || copy.lastModified() != lib.lastModified()) {
+                    changed = true;
+                    break;
+                }
+            }
+            File[] existing = internalDir.listFiles((dir, name) -> name.endsWith(".so"));
+            if (existing == null || existing.length != candidates.length) {
+                changed = true;
+            }
+            if (changed) {
                 deleteRecursively(internalDir);
                 //noinspection ResultOfMethodCallIgnored
                 internalDir.mkdirs();
-                Files.copy(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                //noinspection ResultOfMethodCallIgnored
-                target.setLastModified(source.lastModified());
+                for (File lib : candidates) {
+                    File copy = new File(internalDir, lib.getName());
+                    Files.copy(lib.toPath(), copy.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    //noinspection ResultOfMethodCallIgnored
+                    copy.setLastModified(lib.lastModified());
+                }
             }
             setEnv("REX_VULKAN_DRIVER_DIR", internalDir.getAbsolutePath() + "/");
-            setEnv("REX_VULKAN_DRIVER_NAME", target.getName());
-            Log.i(TAG, "Driver Vulkan alternativo: " + target.getName());
+            setEnv("REX_VULKAN_DRIVER_NAME", source.getName());
+            Log.i(TAG, "Driver Vulkan alternativo: " + source.getName() + " ("
+                    + candidates.length + " bibliotecas)");
         } catch (IOException e) {
             Log.e(TAG, "Falha a instalar o driver " + source, e);
         }

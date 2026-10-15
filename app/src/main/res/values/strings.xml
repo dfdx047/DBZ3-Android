@@ -349,7 +349,7 @@
     <string name="turnip_compat_nolrz">No LRZ and UBWC</string>
     <string name="turnip_compat_paths">No dynamic rendering and stencil export</string>
     <string name="turnip_compat_sync">Diagnostic: full sync (slow)</string>
-    <string name="turnip_compat_single_buffer">Game memory in one block (512 MB)</string>
+    <string name="turnip_compat_single_buffer">Game memory in one block (512 MB) — automatic on Turnip</string>
     <string name="turnip_compat_bc">Decompressed BC textures</string>
     <string name="turnip_compat_depth">Depth as float 32</string>
     <string name="ingame_capture">Capture 2 frames (diagnostic)</string>
@@ -378,4 +378,6 @@
     <string name="gpu_notice_text">The game was optimized on Qualcomm\'s own driver: Snapdragon 865 and newer run it with the system driver.\n\nThe Turnip driver also works well now, thanks to the new renderer. It is optional, in the Drivers tab.\n\nMali GPUs (e.g. Mali-G57) run it, but slower: turn on 30 FPS mode and turn off the game effects in the Performance tab.</string>
     <string name="gpu_notice_ok">Got it</string>
     <string name="about_gpu_notice">Performance tips</string>
+    <string name="driver_status_ok">Last launch: driver loaded (GPU: %1$s).</string>
+    <string name="driver_status_failed">Last launch: this driver did not work on this GPU, the system driver was used instead (%1$s). Use a Turnip build that supports your Adreno (e.g. Adreno 8xx needs a recent Gen8 build).</string>
 </resources>

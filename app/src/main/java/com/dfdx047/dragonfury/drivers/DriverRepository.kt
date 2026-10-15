@@ -33,6 +33,9 @@ data class InstalledDriver(
     val library: File,
 )
 
+/** Resultado do ultimo arranque do jogo com um driver alternativo (escrito pelo runtime). */
+data class DriverStatus(val ok: Boolean, val driver: String, val detail: String)
+
 class DriverException(val reason: Reason, detail: String = "") : Exception(detail) {
     enum class Reason { NO_LIBRARY, NOT_ZIP, IO, NETWORK }
 }
@@ -184,13 +187,43 @@ object DriverRepository {
         val dir = AppPaths.activeDriverDir
         dir.deleteRecursively()
         dir.mkdirs()
-        driver.library.copyTo(File(dir, driver.library.name), overwrite = true)
+        // Todos os .so do pacote: os drivers da Qualcomm empacotados para o AdrenoTools trazem
+        // bibliotecas auxiliares (ex. libllvm-*.so, libgsl.so) que tem de estar na mesma pasta
+        // da principal, senao o dlopen falha e o jogo volta ao driver do sistema.
+        driver.dir.listFiles()?.filter { it.isFile && it.name.endsWith(".so") }?.forEach {
+            it.copyTo(File(dir, it.name), overwrite = true)
+        }
+        if (!File(dir, driver.library.name).isFile) {
+            driver.library.copyTo(File(dir, driver.library.name), overwrite = true)
+        }
+        File(dir, ".library").writeText(driver.library.name)
         File(dir, ".source").writeText(driver.dir.name)
+        statusFile.delete()
+    }
+
+    private val statusFile get() = File(AppPaths.logsDir, "vulkan_driver_status.txt")
+
+    /**
+     * Estado do driver alternativo no ultimo arranque do jogo: o runtime testa-o (instancia
+     * Vulkan + GPUs) e, se nao servir para esta GPU, usa o do sistema e escreve aqui o motivo.
+     */
+    fun lastStatus(): DriverStatus? {
+        val lines = statusFile.takeIf { it.isFile }?.readLines() ?: return null
+        if (lines.size < 2) return null
+        return DriverStatus(lines[0].trim() == "ok", lines[1].trim(), lines.getOrNull(2)?.trim().orEmpty())
+    }
+
+    /** Nome da biblioteca principal do driver ativo (ficheiro .library), ou o primeiro .so. */
+    fun activeLibraryName(): String? {
+        val lib = File(AppPaths.activeDriverDir, ".library")
+        if (lib.isFile) return lib.readText().trim()
+        return AppPaths.activeDriverDir.listFiles()?.firstOrNull { it.name.endsWith(".so") }?.name
     }
 
     /** Volta ao driver do sistema. */
     fun deactivate() {
         AppPaths.activeDriverDir.deleteRecursively()
+        statusFile.delete()
     }
 
     fun delete(driver: InstalledDriver) {

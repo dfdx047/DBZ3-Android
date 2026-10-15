@@ -416,6 +416,9 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var activeDriver by mutableStateOf<String?>(null)
         private set
+    /** Resultado do teste do driver alternativo no ultimo arranque (null = sem informacao). */
+    var activeDriverStatus by mutableStateOf<com.dfdx047.dragonfury.drivers.DriverStatus?>(null)
+        private set
     var driverSource by mutableStateOf(DriverRepository.SOURCES.first())
         private set
     var driverReleases by mutableStateOf<List<DriverRelease>>(emptyList())
@@ -445,6 +448,8 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             installedDrivers = DriverRepository.installed()
             activeDriver = DriverRepository.activeDir()
+            val lib = DriverRepository.activeLibraryName()
+            activeDriverStatus = DriverRepository.lastStatus()?.takeIf { lib != null && it.driver == lib }
         }
     }
 

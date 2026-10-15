@@ -837,3 +837,55 @@ a cache de pipelines passou a ser lida no arranque (patch 0024).
 - Por testar: voar com o analógico físico (RP5/Odin) e com o da tela; LB/RB/LT/RT e X no mapa; menu
   principal: fila TAG TEAM e X → TAG TEAM continuam a funcionar (se não, `sub_8218C5D8` não corre
   todos os frames e é preciso afinar `MainMenuLive`).
+
+### 2026-10-14 noite — logs Exynos 2600, Dimensity 1100 (Mali-G77) e SD480+ (patch 0049, v0.3.1)
+Aparelhos: Galaxy S26 (Xclipse 960, driver do sistema), Retroid Pocket 4 Pro (MT8797 = Dimensity
+1100, Mali-G77), Moto g53 (SM4350 = SD480+, Adreno 619, Turnip A7xx V26).
+- **Xclipse 960:** 60 fps em luta, GPU ~10 ms (resolve ~5). Só problema: 18 "resolve 1EC2F000
+  eliminado mas lido a sério" em ~4 min.
+- **Mali-G77:** 35–38 fps em luta, GPU ~24 ms = desenho 13 ms (22 passes), resolve 7,5, transfer 1,4,
+  outros 1,8, swap 0,75. Fins de passe ~27/f. 7 eliminações erradas do resolve 1EC2F000.
+- **SD480+ com Turnip:** o driver carrega e encontra a GPU ("Turnip Adreno (TM) 619"), mas o driver diz
+  `maxStorageBufferRange` 128 MB: a memória do guest fica partida em 4 buffers — o mesmo caso que deu
+  geometria/texturas erradas no RP5 com Turnip (corrigido lá com "memória num só bloco"). As duas
+  sessões não chegaram à luta. O logcat mostra também `setOrientation() requestedOrientation=13`.
+- **Captura (Mali e Xclipse):** o resolve que alimenta o FXAA (ecrã → textura) tem **limpeza da cor**;
+  o FXAA redesenhava o ecrã a partir dessa textura. Com o FXAA desligado o ecrã ia limpo (preto) para o
+  frontbuffer: era o "não renderiza quando desligo o FXAA". DOF desligado estava certo.
+- **renderArea:** todos os passes do jogo começavam com a renderArea da imagem inteira do render target
+  (1280x**2048** para um ecrã de 1280x720, o EDRAM todo). Num GPU de tiles (Mali, Adreno) a carga e a
+  gravação dos tiles são proporcionais à renderArea: ~2,8x mais tráfego de memória por fim de passe.
+
+Patch 0049 (SDK):
+- **Segundo plano → ecrã preto:** a superfície Vulkan ficava presa ao `ANativeWindow` antigo. No Android
+  o `SDL_EVENT_WINDOW_MINIMIZED` desliga o presenter e o `RESTORED` recria a superfície com a janela nova
+  (o SDL só manda o RESTORED depois do surfaceCreated). A `AndroidNativeWindowSurface` passa a guardar a
+  sua própria referência (`ANativeWindow_acquire/release`).
+- **`dbz3_tight_render_area` (ligado):** a renderArea de cada passe do jogo é ajustada no fim do passe à
+  união dos scissors dos draws (o Clear() do D3D usa scissor 8192: aí conta o retângulo dos 3 vértices,
+  ×2 quando redirecionado para 1x), alinhada a 32 px. Os passes de transferência ficam com a área toda.
+- **FXAA desligado:** salta a limpeza da cor nesse resolve (só nos frames com FXAA, resolve 1280x720 da
+  base 0). **Brilho desligado:** além da cadeia, saltam-se draws e resolves em render targets com pitch
+  ≤ 320 nos frames com a cadeia (~8 passes e ~8 resolves por frame a menos).
+- **`dbz3_rt_elide_depth_resolves` (desligado):** só resolves de cor podem ser eliminados; a eliminação
+  dos de profundidade errava (frame com a profundidade velha = piscada).
+- **Modo rápido do resolve:** se uma textura que o atalho não encontrou for carregada da memória desse
+  destino até 2 frames depois, esse destino passa a ter sempre o resolve completo (log "textura … lida
+  da memoria depois de um resolve so para textura").
+- **Turnip:** `dbz3_vk_turnip_single_shared_buffer` (ligado) aplica sozinho os 512 MB num só buffer no
+  Turnip quando o driver diz menos. O driver alternativo é testado (instância + GPUs) antes de ser usado;
+  se não servir para esta GPU (ex.: Turnip só de A7xx num Adreno 8xx) usa-se o do sistema e o motivo vai
+  para `logs/vulkan_driver_status.txt` (mostrado na aba Drivers). `vkWaitForFences` repete com
+  VK_TIMEOUT (Turnip/KGSL).
+- Log "tiron" só para frames bem acima da média (em aparelhos lentos as 300 linhas acabavam logo).
+
+App (v0.3.1):
+- **Orientação:** o `GameActivity` sobrepõe `setOrientationBis` (o SDL pedia FULL_USER ao criar a janela
+  e o jogo seguia o sensor até retrato).
+- **Drivers:** ativar copia todos os `.so` do pacote (drivers Qualcomm empacotados trazem dependências) e
+  grava `.library` com a biblioteca principal; o `GameActivity` copia todos e usa essa. Aba Drivers mostra
+  o resultado do último arranque.
+
+Por testar: voltar do segundo plano (luta e menus); FXAA/brilho/DOF desligados; Mali-G77 e G57 com a
+renderArea justa (esperado: muito menos "desenho"/"resolve" por fim de passe); Turnip no SD480+ e no RP5
+sem a opção manual; Odin 3 com o Turnip que falhava (a aba Drivers diz se caiu para o do sistema).
