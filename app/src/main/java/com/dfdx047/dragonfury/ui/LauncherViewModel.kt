@@ -206,18 +206,26 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun importGame(uri: Uri) {
+    fun importGame(uri: Uri) = runImport { ctx, progress -> GameFiles.import(ctx, uri, progress) }
+
+    /** Importa direto do .iso do disco de Xbox 360. */
+    fun importIso(uri: Uri) = runImport { ctx, progress -> GameFiles.importIso(ctx, uri, progress) }
+
+    private fun runImport(work: (Context, (ImportProgress) -> Unit) -> Unit) {
         val ctx = getApplication<Application>()
         viewModelScope.launch(Dispatchers.IO) {
             busy = Busy(R.string.busy_importing)
+            val started = System.nanoTime()
             try {
-                GameFiles.import(ctx, uri) { p ->
+                work(ctx) { p ->
                     busy = when (p) {
                         is ImportProgress.Copying -> Busy(R.string.busy_importing, p.file, p.done.toFloat() / p.total.coerceAtLeast(1))
                         is ImportProgress.Hashing -> Busy(R.string.busy_checking_xex, p.file, p.done.toFloat() / p.total.coerceAtLeast(1))
+                        ImportProgress.ReadingIso -> Busy(R.string.busy_reading_iso)
                     }
                 }
-                say(R.string.msg_import_ok)
+                val seconds = ((System.nanoTime() - started) / 1_000_000_000L).toInt()
+                say(R.string.msg_import_ok_time, seconds)
             } catch (e: ImportException) {
                 say(
                     when (e.reason) {
@@ -227,6 +235,9 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
                         ImportException.Reason.BAD_XEX -> R.string.err_import_bad_xex
                         ImportException.Reason.MISSING_REQUIRED -> R.string.err_import_missing
                         ImportException.Reason.IO -> R.string.err_import_io
+                        ImportException.Reason.NOT_ISO -> R.string.err_import_not_iso
+                        ImportException.Reason.ISO_NO_GAME -> R.string.err_import_iso_no_game
+                        ImportException.Reason.NO_SPACE -> R.string.err_import_no_space
                     },
                     e.detail.ifEmpty { "-" },
                 )

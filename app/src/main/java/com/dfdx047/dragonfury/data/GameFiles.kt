@@ -2,9 +2,14 @@ package com.dfdx047.dragonfury.data
 
 import android.content.Context
 import android.net.Uri
+import android.os.StatFs
 import androidx.documentfile.provider.DocumentFile
+import java.io.ByteArrayInputStream
 import java.io.File
+import java.io.FileInputStream
+import java.io.IOException
 import java.io.InputStream
+import java.nio.ByteBuffer
 import java.security.MessageDigest
 
 /** Arquivos esperados do jogo (baserom.md do projeto original, regiao USA). */
@@ -68,10 +73,12 @@ data class GameInstall(val checks: List<FileCheck>) {
 sealed class ImportProgress {
     data class Copying(val file: String, val done: Long, val total: Long) : ImportProgress()
     data class Hashing(val file: String, val done: Long, val total: Long) : ImportProgress()
+    /** A ler a estrutura do .iso (rapido). */
+    data object ReadingIso : ImportProgress()
 }
 
 class ImportException(val reason: Reason, val detail: String = "") : Exception(detail) {
-    enum class Reason { NO_XEX, NO_US_FOLDER, EU_XEX, BAD_XEX, MISSING_REQUIRED, IO }
+    enum class Reason { NO_XEX, NO_US_FOLDER, EU_XEX, BAD_XEX, MISSING_REQUIRED, IO, NOT_ISO, ISO_NO_GAME, NO_SPACE }
 }
 
 object GameFiles {
@@ -144,6 +151,87 @@ object GameFiles {
     private fun DocumentFile.child(name: String): DocumentFile? =
         listFiles().firstOrNull { it.name.equals(name, ignoreCase = true) }
 
+    /** Ficheiro do jogo a copiar: nome no disco/pasta, tamanho e como abrir a origem. */
+    private class Item(val name: String, val size: Long, val offset: Long, val open: () -> FastCopy.Source)
+
+    private fun openUri(context: Context, uri: Uri): FastCopy.Source {
+        val pfd = context.contentResolver.openFileDescriptor(uri, "r")
+            ?: throw IOException("nao foi possivel abrir $uri")
+        return FastCopy.Source(FileInputStream(pfd.fileDescriptor).channel, pfd)
+    }
+
+    private fun readAll(item: Item): ByteArray {
+        if (item.size > 64L shl 20) throw IOException("${item.name}: grande demais")
+        item.open().use { src ->
+            val buf = ByteBuffer.allocate(item.size.toInt())
+            var pos = item.offset
+            while (buf.hasRemaining()) {
+                val n = src.channel.read(buf, pos)
+                if (n <= 0) throw IOException("${item.name}: fim inesperado")
+                pos += n
+            }
+            return buf.array()
+        }
+    }
+
+    /**
+     * Parte comum das duas importacoes: confere o executavel (tamanho, SHA-256, regiao), os
+     * obrigatorios de us/ e o espaco livre, e copia tudo com o [FastCopy]. Ficheiros que ja
+     * estao na app com o mesmo tamanho (reimportacao) sao saltados.
+     */
+    private fun install(xex: Item, usFiles: List<Item>, onProgress: (ImportProgress) -> Unit) {
+        if (xex.size != BaseRom.XEX_SIZE) {
+            throw ImportException(ImportException.Reason.BAD_XEX, xex.name)
+        }
+        val xexBytes = readAll(xex)
+        val hash = sha256(ByteArrayInputStream(xexBytes), xex.size) { d, t ->
+            onProgress(ImportProgress.Hashing(xex.name, d, t))
+        }
+        // Hash desconhecido com o tamanho certo: outro dump USA, aceita (a verificacao avisa).
+        if (hash == BaseRom.XEX_SHA_EU) throw ImportException(ImportException.Reason.EU_XEX)
+
+        val missing = BaseRom.US.filter { e -> e.required && usFiles.none { it.name.equals(e.name, true) } }
+            .map { it.name }.toMutableList()
+        if (BaseRom.TEXT_ANY_OF.none { t -> usFiles.any { it.name.equals(t, true) } }) {
+            missing += BaseRom.TEXT_ANY_OF.joinToString(" / ")
+        }
+        if (missing.isNotEmpty()) {
+            throw ImportException(ImportException.Reason.MISSING_REQUIRED, missing.joinToString())
+        }
+
+        AppPaths.usDir.mkdirs()
+        val jobs = ArrayList<FastCopy.Job>()
+        for (item in usFiles) {
+            // Nome canonico (o runtime procura em minusculas, exceto os Ending0N.sfd).
+            val canonical = BaseRom.US.firstOrNull { it.name.equals(item.name, true) }?.name ?: item.name
+            val target = File(AppPaths.usDir, canonical)
+            if (target.isFile && target.length() == item.size) continue
+            jobs += FastCopy.Job(canonical, target, item.offset, item.size, item.open)
+        }
+        val needed = jobs.sumOf { it.size } + (64L shl 20)
+        val free = try { StatFs(AppPaths.appDir.path).availableBytes } catch (_: Exception) { Long.MAX_VALUE }
+        if (free < needed) {
+            throw ImportException(
+                ImportException.Reason.NO_SPACE,
+                "%.1f GB / %.1f GB".format(needed / 1e9, free / 1e9),
+            )
+        }
+        try {
+            AppPaths.xexFile.parentFile?.mkdirs()
+            val tmp = File(AppPaths.gameDir, AppPaths.xexFile.name + ".part")
+            tmp.writeBytes(xexBytes)
+            if (AppPaths.xexFile.exists()) AppPaths.xexFile.delete()
+            if (!tmp.renameTo(AppPaths.xexFile)) throw IOException(AppPaths.xexFile.name)
+            FastCopy.run(jobs, threads = 2) { file, done, total ->
+                onProgress(ImportProgress.Copying(file, done, total))
+            }
+        } catch (e: ImportException) {
+            throw e
+        } catch (e: Exception) {
+            throw ImportException(ImportException.Reason.IO, e.message ?: e.javaClass.simpleName)
+        }
+    }
+
     /**
      * Importa o jogo de uma pasta escolhida pelo usuario (SAF). Aceita a pasta
      * com o .xex (yae3_xenon.xex ou default.xex) e a pasta us/, ou uma pasta
@@ -157,73 +245,42 @@ object GameFiles {
             ?: throw ImportException(ImportException.Reason.NO_XEX)
         val usDoc = base.child("us")?.takeIf { it.isDirectory }
             ?: throw ImportException(ImportException.Reason.NO_US_FOLDER)
+        fun item(doc: DocumentFile) = Item(doc.name ?: "", doc.length(), 0L) { openUri(context, doc.uri) }
+        val usFiles = usDoc.listFiles().filter { it.isFile && it.name != null }.map(::item)
+        install(item(xexDoc), usFiles, onProgress)
+    }
 
-        // 1) O .xex primeiro: e pequeno e diz logo se a copia e a certa.
-        if (xexDoc.length() != BaseRom.XEX_SIZE) {
-            throw ImportException(ImportException.Reason.BAD_XEX, xexDoc.name ?: "")
+    /**
+     * Importa direto da imagem do disco de Xbox 360 (.iso, XGD2/XGD3 ou XISO). So le a
+     * estrutura do disco e copia o executavel do Budokai 3 e a pasta de dados USA (os
+     * ficheiros do Budokai 1 e das outras regioes ficam de fora). O .iso nao e alterado.
+     */
+    fun importIso(context: Context, uri: Uri, onProgress: (ImportProgress) -> Unit) {
+        onProgress(ImportProgress.ReadingIso)
+        val files = try {
+            openUri(context, uri).use { XisoReader(it.channel).files }
+        } catch (e: XisoReader.NotXisoException) {
+            throw ImportException(ImportException.Reason.NOT_ISO)
+        } catch (e: IOException) {
+            throw ImportException(ImportException.Reason.IO, e.message ?: "")
         }
-        val resolver = context.contentResolver
-        val hash = sha256(resolver.openInputStream(xexDoc.uri)!!, xexDoc.length()) { d, t ->
-            onProgress(ImportProgress.Hashing(xexDoc.name ?: "xex", d, t))
-        }
-        // Hash desconhecido com o tamanho certo: outro dump USA, aceita (a verificacao avisa).
-        if (hash == BaseRom.XEX_SHA_EU) throw ImportException(ImportException.Reason.EU_XEX)
-
-        val usFiles = usDoc.listFiles().filter { it.isFile }
-        val missing = BaseRom.US.filter { e -> e.required && usFiles.none { it.name.equals(e.name, true) } }
-            .map { it.name }.toMutableList()
-        if (BaseRom.TEXT_ANY_OF.none { t -> usFiles.any { it.name.equals(t, true) } }) {
-            missing += BaseRom.TEXT_ANY_OF.joinToString(" / ")
-        }
-        if (missing.isNotEmpty()) {
-            throw ImportException(ImportException.Reason.MISSING_REQUIRED, missing.joinToString())
-        }
-
-        AppPaths.usDir.mkdirs()
-        val total = xexDoc.length() + usFiles.sumOf { it.length() }
-        var done = 0L
-        fun copy(doc: DocumentFile, target: File) {
-            val tmp = File(target.parentFile, target.name + ".part")
-            try {
-                resolver.openInputStream(doc.uri)!!.use { input ->
-                    tmp.outputStream().use { out ->
-                        val buf = ByteArray(1 shl 20)
-                        var lastReport = 0L
-                        while (true) {
-                            val n = input.read(buf)
-                            if (n < 0) break
-                            out.write(buf, 0, n)
-                            done += n
-                            if (done - lastReport >= (4L shl 20)) {
-                                lastReport = done
-                                onProgress(ImportProgress.Copying(doc.name ?: "", done, total))
-                            }
-                        }
-                    }
-                }
-                if (target.exists()) target.delete()
-                if (!tmp.renameTo(target)) throw ImportException(ImportException.Reason.IO, target.name)
-            } catch (e: ImportException) {
-                tmp.delete()
-                throw e
-            } catch (e: Exception) {
-                tmp.delete()
-                throw ImportException(ImportException.Reason.IO, "${doc.name}: ${e.message}")
-            }
-        }
-        copy(xexDoc, AppPaths.xexFile)
-        for (doc in usFiles) {
-            // Nome canonico (o runtime procura em minusculas, exceto os Ending0N.sfd).
-            val canonical = BaseRom.US.firstOrNull { it.name.equals(doc.name, true) }?.name ?: (doc.name ?: continue)
-            val target = File(AppPaths.usDir, canonical)
-            // Ja esta igual (reimportacao): salta.
-            if (target.isFile && target.length() == doc.length()) {
-                done += doc.length()
-                continue
-            }
-            copy(doc, target)
-        }
-        onProgress(ImportProgress.Copying("", total, total))
+        // Pasta de dados: a que tem mais ficheiros da tabela do baserom.md com o tamanho certo
+        // (desempate: chamar-se "us"). Assim nao depende do caminho exato no disco.
+        val usDir = files.groupBy { it.parent }.maxByOrNull { (dir, list) ->
+            val sizes = list.count { f -> BaseRom.US.any { it.name.equals(f.name, true) && it.size == f.size } }
+            val names = list.count { f -> BaseRom.US.any { it.name.equals(f.name, true) } }
+            sizes * 100 + names * 10 + (if (dir.substringAfterLast('/').equals("us", true)) 5 else 0)
+        }?.takeIf { (_, list) -> list.any { it.name.equals("data_cmn.afs", true) } }
+            ?: throw ImportException(ImportException.Reason.ISO_NO_GAME, "us/")
+        val dataParent = usDir.key.substringBeforeLast('/', "")
+        // Executavel: yae3_xenon.xex (de preferencia ao lado da pasta de dados); senao um
+        // default.xex com o tamanho do Budokai 3 (copias digitais).
+        val xex = files.filter { it.name.equals("yae3_xenon.xex", true) }
+            .sortedByDescending { it.parent.equals(dataParent, true) }.firstOrNull()
+            ?: files.firstOrNull { it.name.equals("default.xex", true) && it.size == BaseRom.XEX_SIZE }
+            ?: throw ImportException(ImportException.Reason.ISO_NO_GAME, "yae3_xenon.xex")
+        fun item(e: XisoReader.Entry) = Item(e.name, e.size, e.offset) { openUri(context, uri) }
+        install(item(xex), usDir.value.map(::item), onProgress)
     }
 
     fun installedSizeBytes(): Long =

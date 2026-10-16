@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddToHomeScreen
+import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.ScreenRotation
@@ -64,6 +65,9 @@ fun HomeScreen(vm: LauncherViewModel, goTo: (LauncherTab) -> Unit) {
     val context = LocalContext.current
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
         if (uri != null) vm.importGame(uri)
+    }
+    val pickIso = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) vm.importIso(uri)
     }
     val install = vm.install
     var showFiles by remember { mutableStateOf(false) }
@@ -127,11 +131,21 @@ fun HomeScreen(vm: LauncherViewModel, goTo: (LauncherTab) -> Unit) {
             subtitle = stringResource(R.string.game_files_subtitle),
         ) {
             Text(stringResource(R.string.game_files_help), style = MaterialTheme.typography.bodySmall)
+            // .iso primeiro (o mais pratico); a pasta extraida continua a funcionar.
+            Button(
+                onClick = { pickIso.launch(arrayOf("application/x-iso9660-image", "application/octet-stream", "*/*")) },
+                enabled = vm.busy == null,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Filled.Album, null)
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(if (install?.installed == true) R.string.reimport_iso else R.string.import_iso))
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilledTonalButton(onClick = { pickFolder.launch(null) }, enabled = vm.busy == null) {
                     Icon(Icons.Filled.FolderOpen, null)
                     Spacer(Modifier.width(6.dp))
-                    Text(stringResource(if (install?.installed == true) R.string.reimport else R.string.import_game))
+                    Text(stringResource(R.string.import_folder))
                 }
                 OutlinedButton(onClick = { vm.refreshInstall(true) }, enabled = install?.installed == true && vm.busy == null) {
                     Icon(Icons.Filled.VerifiedUser, null)

@@ -35,7 +35,7 @@
     <string name="status_eu">EU copy: this port needs the USA executable</string>
     <string name="game_files_title">Game files</string>
     <string name="game_files_subtitle">Your own copy, nothing is downloaded</string>
-    <string name="game_files_help">Pick the folder that has yae3_xenon.xex (or default.xex) and the us/ folder from your Xbox 360 copy. They are copied into the app (about 2.5 GB). The executable is checked by SHA-256 right away; \"Verify files\" also checks every archive (takes a few minutes).</string>
+    <string name="game_files_help">Pick the .iso of your Xbox 360 disc (Budokai 3 HD Collection, USA): only the Budokai 3 executable and its data are extracted (about 2.5 GB), straight from the image. You can also pick an already extracted folder with yae3_xenon.xex (or default.xex) and us/. The executable is checked by SHA-256 right away; \"Verify files\" also checks every archive (takes a few minutes).</string>
     <string name="import_game">Import game</string>
     <string name="reimport">Import again</string>
     <string name="file_ok">OK</string>
@@ -380,4 +380,12 @@
     <string name="about_gpu_notice">Performance tips</string>
     <string name="driver_status_ok">Last launch: driver loaded (GPU: %1$s).</string>
     <string name="driver_status_failed">Last launch: this driver did not work on this GPU, the system driver was used instead (%1$s). Use a Turnip build that supports your Adreno (e.g. Adreno 8xx needs a recent Gen8 build).</string>
+    <string name="import_iso">Import .iso</string>
+    <string name="reimport_iso">Import .iso again</string>
+    <string name="import_folder">Extracted folder</string>
+    <string name="busy_reading_iso">Reading the disc image</string>
+    <string name="msg_import_ok_time">Game imported in %1$d s. Ready to play!</string>
+    <string name="err_import_not_iso">This file is not an Xbox 360 disc image (.iso XGD2/XGD3 or XISO).</string>
+    <string name="err_import_iso_no_game">The Budokai 3 files were not found in this image (%1$s). Is it the Budokai 3 HD Collection USA disc?</string>
+    <string name="err_import_no_space">Not enough free space: %1$s needed / free.</string>
 </resources>

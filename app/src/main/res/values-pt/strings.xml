@@ -34,7 +34,7 @@
     <string name="status_eu">Cópia EU: este port precisa do executável USA</string>
     <string name="game_files_title">Arquivos do jogo</string>
     <string name="game_files_subtitle">Sua própria cópia, nada é baixado</string>
-    <string name="game_files_help">Escolha a pasta que tem o yae3_xenon.xex (ou default.xex) e a pasta us/ da sua cópia de Xbox 360. Os arquivos são copiados para o app (cerca de 2,5 GB). O executável é conferido por SHA-256 na hora; \"Verificar arquivos\" confere também cada arquivo .afs (leva alguns minutos).</string>
+    <string name="game_files_help">Escolha o .iso do seu disco de Xbox 360 (Budokai 3 HD Collection, USA): só o executável do Budokai 3 e os dados dele são extraídos (cerca de 2,5 GB), direto da imagem. Também dá para escolher uma pasta já extraída com o yae3_xenon.xex (ou default.xex) e a pasta us/. O executável é conferido por SHA-256 na hora; \"Verificar arquivos\" confere também cada arquivo .afs (leva alguns minutos).</string>
     <string name="import_game">Importar jogo</string>
     <string name="reimport">Importar de novo</string>
     <string name="file_ok">OK</string>
@@ -379,4 +379,12 @@
     <string name="about_gpu_notice">Dicas de desempenho</string>
     <string name="driver_status_ok">Na última vez que o jogo abriu: driver carregado (GPU: %1$s).</string>
     <string name="driver_status_failed">Na última vez que o jogo abriu, este driver não funcionou nesta GPU e o do sistema foi usado no lugar (%1$s). Use um Turnip compatível com o seu Adreno (ex.: Adreno 8xx precisa de uma versão Gen8 recente).</string>
+    <string name="import_iso">Importar .iso</string>
+    <string name="reimport_iso">Importar .iso de novo</string>
+    <string name="import_folder">Pasta extraída</string>
+    <string name="busy_reading_iso">Lendo a imagem do disco</string>
+    <string name="msg_import_ok_time">Jogo importado em %1$d s. Pronto para jogar!</string>
+    <string name="err_import_not_iso">Esse arquivo não é uma imagem de disco de Xbox 360 (.iso XGD2/XGD3 ou XISO).</string>
+    <string name="err_import_iso_no_game">Os arquivos do Budokai 3 não foram encontrados nessa imagem (%1$s). É o disco Budokai 3 HD Collection USA?</string>
+    <string name="err_import_no_space">Espaço livre insuficiente: %1$s necessários / livres.</string>
 </resources>

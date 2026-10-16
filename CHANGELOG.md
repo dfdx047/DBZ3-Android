@@ -3,6 +3,14 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.3.2 — 2026-10-16
+
+### Features
+- Import straight from the Xbox 360 disc image (.iso XGD2/XGD3 or XISO): only the Budokai 3
+  executable and its USA data are extracted; no external tool needed.
+- Faster import (ISO and folder): positional reads + in-kernel copy (sendfile), two files in
+  parallel, free-space check before copying, import time shown at the end.
+
 ## 0.3.1 — 2026-10-15
 
 ### Fixes

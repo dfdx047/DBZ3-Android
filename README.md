@@ -48,15 +48,13 @@ Exynos) are expected to run it at or near full speed. Reports are welcome.
 ## Installation
 
 1. Download the latest `DragonFury-*.apk` from [Releases](../../releases) and install it.
-2. Extract your game disc/ISO on a PC (or with an Android app that opens Xbox 360 ISOs, e.g. with
-   `extract-xiso`). Inside there is one folder per game; you only need the **`DBZ3`** folder
-   (it contains `yae3_xenon.xex` and the `us/` folder).
-3. Copy the `DBZ3` folder to your device.
-4. Open Dragon Fury → **Import game** → pick the `DBZ3` folder. The files are copied into the app
-   and the executable is checked by SHA-256. You can delete the copied folder afterwards.
-5. Press **Play**.
-
-Importing directly from the ISO is planned.
+2. Copy the `.iso` of your Budokai 3 HD Collection (USA) disc to your device.
+3. Open Dragon Fury → **Import .iso** → pick the file. Only the Budokai 3 executable and its data
+   are extracted from the image (about 2.5 GB, a few minutes); the executable is checked by
+   SHA-256. You can delete the `.iso` afterwards.
+   - Already extracted the disc? **Extracted folder** → pick the `DBZ3` folder (it contains
+     `yae3_xenon.xex` and the `us/` folder).
+4. Press **Play**.
 
 ## Launcher
 
@@ -157,7 +155,6 @@ Details in [`docs/ESTADO.md`](docs/ESTADO.md).
 
 - More optimization for Mali GPUs (own shaders for the game's ~33 shaders, native renderer).
 - Fix the occasional black flash in menus on Mali.
-- Import directly from the ISO.
 - More cheats (capsules, Zeni, stages) and widescreen patch.
 
 ## Credits
