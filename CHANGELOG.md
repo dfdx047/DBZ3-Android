@@ -3,6 +3,19 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.4.0 — 2026-10-16
+
+### Launcher
+- New look closer to the game's menus while keeping the Dragon Fury palette: italic heavy titles,
+  dragon-ball orbs on section icons, slanted orange/gold stripes, subtle speed-line backdrop.
+- Home: animated ki-beam clash (blue vs gold, sparks, lightning, shock waves; drawn in code),
+  community links (YouTube, Discord, GitHub, Ko-fi) as capsule buttons in each network's colors.
+- Settings reorganized: new **Debug** tab (log export, verbose log, performance diagnostics,
+  renderer internals, Turnip A/B fixes, cvars.txt); orientation moved to Settings; performance
+  tips in Performance.
+- About rewritten after the original project's README: game sheet, the NovaPowers project, this
+  port, credits and license.
+
 ## 0.3.2 — 2026-10-16
 
 ### Features

@@ -60,18 +60,19 @@ Exynos recientes) deberían ir a velocidad completa o cerca. Se agradecen report
 
 | Pestaña | Qué hace |
 |---|---|
-| **Inicio** | Importar/verificar el juego, jugar, accesos rápidos. |
-| **Rendimiento** | Modo 30 FPS, resolución interna (1x/2x/3x), efectos del juego (bloom, profundidad de campo, FXAA), filtros de imagen (FSR 1, CAS, nitidez), relación de aspecto, optimizaciones de GPU. |
+| **Inicio** | Animación de choque de ki, jugar, importar el juego (.iso o carpeta), enlaces de la comunidad (YouTube, Discord, GitHub, Ko-fi), atajos. |
+| **Rendimiento** | Modo 30 FPS, resolución interna (1x/2x/3x), efectos del juego (bloom, profundidad de campo, FXAA), filtros de imagen (FSR 1, CAS, nitidez), proporción, consejos de rendimiento. |
 | **Controles** | Controles táctiles (diseños para menús, combates y el mapa de Dragon Universe; editor en pantalla, opacidad, vibración) y mando físico (zona muerta, vibración). |
 | **Mods** | Instalar mods desde `.zip` (mismo formato que la carpeta `mods/` de la versión de PC). |
 | **Texturas** | Importar y gestionar packs de texturas HD. |
 | **Trucos** | Desbloquear todos los personajes (se están investigando más trucos). |
 | **Drivers** | Driver del sistema o Turnip; descarga drivers desde la app (Mr. Purple, StevenMXZ, K11MCH1) o importa un `.zip`. |
-| **Ajustes** | Audio, idioma del juego, interruptores de Tag Team / Online / forma inicial, tema (Dragon Fury o Material You), idioma de la app, exportación de logs. |
-| **Acerca de** | Versión, consejos de rendimiento, créditos, exportación de logs. |
+| **Ajustes** | Audio, idioma del juego, interruptores de Tag Team / Online / forma inicial, orientación, tema (Dragon Fury o Material You), idioma de la app, actualizaciones. |
+| **Depuración** | Exportar registros, registro detallado, diagnóstico de rendimiento, opciones internas del renderizador, correcciones de Turnip para pruebas, `cvars.txt`. |
+| **Acerca de** | Ficha del juego, el proyecto original (NovaPowers), este port, créditos y licencia. |
 
 En el primer inicio la app muestra un aviso corto sobre drivers y GPU; se puede volver a abrir desde
-**Acerca de**.
+**Rendimiento**.
 
 ## Rendimiento
 

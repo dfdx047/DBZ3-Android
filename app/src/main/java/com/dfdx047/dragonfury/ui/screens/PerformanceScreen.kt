@@ -3,19 +3,23 @@ package com.dfdx047.dragonfury.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BlurOn
-import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.PhotoSizeSelectLarge
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -36,7 +40,7 @@ import kotlin.math.roundToInt
 
 /**
  * Aba Desempenho: tudo o que pesa na GPU (FPS, resolucao interna, efeitos do jogo,
- * filtros de imagem, proporcao e as otimizacoes do renderizador). Tudo vai para o
+ * filtros de imagem, proporcao). As otimizacoes internas do renderizador estao na Depuracao. Tudo vai para o
  * dbz3_user.toml (GameConfig), lido pelo jogo no arranque.
  */
 @Composable
@@ -51,6 +55,11 @@ fun PerformanceScreen(vm: LauncherViewModel) {
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         StatusLine(stringResource(R.string.settings_saved_note), Level.INFO)
+        OutlinedButton(onClick = { vm.openGpuNotice() }, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Filled.Lightbulb, null)
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.about_gpu_notice))
+        }
 
         // ------------------------------------------------------------ desempenho
         SectionCard(stringResource(R.string.settings_performance), Icons.Filled.Speed) {
@@ -192,36 +201,5 @@ fun PerformanceScreen(vm: LauncherViewModel) {
             StatusLine(stringResource(R.string.settings_widescreen_note), Level.INFO)
         }
 
-        // ------------------------------------------------------ otimizacoes da GPU
-        SectionCard(
-            stringResource(R.string.perf_gpu_title),
-            Icons.Filled.Memory,
-            subtitle = stringResource(R.string.perf_gpu_sub),
-        ) {
-            SettingSwitch(
-                stringResource(R.string.settings_rt_direct),
-                stringResource(R.string.settings_rt_direct_sub),
-                checked = c.rtDirect,
-            ) { on -> vm.updateConfig { it.copy(rtDirect = on) } }
-            SettingSwitch(
-                stringResource(R.string.settings_spec_shaders),
-                stringResource(R.string.settings_spec_shaders_sub),
-                checked = c.specShaders,
-            ) { on -> vm.updateConfig { it.copy(specShaders = on) } }
-            // O valor 2 (R/B invertido) so serviu para confirmar a ordem dos canais:
-            // fica so na cvar, para testes.
-            SettingSwitch(
-                stringResource(R.string.settings_direct_resolve),
-                stringResource(R.string.settings_direct_resolve_sub),
-                checked = c.directResolve != 0,
-            ) { on -> vm.updateConfig { it.copy(directResolve = if (on) 1 else 0) } }
-            if (c.directResolve != 0) {
-                SettingSwitch(
-                    stringResource(R.string.settings_direct_resolve_fast),
-                    stringResource(R.string.settings_direct_resolve_fast_sub),
-                    checked = c.directResolveFast,
-                ) { on -> vm.updateConfig { it.copy(directResolveFast = on) } }
-            }
-        }
     }
 }

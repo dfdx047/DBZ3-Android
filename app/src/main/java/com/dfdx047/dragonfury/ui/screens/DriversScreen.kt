@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
@@ -51,7 +50,6 @@ import com.dfdx047.dragonfury.ui.LauncherViewModel
 import com.dfdx047.dragonfury.ui.components.Level
 import com.dfdx047.dragonfury.ui.components.Pill
 import com.dfdx047.dragonfury.ui.components.SectionCard
-import com.dfdx047.dragonfury.ui.components.SettingSwitch
 import com.dfdx047.dragonfury.ui.components.SettingSegmented
 import com.dfdx047.dragonfury.ui.components.StatusLine
 import com.dfdx047.dragonfury.ui.components.formatBytes
@@ -111,24 +109,8 @@ fun DriversScreen(vm: LauncherViewModel) {
             }
         }
         item {
-            // Testes A/B dos glitches do Turnip nos Adreno 6xx (RP5): cada opcao liga um
-            // conjunto de correcoes no arranque do jogo (GameActivity.applyTurnipCompat).
-            SectionCard(stringResource(R.string.turnip_compat_title), Icons.Filled.Build, subtitle = stringResource(R.string.turnip_compat_sub)) {
-                listOf(
-                    1 to R.string.turnip_compat_single_buffer,
-                    8 to R.string.turnip_compat_bc,
-                    2 to R.string.turnip_compat_sysmem,
-                    4 to R.string.turnip_compat_nolrz,
-                    16 to R.string.turnip_compat_paths,
-                    32 to R.string.turnip_compat_depth,
-                    64 to R.string.turnip_compat_sync,
-                ).forEach { (bit, label) ->
-                    SettingSwitch(
-                        stringResource(label),
-                        checked = (vm.turnipCompatFlags and bit) != 0,
-                    ) { on -> vm.setTurnipCompatFlag(bit, on) }
-                }
-            }
+            // As correcoes do Turnip (testes A/B) estao na aba Depuracao.
+            StatusLine(stringResource(R.string.drivers_debug_hint), Level.INFO)
         }
         if (vm.installedDrivers.isNotEmpty()) {
             item { Text(stringResource(R.string.drivers_installed), style = MaterialTheme.typography.titleMedium) }

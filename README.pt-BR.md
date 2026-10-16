@@ -60,17 +60,18 @@ Exynos recentes) devem rodar na velocidade cheia ou perto disso. Relatos são be
 
 | Aba | O que faz |
 |---|---|
-| **Início** | Importar/verificar o jogo, jogar, atalhos rápidos. |
-| **Desempenho** | Modo 30 FPS, resolução interna (1x/2x/3x), efeitos do jogo (bloom, profundidade de campo, FXAA), filtros de imagem (FSR 1, CAS, nitidez), proporção, otimizações da GPU. |
+| **Início** | Animação de choque de ki, jogar, importar o jogo (.iso ou pasta), links da comunidade (YouTube, Discord, GitHub, Ko-fi), atalhos. |
+| **Desempenho** | Modo 30 FPS, resolução interna (1x/2x/3x), efeitos do jogo (bloom, profundidade de campo, FXAA), filtros de imagem (FSR 1, CAS, nitidez), proporção, dicas de desempenho. |
 | **Controles** | Controles por toque (layouts para menus, lutas e o mapa do Dragon Universe; editor na tela, opacidade, vibração) e controle físico (zona morta, vibração). |
 | **Mods** | Instalar mods a partir de `.zip` (mesmo formato da pasta `mods/` da versão de PC). |
 | **Texturas** | Importar e gerenciar packs de texturas HD. |
 | **Cheats** | Desbloquear todos os personagens (outros cheats estão em engenharia reversa). |
 | **Drivers** | Driver do sistema ou Turnip; baixe drivers dentro do app (Mr. Purple, StevenMXZ, K11MCH1) ou importe um `.zip`. |
-| **Configurações** | Áudio, idioma do jogo, interruptores de Tag Team / Online / forma inicial, tema (Dragon Fury ou Material You), idioma do app, exportação de logs. |
-| **Sobre** | Versão, dicas de desempenho, créditos, exportação de logs. |
+| **Configurações** | Áudio, idioma do jogo, interruptores de Tag Team / Online / forma inicial, orientação, tema (Dragon Fury ou Material You), idioma do app, atualizações. |
+| **Depuração** | Exportar logs, log detalhado, diagnóstico de desempenho, opções internas do renderizador, correções do Turnip para testes, `cvars.txt`. |
+| **Sobre** | Ficha do jogo, o projeto original (NovaPowers), este port, créditos e licença. |
 
-No primeiro arranque o app mostra um aviso curto sobre drivers e GPUs; dá para reabrir em **Sobre**.
+No primeiro arranque o app mostra um aviso curto sobre drivers e GPUs; dá para reabrir em **Desempenho**.
 
 ## Desempenho
 

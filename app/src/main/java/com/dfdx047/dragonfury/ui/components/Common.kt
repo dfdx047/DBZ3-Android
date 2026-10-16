@@ -3,13 +3,16 @@
 package com.dfdx047.dragonfury.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -38,13 +41,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dfdx047.dragonfury.ui.theme.DfColors
 
+/**
+ * Cartao de secao. Do jogo: o icone numa esfera laranja (como as esferas do dragao) e uma
+ * faixa inclinada laranja/dourada por baixo do titulo (os menus do Budokai 3 usam barras
+ * inclinadas). Do visual original do Dragon Fury: cantos redondos e as cores de superficie.
+ */
 @Composable
 fun SectionCard(
     title: String,
@@ -53,33 +65,106 @@ fun SectionCard(
     subtitle: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val edge = MaterialTheme.colorScheme.primary
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .border(
+                1.dp,
+                Brush.linearGradient(listOf(edge.copy(alpha = 0.55f), edge.copy(alpha = 0.06f), DfColors.KiBlue.copy(alpha = 0.18f))),
+                RoundedCornerShape(20.dp),
+            ),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (icon != null) {
-                    Box(
-                        Modifier
-                            .size(34.dp)
-                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(10.dp)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(icon, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
-                    }
+                    OrbIcon(icon, Modifier.size(36.dp))
                     Spacer(Modifier.width(12.dp))
                 }
                 Column(Modifier.weight(1f)) {
                     Text(title, style = MaterialTheme.typography.titleMedium)
+                    SlantStripe(Modifier.padding(top = 3.dp).width(54.dp).height(4.dp))
                     if (subtitle != null) {
-                        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
                     }
                 }
             }
             content()
         }
+    }
+}
+
+/** Icone dentro de uma esfera laranja com brilho, ao estilo das esferas do dragao. */
+@Composable
+fun OrbIcon(icon: ImageVector, modifier: Modifier = Modifier) {
+    Box(
+        modifier.drawBehind {
+            val r = size.minDimension / 2f
+            drawCircle(
+                Brush.radialGradient(
+                    listOf(Color(0xFFFFE9A8), DfColors.Orange, DfColors.OrangeDeep, Color(0xFF8A2A00)),
+                    center = Offset(size.width * 0.36f, size.height * 0.32f),
+                    radius = r * 1.25f,
+                ),
+                radius = r,
+            )
+            drawCircle(Color.White.copy(alpha = 0.55f), radius = r * 0.16f, center = Offset(size.width * 0.32f, size.height * 0.28f))
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, null, tint = Color(0xFF5A1600), modifier = Modifier.fillMaxSize(0.56f))
+    }
+}
+
+/** Faixa inclinada laranja -> dourado (barras dos menus do jogo). */
+@Composable
+fun SlantStripe(modifier: Modifier = Modifier) {
+    Box(
+        modifier.drawBehind {
+            val slant = size.height * 1.2f
+            val path = Path().apply {
+                moveTo(slant, 0f)
+                lineTo(size.width, 0f)
+                lineTo(size.width - slant, size.height)
+                lineTo(0f, size.height)
+                close()
+            }
+            drawPath(path, Brush.horizontalGradient(listOf(DfColors.OrangeDeep, DfColors.Orange, DfColors.Gold)))
+        },
+    )
+}
+
+/**
+ * Fundo das abas: a cor do tema com um brilho de aura no canto e linhas de velocidade
+ * diagonais muito leves (lembram os fundos dos menus do Budokai 3).
+ */
+fun Modifier.dragonBackdrop(base: Color, glow: Color, lines: Color): Modifier = drawBehind {
+    drawRect(base)
+    drawCircle(
+        Brush.radialGradient(listOf(glow.copy(alpha = 0.22f), Color.Transparent), center = Offset(size.width, 0f), radius = size.maxDimension * 0.7f),
+        radius = size.maxDimension * 0.7f,
+        center = Offset(size.width, 0f),
+    )
+    drawCircle(
+        Brush.radialGradient(listOf(DfColors.KiBlue.copy(alpha = 0.10f), Color.Transparent), center = Offset(0f, size.height), radius = size.maxDimension * 0.6f),
+        radius = size.maxDimension * 0.6f,
+        center = Offset(0f, size.height),
+    )
+    val step = 46.dp.toPx()
+    var x = -size.height
+    var i = 0
+    while (x < size.width) {
+        val w = if (i % 3 == 0) 2.dp.toPx() else 1.dp.toPx()
+        drawLine(lines, Offset(x, size.height), Offset(x + size.height * 0.55f, 0f), strokeWidth = w)
+        x += step
+        i++
     }
 }
 

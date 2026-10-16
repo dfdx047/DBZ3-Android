@@ -60,17 +60,18 @@ Exynos) are expected to run it at or near full speed. Reports are welcome.
 
 | Tab | What it does |
 |---|---|
-| **Home** | Import/verify the game, play, quick shortcuts. |
-| **Performance** | 30 FPS mode, internal resolution (1x/2x/3x), game effects (bloom, depth of field, FXAA), image filters (FSR 1, CAS, sharpness), aspect ratio, GPU optimizations. |
+| **Home** | Ki clash animation, play, import the game (.iso or folder), community links (YouTube, Discord, GitHub, Ko-fi), shortcuts. |
+| **Performance** | 30 FPS mode, internal resolution (1x/2x/3x), game effects (bloom, depth of field, FXAA), image filters (FSR 1, CAS, sharpness), aspect ratio, performance tips. |
 | **Controls** | Touch controls (layouts for menus, fights and the Dragon Universe map; on-screen editor, opacity, vibration) and physical controller (dead zone, rumble). |
 | **Mods** | Install mods from `.zip` (same format as the PC version's `mods/` folder). |
 | **Textures** | Import and manage HD texture packs. |
 | **Cheats** | Unlock all characters (more cheats are being reverse-engineered). |
 | **Drivers** | System driver or Turnip; download drivers in-app (Mr. Purple, StevenMXZ, K11MCH1) or import a `.zip`. |
-| **Settings** | Audio, game language, Tag Team / Online / starting form switches, theme (Dragon Fury or Material You), app language, log export. |
-| **About** | Version, performance tips, credits, log export. |
+| **Settings** | Audio, game language, Tag Team / Online / starting form switches, orientation, theme (Dragon Fury or Material You), app language, updates. |
+| **Debug** | Log export, verbose log, performance diagnostics, renderer internals, Turnip A/B fixes, `cvars.txt`. |
+| **About** | Game sheet, the original project (NovaPowers), this port, credits and license. |
 
-On first launch the app shows a short note about drivers and GPUs; it can be reopened from **About**.
+On first launch the app shows a short note about drivers and GPUs; it can be reopened from **Performance**.
 
 ## Performance
 

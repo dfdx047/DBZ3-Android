@@ -13,6 +13,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.dfdx047.dragonfury.data.DarkMode
@@ -27,6 +30,11 @@ object DfColors {
     val BlueDeep = Color(0xFF0B2A8C)
     val Navy = Color(0xFF0B1A4A)
     val StarRed = Color(0xFFD7261E)
+    /** Cores do jogo (menus do Budokai 3 HD): dourado do titulo, azul de ki, roxo de energia. */
+    val Gold = Color(0xFFFFE27A)
+    val KiBlue = Color(0xFF3FD0FF)
+    val KiWhite = Color(0xFFEFFBFF)
+    val Energy = Color(0xFF9B4DFF)
     val Ok = Color(0xFF2E9E5B)
     val Warn = Color(0xFFE0A000)
     val Error = Color(0xFFD7261E)
@@ -82,17 +90,26 @@ private val DragonDark = darkColorScheme(
     error = Color(0xFFFF6B5E),
 )
 
+// Titulos em italico pesado, como os menus do Budokai 3 (letras inclinadas e grossas); o
+// texto corrido fica normal para ler bem.
 private val DfTypography = Typography().let { t ->
     t.copy(
-        headlineMedium = t.headlineMedium.copy(fontWeight = FontWeight.Black),
-        headlineSmall = t.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
-        titleLarge = t.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
-        titleMedium = t.titleMedium.copy(fontWeight = FontWeight.Bold),
+        headlineMedium = t.headlineMedium.copy(fontWeight = FontWeight.Black, fontStyle = FontStyle.Italic),
+        headlineSmall = t.headlineSmall.copy(fontWeight = FontWeight.ExtraBold, fontStyle = FontStyle.Italic),
+        titleLarge = t.titleLarge.copy(fontWeight = FontWeight.ExtraBold, fontStyle = FontStyle.Italic),
+        titleMedium = t.titleMedium.copy(fontWeight = FontWeight.ExtraBold, fontStyle = FontStyle.Italic, letterSpacing = 0.3.sp),
         labelLarge = t.labelLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp),
     )
 }
 
-val LogoStyle = TextStyle(fontWeight = FontWeight.Black, fontSize = 30.sp, letterSpacing = 1.sp)
+/** Logotipo: italico, grosso, com sombra escura (como o titulo do jogo). */
+val LogoStyle = TextStyle(
+    fontWeight = FontWeight.Black,
+    fontStyle = FontStyle.Italic,
+    fontSize = 30.sp,
+    letterSpacing = 1.sp,
+    shadow = Shadow(color = Color(0xCC3A1200), offset = Offset(3f, 3f), blurRadius = 4f),
+)
 
 @Composable
 fun DragonFuryTheme(themeMode: ThemeMode, darkMode: DarkMode, content: @Composable () -> Unit) {

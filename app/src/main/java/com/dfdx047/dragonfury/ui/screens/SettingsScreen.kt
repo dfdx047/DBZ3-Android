@@ -11,16 +11,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.dfdx047.dragonfury.R
 import com.dfdx047.dragonfury.data.AppLanguage
 import com.dfdx047.dragonfury.data.DarkMode
+import com.dfdx047.dragonfury.data.GameOrientation
 import com.dfdx047.dragonfury.data.ThemeMode
 import com.dfdx047.dragonfury.ui.LauncherViewModel
 import com.dfdx047.dragonfury.ui.components.Level
@@ -33,14 +31,13 @@ import com.dfdx047.dragonfury.ui.components.StatusLine
 import kotlin.math.roundToInt
 
 /**
- * Aba Configuracoes: so o geral (audio, idioma do jogo, Tag Team, tema, idioma da
- * app, logs). Graficos/desempenho estao em PerformanceScreen e os controles em
- * ControlsScreen.
+ * Aba Configuracoes: so o geral (audio, idioma e modos do jogo, orientacao, tema e idioma
+ * da app, atualizacoes). Graficos em PerformanceScreen, controles em ControlsScreen, drivers
+ * em DriversScreen e logs/diagnostico em DebugScreen.
  */
 @Composable
 fun SettingsScreen(vm: LauncherViewModel) {
     val c = vm.config
-    val context = LocalContext.current
 
     Column(
         Modifier
@@ -86,6 +83,16 @@ fun SettingsScreen(vm: LauncherViewModel) {
                 stringResource(R.string.settings_form_select_sub),
                 checked = c.formSelect,
             ) { on -> vm.updateConfig { it.copy(formSelect = on) } }
+            SettingSegmented(
+                title = stringResource(R.string.orientation),
+                options = listOf(
+                    GameOrientation.LANDSCAPE to stringResource(R.string.orientation_landscape),
+                    GameOrientation.REVERSE to stringResource(R.string.orientation_reverse),
+                    GameOrientation.AUTO to stringResource(R.string.orientation_auto),
+                ),
+                selected = vm.gameOrientation,
+                onSelect = vm::setOrientation,
+            )
         }
 
         // -------------------------------------------------------------- aplicacao
@@ -122,19 +129,6 @@ fun SettingsScreen(vm: LauncherViewModel) {
                 selected = vm.appLanguage,
                 onSelect = vm::setLanguage,
             )
-            SettingSwitch(
-                stringResource(R.string.settings_verbose_log),
-                stringResource(R.string.settings_verbose_log_sub),
-                checked = c.verboseLog,
-            ) { on -> vm.updateConfig { it.copy(verboseLog = on) } }
-            SettingSwitch(
-                stringResource(R.string.settings_perf_log),
-                stringResource(R.string.settings_perf_log_sub),
-                checked = c.perfLogging,
-            ) { on -> vm.updateConfig { it.copy(perfLogging = on) } }
-            OutlinedButton(onClick = { vm.exportLogs(context) }, enabled = vm.busy == null) {
-                Text(stringResource(R.string.export_logs))
-            }
             SettingSwitch(
                 stringResource(R.string.settings_check_updates),
                 checked = vm.checkUpdatesOnStart,

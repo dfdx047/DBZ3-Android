@@ -388,4 +388,35 @@
     <string name="err_import_not_iso">This file is not an Xbox 360 disc image (.iso XGD2/XGD3 or XISO).</string>
     <string name="err_import_iso_no_game">The Budokai 3 files were not found in this image (%1$s). Is it the Budokai 3 HD Collection USA disc?</string>
     <string name="err_import_no_space">Not enough free space: %1$s needed / free.</string>
+    <string name="tab_debug">Debug</string>
+    <string name="social_title">Community</string>
+    <string name="social_subtitle">Videos, chat, code and support for the project</string>
+    <string name="social_youtube_handle">@DFDX47 · videos</string>
+    <string name="social_discord_handle">Server · chat</string>
+    <string name="social_github_handle">dfdx047 · code</string>
+    <string name="social_kofi_handle">Support the project</string>
+    <string name="drivers_debug_hint">Turnip fixes for A/B tests are in the Debug tab.</string>
+    <string name="debug_intro">For testing and bug reports. Leave everything as it is to play.</string>
+    <string name="debug_logs_title">Logs</string>
+    <string name="debug_logs_sub">Export a zip to Download/ to send with a bug report</string>
+    <string name="debug_cvars_title">cvars.txt</string>
+    <string name="debug_cvars_text">Advanced runtime options without rebuilding: create cvars.txt in the app folder (Android/data/com.dfdx047.dragonfury/files/) with lines like \"name = value\" (e.g. dbz3_tight_render_area = false), or \"env:NAME = value\" for driver variables (e.g. env:TU_DEBUG = sysmem). Read when the game opens.</string>
+    <string name="about_tagline">Budokai 3 HD on Android</string>
+    <string name="about_sheet_title">Game sheet</string>
+    <string name="about_sheet_players">Players</string>
+    <string name="about_sheet_players_value">1–2 (versus)</string>
+    <string name="about_sheet_platform">Platform</string>
+    <string name="about_sheet_platform_value">Android (Vulkan)</string>
+    <string name="about_sheet_engine">Engine</string>
+    <string name="about_sheet_engine_value">Xbox 360 (ReXGlue SDK)</string>
+    <string name="about_sheet_genre">Genre</string>
+    <string name="about_sheet_genre_value">3D fighting</string>
+    <string name="about_sheet_base">Based on</string>
+    <string name="about_sheet_version">Port version</string>
+    <string name="about_original_title">The original project</string>
+    <string name="about_original_text">DBZ Budokai 3 HD Collection is the PC port of the Xbox 360 game by NovaPowers, made with the ReXGlue SDK: the PowerPC code is statically recompiled into a native executable, it is not emulated. Tag Team, online, the mod system and HD texture packs come from there.</string>
+    <string name="about_port_title">This port</string>
+    <string name="about_port_text">Dragon Fury brings that recompilation to Android: its own launcher (import from the .iso, mods, textures, drivers), touch controls and a GPU path built for phone GPUs (Adreno and Mali), with optional Turnip drivers.</string>
+    <string name="about_credits_title">Credits and license</string>
+    <string name="about_license">Original project © 2026 NovaPowers, MIT license. Android port by dfdx047.</string>
 </resources>
