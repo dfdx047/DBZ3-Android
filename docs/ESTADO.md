@@ -1037,3 +1037,17 @@ diferente?); `dbz3: dedupe:` e `dbz3: passo 4:` no log; perf a 720p vs 540p no C
 - Efeitos: brilho −3,0 ms (3% da imagem nesta cena), DOF −1,3 (0,3%), FXAA do jogo −5,6 (4%). Os três
   desligados dariam ~19,6 ms a 720p.
 - O que pesa agora é o desenho (17 ms em ~20 passes por frame).
+
+### 2026-10-17 16:12 — luta a 540p no Cube; ecrã preto com efeitos desligados ao entrar; v0.5.5 (patch 0062)
+
+- 540p (75%) com os efeitos ligados: GPU ~23 ms (des 12, res 5,8, tr 1,7, out 2,5), ~42 FPS; resolves
+  21/f (960x544: 10). Com FXAA do jogo e brilho desligados deve ficar perto dos 16,7 ms.
+- Relato: entrar no jogo com os efeitos desligados → não renderiza (só se testara desligar ao vivo
+  numa luta). Causa provável: o FXAA desligado saltava sempre o draw, mas só tirava a limpeza do
+  resolve que o alimenta quando era 1x, 1280x720 na base 0 (0047); noutros render targets (menus) o
+  ecrã ficava limpo → preto.
+- 0062: par resolve → efeito aprendido (FXAA e DOF). O Resolve regista os resolves de cor do frame
+  (`Dbz3PostFxNoteResolve`, também os saltados pelo dedupe); o draw do efeito só é saltado se uma das
+  suas texturas veio neste frame de um resolve do mesmo render target (base, pitch, MSAA) que não
+  limpou (ou cuja limpeza foi tirada). Se limpou, desenha-se esse frame e a entrada fica aprendida
+  (a limpeza sai a partir do seguinte). Logs: "FXAA desligado: entrada … aprendida" / "draw mantido".

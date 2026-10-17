@@ -3,6 +3,16 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.5.5 — 2026-10-17
+
+### Fixes
+- Starting the game with the game's FXAA or depth of field turned off could leave the screen black
+  (patch 0062). The effect draw was always skipped, but the screen was only kept for one exact
+  resolve (1x, 1280x720, base 0); anywhere else the resolve feeding the effect cleared the screen.
+  Now the resolve → effect pair is learned: the effect is skipped only when its input was copied
+  this frame from the same render target it draws to, and the clear of that copy is dropped from
+  the next frame on. Otherwise the effect is drawn (and logged).
+
 ## 0.5.4 — 2026-10-17
 
 ### Performance (Mali)

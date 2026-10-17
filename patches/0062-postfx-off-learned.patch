@@ -1,0 +1,210 @@
+diff --git a/src/graphics/vulkan/command_processor.cpp b/src/graphics/vulkan/command_processor.cpp
+index abd7ded..4b3db96 100644
+--- a/src/graphics/vulkan/command_processor.cpp
++++ b/src/graphics/vulkan/command_processor.cpp
+@@ -196,12 +196,131 @@ void Dbz3NoteRenderPassEnd(const char* file, uint32_t line) {
+ // e a cadeia de brilho do jogo. Usados pelos interruptores de efeitos (dbz3_fx_*) para so
+ // mexer em resolves/render targets pequenos nos frames que tem esses efeitos.
+ uint64_t g_dbz3_frame_index = 0;
+-uint64_t g_dbz3_fxaa_frame = 0;
+ uint64_t g_dbz3_bloom_frame = 0;
+ 
+-bool Dbz3FxaaOffKeepsScreen() {
+-  return !REXCVAR_GET(dbz3_fx_fxaa) && g_dbz3_fxaa_frame &&
+-         g_dbz3_frame_index <= g_dbz3_fxaa_frame + 2;
++// DBZ3-Android (0062): FXAA e profundidade de campo desligados. Os dois leem uma copia do ecra
++// (resolve) e voltam a desenha-lo; o resolve do FXAA LIMPA o ecra. Saltar o draw so e seguro se
++// a entrada dele veio, neste frame, de um resolve do mesmo render target em que ele desenha e
++// esse resolve nao limpou. Antes (0047) a limpeza era tirada so a um resolve 1x de 1280x720 na
++// base 0, e o draw era sempre saltado: a entrar no jogo com o FXAA desligado (menus com outro
++// render target) o ecra ficava preto. Agora o par resolve -> efeito e aprendido: no 1.o frame o
++// efeito desenha-se, dai em diante a limpeza do resolve dessa entrada sai e o draw e saltado.
++namespace dbz3_postfx {
++struct FrameResolve {
++  uint32_t dest;
++  uint32_t base;
++  uint32_t pitch;
++  uint32_t msaa;
++  bool clears;
++  bool dropped;
++};
++std::vector<FrameResolve> g_frame;  // resolves de cor do frame atual
++uint64_t g_frame_of = UINT64_MAX;
++struct Learned {
++  uint32_t dest;
++  uint32_t kind;  // 0 FXAA, 1 profundidade de campo
++  uint64_t seen;  // ultimo frame em que o efeito apareceu
++};
++std::vector<Learned> g_learned;
++uint32_t g_logs = 0;
++
++void SyncFrame() {
++  if (g_frame_of != g_dbz3_frame_index) {
++    g_frame_of = g_dbz3_frame_index;
++    g_frame.clear();
++  }
++}
++
++bool KindOff(uint32_t kind) {
++  return kind == 0 ? !REXCVAR_GET(dbz3_fx_fxaa) : !REXCVAR_GET(dbz3_fx_dof);
++}
++}  // namespace dbz3_postfx
++
++// Chamado pelo Resolve de cor (render_target_cache.cpp) antes da limpeza. Devolve se a limpeza
++// da cor deve ser tirada (a entrada de um efeito desligado ja aprendida).
++bool Dbz3PostFxNoteResolve(uint32_t dest, uint32_t base_tiles, uint32_t pitch_tiles,
++                           uint32_t msaa, bool clears) {
++  using namespace dbz3_postfx;
++  SyncFrame();
++  dest &= 0x1FFFFFFF;
++  bool drop = false;
++  if (clears) {
++    for (const Learned& l : g_learned) {
++      if (l.dest == dest && KindOff(l.kind) && g_dbz3_frame_index <= l.seen + 2) {
++        drop = true;
++        break;
++      }
++    }
++  }
++  if (g_frame.size() < 64) {
++    g_frame.push_back({dest, base_tiles, pitch_tiles, msaa, clears, drop});
++  }
++  return drop;
++}
++
++// O draw do efeito pode ser saltado? (so se o ecra ja tem a cena: ver acima.)
++bool Dbz3PostFxDrawSkippable(uint32_t kind, const RegisterFile& regs, Shader* pixel_shader) {
++  using namespace dbz3_postfx;
++  SyncFrame();
++  const auto surface = regs.Get<reg::RB_SURFACE_INFO>();
++  const auto color = regs.Get<reg::RB_COLOR_INFO>(reg::RB_COLOR_INFO::rt_register_indices[0]);
++  const uint32_t msaa = uint32_t(surface.msaa_samples);
++  const uint32_t width_samples = uint32_t(surface.surface_pitch)
++                                 << (surface.msaa_samples >= xenos::MsaaSamples::k4X ? 1 : 0);
++  const uint32_t pitch_tiles = (width_samples + 79) / 80;
++  // Qualquer textura do efeito que seja uma copia, deste frame, do render target em que ele
++  // desenha (o DOF tambem le o desfoque pequeno).
++  uint32_t src = 0;
++  const FrameResolve* r = nullptr;
++  bool same_target = false;
++  for (const auto& binding : pixel_shader->texture_bindings()) {
++    const xenos::xe_gpu_texture_fetch_t fetch = regs.GetTextureFetch(binding.fetch_constant);
++    if (fetch.type != xenos::FetchConstantType::kTexture) continue;
++    const uint32_t a = (uint32_t(fetch.base_address) << 12) & 0x1FFFFFFF;
++    const FrameResolve* found = nullptr;
++    for (auto it = g_frame.rbegin(); it != g_frame.rend(); ++it) {
++      if (it->dest == a) {
++        found = &*it;
++        break;
++      }
++    }
++    const bool same = found && found->base == uint32_t(color.color_base) &&
++                      found->msaa == msaa && found->pitch == pitch_tiles;
++    if (!r || (same && !same_target)) {
++      src = a;
++      r = found;
++      same_target = same;
++    }
++    if (same_target) break;
++  }
++  if (!src) return false;
++  Learned* learned = nullptr;
++  for (Learned& l : g_learned) {
++    if (l.dest == src && l.kind == kind) learned = &l;
++  }
++  if (learned) learned->seen = g_dbz3_frame_index;
++  if (same_target && (!r->clears || r->dropped)) {
++    return true;
++  }
++  if (same_target && r->clears && !learned) {
++    // Este frame ja perdeu o ecra na limpeza: desenha-se; dos proximos em diante a limpeza sai.
++    if (g_learned.size() >= 16) g_learned.erase(g_learned.begin());
++    g_learned.push_back({src, kind, g_dbz3_frame_index});
++    REXGPU_INFO("dbz3: {} desligado: entrada {:08X} (resolve com limpeza do mesmo render target "
++                "base {} pitch {} msaa {}) aprendida",
++                kind == 0 ? "FXAA" : "profundidade de campo", src, r->base, r->pitch, r->msaa);
++    return false;
++  }
++  if (!same_target && g_logs < 8) {
++    ++g_logs;
++    REXGPU_INFO("dbz3: {} desligado: draw mantido, entrada {:08X} {} (alvo base {} pitch {} msaa "
++                "{}; resolve base {} pitch {} msaa {})",
++                kind == 0 ? "FXAA" : "profundidade de campo", src,
++                r ? "de outro render target" : "sem resolve neste frame",
++                uint32_t(color.color_base), pitch_tiles, msaa, r ? r->base : 0, r ? r->pitch : 0,
++                r ? r->msaa : 0);
++  }
++  return false;
+ }
+ 
+ bool Dbz3BloomSkipsSmallTargets() {
+@@ -4788,7 +4907,7 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
+   // 2026-10-14 (capturas do Mali-G77 e do Xclipse 960): o resolve que alimenta o FXAA (cor do
+   // ecra -> textura) tem LIMPEZA da cor; sem o draw do FXAA o ecra ficava limpo (preto) quando
+   // era copiado para o frontbuffer. Com o FXAA desligado essa limpeza e saltada no resolve
+-  // (VulkanRenderTargetCache::Resolve, Dbz3FxaaOffKeepsScreen). No brilho, alem dos draws da
++  // (VulkanRenderTargetCache::Resolve, Dbz3PostFxNoteResolve, 0062). No brilho, alem dos draws da
+   // cadeia, saltam-se todos os draws e resolves em render targets pequenos (pitch <= 320) nos
+   // frames que tem a cadeia (Dbz3BloomSkipsSmallTargets): menos ~8 passes e ~8 resolves.
+   if (REXCVAR_GET(dbz3_rt_direct) && Dbz3BloomSkipsSmallTargets()) {
+@@ -4810,10 +4929,9 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
+     const bool fx_opaque = (regs[XE_GPU_REG_RB_BLENDCONTROL0] & 0x1FFF1FFF) == 0x00010001;
+     bool fx_skip = false;
+     if (!REXCVAR_GET(dbz3_fx_dof) && fx_ps == UINT64_C(0x4DFCBC49057E5721) && fx_opaque) {
+-      fx_skip = true;
++      fx_skip = Dbz3PostFxDrawSkippable(1, regs, pixel_shader);
+     } else if (!REXCVAR_GET(dbz3_fx_fxaa) && fx_ps == UINT64_C(0xF5F4D761A981B87D) && fx_opaque) {
+-      g_dbz3_fxaa_frame = g_dbz3_frame_index + 1;
+-      fx_skip = true;
++      fx_skip = Dbz3PostFxDrawSkippable(0, regs, pixel_shader);
+     } else if (!REXCVAR_GET(dbz3_fx_bloom)) {
+       const uint32_t fx_pitch = regs.Get<reg::RB_SURFACE_INFO>().surface_pitch;
+       if (fx_ps == UINT64_C(0x555EBAAEF8F61839)) {
+diff --git a/src/graphics/vulkan/render_target_cache.cpp b/src/graphics/vulkan/render_target_cache.cpp
+index 0af77c1..3b67d88 100644
+--- a/src/graphics/vulkan/render_target_cache.cpp
++++ b/src/graphics/vulkan/render_target_cache.cpp
+@@ -1179,7 +1179,8 @@ void VulkanRenderTargetCache::EndSubmission() {
+ }
+ 
+ // DBZ3-Android: interruptores de efeitos (command_processor.cpp).
+-bool Dbz3FxaaOffKeepsScreen();
++bool Dbz3PostFxNoteResolve(uint32_t dest, uint32_t base_tiles, uint32_t pitch_tiles,
++                           uint32_t msaa, bool clears);
+ bool Dbz3BloomSkipsSmallTargets();
+ extern uint64_t g_dbz3_frame_index;
+ 
+@@ -1295,6 +1296,14 @@ bool VulkanRenderTargetCache::Resolve(const memory::Memory& memory,
+     const bool clears = resolve_info.IsClearingColor() || resolve_info.IsClearingDepth();
+     if (dbz3_resolve_dedupe::Resolve(resolve_info,
+                                      !clears && !dbz3_capture::WantsResolveReadback())) {
++      // 0062: conta como resolve deste frame para o par resolve -> efeito (sem ele, saltar o
++      // efeito fazia o dedupe saltar a copia e no frame seguinte o efeito voltava a desenhar).
++      if (!resolve_info.IsCopyingDepth()) {
++        Dbz3PostFxNoteResolve(resolve_info.copy_dest_base,
++                              uint32_t(resolve_info.color_edram_info.base_tiles),
++                              uint32_t(resolve_info.color_edram_info.pitch_tiles),
++                              uint32_t(resolve_info.color_edram_info.msaa_samples), false);
++      }
+       return true;
+     }
+   }
+@@ -1526,11 +1535,13 @@ bool VulkanRenderTargetCache::Resolve(const memory::Memory& memory,
+   // textura que o FXAA le e LIMPA a cor; o FXAA voltava a desenhar o ecra a partir dessa
+   // textura. Sem o FXAA o ecra tem de ficar como esta para o resolve do frontbuffer, por isso
+   // a limpeza da cor e saltada (o frame seguinte comeca com o Clear() do D3D, que cobre tudo).
+-  if (resolve_info.IsClearingColor() && Dbz3FxaaOffKeepsScreen() &&
+-      resolve_info.color_edram_info.base_tiles == 0 &&
+-      resolve_info.color_edram_info.msaa_samples == xenos::MsaaSamples::k1X &&
+-      uint32_t(resolve_info.coordinate_info.width_div_8) * 8 >= 1280 &&
+-      resolve_info.height_div_8 * 8 >= 720) {
++  // 0062: o par resolve -> efeito e aprendido (Dbz3PostFxNoteResolve, command_processor.cpp).
++  if (resolve_info.copy_dest_extent_length && !resolve_info.IsCopyingDepth() &&
++      Dbz3PostFxNoteResolve(resolve_info.copy_dest_base,
++                            uint32_t(resolve_info.color_edram_info.base_tiles),
++                            uint32_t(resolve_info.color_edram_info.pitch_tiles),
++                            uint32_t(resolve_info.color_edram_info.msaa_samples),
++                            resolve_info.IsClearingColor())) {
+     resolve_info.rb_copy_control.color_clear_enable = 0;
+   }
+ 
