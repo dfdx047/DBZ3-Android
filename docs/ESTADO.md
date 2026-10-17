@@ -1089,3 +1089,10 @@ diferente?); `dbz3: dedupe:` e `dbz3: passo 4:` no log; perf a 720p vs 540p no C
   leituras é real, por isso o dedupe matava e revivia o destino (e cada revivência lia conteúdo velho).
 - 0064: `revivals` por destino no dedupe; com 2 revivências nunca mais é dado como sem leitor.
 - Números iguais ao teste anterior: frame congelado 13,8 ms; luta a 720p 55 FPS (GPU ~17 ms).
+
+### 2026-10-17 17:35 — 0.5.8 no Cube (720p sem efeitos)
+
+- 0064 funcionou: "sem leitor" só 2 vezes por destino (1EC2F000, 1EFC7000, 1F35F000), 1 "lido a sério",
+  1 "voltou a ser lido" na sessão toda (antes 365 só no 1EFC7000).
+- Luta a 720p sem efeitos: game_fps 55–58 mas presented_fps 42–48 (GPU 16–18 ms, no limite do vsync a
+  60 Hz em FIFO: o que se vê fica ~45). 540p continua a ser a predefinição certa para o Cube.
