@@ -120,6 +120,7 @@ fun PerformanceScreen(vm: LauncherViewModel) {
                 onSelect = { v -> vm.updateConfig { it.withResolution(v) } },
             )
             if (c.effectivePercent < 100) StatusLine(stringResource(R.string.perf_resolution_below), Level.INFO)
+            if (vm.isMali) StatusLine(stringResource(R.string.perf_mali_preset), Level.INFO)
             if (c.resolutionScale >= 2) StatusLine(stringResource(R.string.perf_resolution_mem), Level.INFO)
             if (c.resolutionScale >= 3) StatusLine(stringResource(R.string.settings_resolution_warn), Level.WARN)
             SettingSwitch(stringResource(R.string.settings_show_fps), checked = c.showFps) { on -> vm.updateConfig { it.copy(showFps = on) } }

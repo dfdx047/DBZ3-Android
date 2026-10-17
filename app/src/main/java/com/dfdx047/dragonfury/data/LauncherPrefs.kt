@@ -118,6 +118,11 @@ class LauncherPrefs(context: Context) {
         get() = prefs.getBoolean(KEY_RT_DIRECT_MIGRATED, false)
         set(v) = prefs.edit().putBoolean(KEY_RT_DIRECT_MIGRATED, v).apply()
 
+    /** Migracao unica: predefinicao das GPUs Mali (540p, efeitos do jogo desligados). */
+    var maliPresetApplied: Boolean
+        get() = prefs.getBoolean(KEY_MALI_PRESET, false)
+        set(v) = prefs.edit().putBoolean(KEY_MALI_PRESET, v).apply()
+
     var checkUpdatesOnStart: Boolean
         get() = prefs.getBoolean(KEY_CHECK_UPDATES, true)
         set(v) = prefs.edit().putBoolean(KEY_CHECK_UPDATES, v).apply()
@@ -145,6 +150,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_TURNIP_NOTICE = "turnip_notice_shown"
         const val KEY_GPU_NOTICE = "gpu_notice_shown"
         const val KEY_RT_DIRECT_MIGRATED = "rt_direct_migrated"
+        const val KEY_MALI_PRESET = "mali_preset_applied"
         const val KEY_CHECK_UPDATES = "check_updates"
         const val KEY_SKIPPED_UPDATE = "skipped_update"
     }

@@ -120,6 +120,18 @@ data class GameConfig(
     /** Resolucao escolhida como uma so lista: (escala, percentagem). */
     val resolutionChoice: Pair<Int, Int> get() = resolutionScale to effectivePercent
 
+    /**
+     * Predefinicao das GPUs Mali (RG Cube, 17/10): 540p e os efeitos do jogo desligados dao 60 FPS
+     * na luta (GPU 11-18 ms; a 720p com efeitos eram ~30 ms). So mexe na resolucao se estava em
+     * 720p 1x.
+     */
+    fun withMaliPreset(): GameConfig = copy(
+        resolutionPercent = if (resolutionScale == 1 && resolutionPercent == 100) 75 else resolutionPercent,
+        fxBloom = false,
+        fxDof = false,
+        fxFxaa = false,
+    )
+
     fun withResolution(choice: Pair<Int, Int>): GameConfig =
         copy(resolutionScale = choice.first.coerceIn(1, MAX_RESOLUTION_SCALE),
             resolutionPercent = if (choice.first > 1) 100 else choice.second)

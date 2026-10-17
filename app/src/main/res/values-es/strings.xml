@@ -425,5 +425,6 @@
     <string name="perf_fps_120_interp">120 (interp.)</string>
     <string name="perf_fps_120_interp_note">120 FPS interpolado: el juego corre a 60 y la pantalla pasa a 120 Hz; un frame de pantalla más de latencia y un poco más de GPU (~1-2 ms en móviles rápidos). Necesita 60 FPS estables.</string>
     <string name="perf_fps_120_unavailable">Esta pantalla llega a %1$d Hz: los 120 FPS necesitan una pantalla de 110 Hz o más.</string>
+    <string name="perf_mali_preset">GPU Mali: Dragon Fury empieza a 540p con los efectos del juego (brillo, profundidad de campo, FXAA) desactivados, lo que mantiene 60 FPS en los combates en una Mali-G57. A 720p con los efectos activados va a unos 30.</string>
     <string name="perf_resolution_below">Por debajo de 720p el juego se dibuja en una esquina de los objetivos de 720p y la imagen se estira a la pantalla (con FSR 1). 540p mantiene exactos todos los tamaños del juego y es la opción segura para GPU Mali; 360p es la más ligera.</string>
 </resources>

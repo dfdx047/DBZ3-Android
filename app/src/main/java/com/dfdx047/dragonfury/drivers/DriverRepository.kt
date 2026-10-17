@@ -55,6 +55,21 @@ object DriverRepository {
             Build.BOARD.contains("sm8", true)
     }
 
+    /**
+     * GPU Mali (Arm)? O driver do kernel da Mali cria /dev/mali0; sem acesso a ele, o fabricante
+     * do SoC (MediaTek e Unisoc usam Mali; os Exynos novos tem Xclipse, por isso ficam de fora).
+     */
+    fun isMali(): Boolean {
+        if (isAdreno()) return false
+        if (java.io.File("/dev/mali0").exists() || java.io.File("/sys/class/misc/mali0").exists()) {
+            return true
+        }
+        val soc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MANUFACTURER else ""
+        return soc.contains("mediatek", true) || soc.contains("spreadtrum", true) ||
+            soc.contains("unisoc", true) || Build.HARDWARE.startsWith("mt", true) ||
+            Build.HARDWARE.startsWith("ums", true)
+    }
+
     fun socName(): String =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "${Build.SOC_MANUFACTURER} ${Build.SOC_MODEL}" else Build.HARDWARE
 

@@ -422,6 +422,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
 
     // --------------------------------------------------------------- drivers
     val isAdreno = DriverRepository.isAdreno()
+    val isMali = DriverRepository.isMali()
     val socName = DriverRepository.socName()
     var installedDrivers by mutableStateOf<List<InstalledDriver>>(emptyList())
         private set
@@ -625,6 +626,12 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
             if (!prefs.rtDirectMigrated) {
                 c = c.copy(rtDirect = true)
                 prefs.rtDirectMigrated = true
+            }
+            // Mali: uma vez (primeiro arranque ou ao atualizar), 540p e efeitos desligados.
+            // Depois o usuario pode mudar a vontade.
+            if (!prefs.maliPresetApplied) {
+                if (DriverRepository.isMali()) c = c.withMaliPreset().copy(rtDirect = true)
+                prefs.maliPresetApplied = true
             }
             val loaded = c
             withContext(Dispatchers.Main) { config = loaded }

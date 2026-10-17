@@ -3,6 +3,14 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.5.6 — 2026-10-17
+
+### Mali GPUs
+- On Mali GPUs (detected by `/dev/mali0`, or a MediaTek/Unisoc SoC) the launcher applies once a
+  preset: 540p and the game effects (bloom, depth of field, FXAA) off. On the RG Cube (Mali-G57)
+  that holds 60 FPS in fights; 720p with the effects on is about 30. Everything can still be
+  changed in Performance, and the preset is not applied again.
+
 ## 0.5.5 — 2026-10-17
 
 ### Fixes

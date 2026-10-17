@@ -1062,3 +1062,9 @@ diferente?); `dbz3: dedupe:` e `dbz3: passo 4:` no log; perf a 720p vs 540p no C
   FXAA desligado agora sai certo.
 - Ainda a medir: "com brilho" a 540p custa +9 ms (res 2,4 → 8,2): a cadeia pequena do brilho fica cara
   abaixo de 1x.
+
+### 2026-10-17 16:41 — v0.5.6: predefinição Mali no launcher
+
+- `DriverRepository.isMali()` (/dev/mali0 ou /sys/class/misc/mali0; senão SoC MediaTek/Unisoc, HARDWARE
+  mt*/ums*; Adreno nunca). Migração única (`mali_preset_applied`): `withMaliPreset()` = 540p (só se
+  estava em 720p 1x) e brilho/DOF/FXAA do jogo desligados. Linha informativa na aba Desempenho.
