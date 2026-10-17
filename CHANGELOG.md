@@ -3,6 +3,15 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.5.2 — 2026-10-17
+
+### Fixes
+- Render self-test freeze: in Budokai 3 the frame swap comes inside an indirect buffer, so the
+  frame boundary is now taken in the primary ring after that packet (patch 0059). The test also
+  measures the game effects (bloom, depth of field, FXAA) for the Mali presets.
+- More diagnostics: where each "sample" barrier that breaks a render pass comes from, and why
+  render-into-texture finds 0 or several textures.
+
 ## 0.5.1 — 2026-10-17
 
 ### Fixes

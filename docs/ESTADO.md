@@ -971,3 +971,16 @@ diferente?); `dbz3: dedupe:` e `dbz3: passo 4:` no log; perf a 720p vs 540p no C
   F5F4…) e o restauro (VS 95DD91E3E9AE3A74, PS ADCA…). Próximo: ler o layout desses VS na captura e
   aceitar se cobrirem o scissor.
 - Fins de passe 30/f, metade por "barreira de imagem (amostrar)" (14/f): alvo seguinte no Mali.
+
+### 2026-10-17 14:29 — 2.º autoteste no RG Cube (720p, 60) e v0.5.2 (patch 0059)
+
+- Foco agora só no RG Cube (o RP5 e o Odin 3 já fazem 60 a 720p).
+- O 0058 avisou "troca fora do ring principal": no Budokai 3 o `VdSwap` vai dentro de um indirect
+  buffer. 0059: a troca só marca `g_swap_seen`; a fronteira do frame é tratada no ring principal,
+  depois do pacote que a trouxe (`Dbz3FreezeAtFrameEnd`).
+- Luta a 720p no Cube: GPU ~42 ms (desenho 19,5, **resolve 16**, transfer 2,6, outros 3); resolves
+  21/f (1280x720: 10, 320x184: 5, 80x48: 2, 512x512: 2; 19 pelo atalho); fins de passe 26/f, **14/f
+  "barreira de imagem (amostrar)"** (no menu só 2/f). 0059 separa essa causa pelo layout antigo
+  (general/imageStore, cópia, alvo de cor, nova…). Passo 4: "texturas" 1911 falhas a 720p; o 0059 diz
+  se são 0 ou várias e regista os destinos.
+- O autoteste passa a medir também os efeitos (brilho, DOF, FXAA) para as predefinições do Mali.

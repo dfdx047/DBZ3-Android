@@ -1,0 +1,147 @@
+diff --git a/include/rex/graphics/command_processor.h b/include/rex/graphics/command_processor.h
+index 226aafb..2110c9c 100644
+--- a/include/rex/graphics/command_processor.h
++++ b/include/rex/graphics/command_processor.h
+@@ -257,6 +257,7 @@ class CommandProcessor {
+   // e repete o ultimo frame completo (os comandos copiados do ring e dos indirect buffers), com
+   // os registos do inicio dele, ~60 vezes por segundo, ate a cvar voltar a false.
+   void Dbz3FreezeReplay();
++  void Dbz3FreezeAtFrameEnd(const memory::RingBuffer* reader);
+   void Dbz3FreezeWriteRegisters(const std::vector<uint32_t>& values);
+ 
+   uint32_t primary_buffer_ptr_ = 0;
+diff --git a/src/graphics/command_processor.cpp b/src/graphics/command_processor.cpp
+index e4cbdcd..ac4eebb 100644
+--- a/src/graphics/command_processor.cpp
++++ b/src/graphics/command_processor.cpp
+@@ -148,6 +148,7 @@ size_t g_ib_cursor = 0;
+ uint64_t g_ib_misses = 0;
+ uint32_t g_overflow_logs = 0;
+ uint32_t g_off_primary_logs = 0;
++bool g_swap_seen = false;
+ uint64_t g_replays = 0;
+ std::chrono::steady_clock::time_point g_next_replay;
+ }  // namespace dbz3_freeze
+@@ -711,7 +712,12 @@ uint32_t CommandProcessor::ExecutePrimaryBuffer(uint32_t read_index, uint32_t wr
+       assert_always();
+       break;
+     }
+-    // DBZ3-Android (dbz3_freeze_frame): para logo a seguir a troca que fecha o frame gravado.
++    // DBZ3-Android (dbz3_freeze_frame): fronteira do frame (uma troca neste pacote ou num
++    // indirect buffer dele) e paragem logo a seguir a troca que fecha o frame gravado.
++    if (dbz3_freeze::g_swap_seen) {
++      dbz3_freeze::g_swap_seen = false;
++      Dbz3FreezeAtFrameEnd(&reader);
++    }
+     if (dbz3_freeze::g_stop_after_packet) {
+       dbz3_freeze::g_stop_after_packet = false;
+       dbz3_freeze::g_primary_reader = nullptr;
+@@ -1062,14 +1068,16 @@ bool CommandProcessor::ExecutePacketType3_XE_SWAP(memory::RingBuffer* reader, ui
+   ++counter_;
+ 
+   // DBZ3-Android (dbz3_freeze_frame): grava o frame entre duas trocas do ring principal e para.
+-  if (!dbz3_freeze::g_replaying && reader != dbz3_freeze::g_primary_reader &&
+-      dbz3_freeze::g_off_primary_logs < 4 && REXCVAR_GET(dbz3_freeze_frame)) {
+-    ++dbz3_freeze::g_off_primary_logs;
+-    REXGPU_WARN("dbz3: congelar: troca fora do ring principal (reader {} principal {}); sem congelar",
+-                static_cast<const void*>(reader),
+-                static_cast<const void*>(dbz3_freeze::g_primary_reader));
++  // DBZ3-Android (dbz3_freeze_frame): a fronteira do frame e tratada no ring principal, depois do
++  // pacote que trouxe esta troca (no Budokai 3 a troca vem dentro de um indirect buffer: 0059).
++  if (!dbz3_freeze::g_replaying) {
++    dbz3_freeze::g_swap_seen = true;
+   }
+-  if (!dbz3_freeze::g_replaying && reader == dbz3_freeze::g_primary_reader) {
++  return true;
++}
++
++void CommandProcessor::Dbz3FreezeAtFrameEnd(const memory::RingBuffer* reader) {
++  {
+     namespace fz = dbz3_freeze;
+     const uint32_t index = uint32_t(reader->read_offset() / sizeof(uint32_t));
+     const bool want = REXCVAR_GET(dbz3_freeze_frame);
+@@ -1110,7 +1118,6 @@ bool CommandProcessor::ExecutePacketType3_XE_SWAP(memory::RingBuffer* reader, ui
+       fz::g_state = fz::State::kOff;
+     }
+   }
+-  return true;
+ }
+ 
+ void CommandProcessor::Dbz3FreezeWriteRegisters(const std::vector<uint32_t>& values) {
+diff --git a/src/graphics/vulkan/command_processor.cpp b/src/graphics/vulkan/command_processor.cpp
+index 42154fc..bf24946 100644
+--- a/src/graphics/vulkan/command_processor.cpp
++++ b/src/graphics/vulkan/command_processor.cpp
+@@ -3735,9 +3735,30 @@ bool VulkanCommandProcessor::SubmitBarriers(bool force_end_render_pass) {
+     const char* reason = "barreira (outra)";
+     if (!pending_barriers_image_memory_barriers_.empty()) {
+       // Classificacao pelo destino da primeira barreira de imagem (diagnostico).
+-      switch (pending_barriers_image_memory_barriers_.front().newLayout) {
++      const VkImageMemoryBarrier& first_image = pending_barriers_image_memory_barriers_.front();
++      switch (first_image.newLayout) {
+         case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+-          reason = "barreira de imagem (amostrar)";
++          // 0059: de onde vem a textura (no RG Cube, 14 destes por frame na luta).
++          switch (first_image.oldLayout) {
++            case VK_IMAGE_LAYOUT_GENERAL:
++              reason = "barreira de imagem (amostrar <- general/imageStore)";
++              break;
++            case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
++              reason = "barreira de imagem (amostrar <- copia/carga)";
++              break;
++            case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
++              reason = "barreira de imagem (amostrar <- alvo de cor)";
++              break;
++            case VK_IMAGE_LAYOUT_UNDEFINED:
++              reason = "barreira de imagem (amostrar <- nova)";
++              break;
++            case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
++              reason = "barreira de imagem (amostrar <- amostrar)";
++              break;
++            default:
++              reason = "barreira de imagem (amostrar <- outro)";
++              break;
++          }
+           break;
+         case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+           reason = "barreira de imagem (carga)";
+diff --git a/src/graphics/vulkan/render_target_cache.cpp b/src/graphics/vulkan/render_target_cache.cpp
+index 1d0b345..d2c1513 100644
+--- a/src/graphics/vulkan/render_target_cache.cpp
++++ b/src/graphics/vulkan/render_target_cache.cpp
+@@ -7397,6 +7397,7 @@ uint64_t g_ok = 0;
+ uint64_t g_abort = 0;
+ uint64_t g_learn_fail[2] = {};
+ uint64_t g_begin_fail[7] = {};
++uint64_t g_begin_many = 0;
+ uint64_t g_frames = 0;
+ 
+ void BanStale(const char* why) {
+@@ -7531,10 +7532,10 @@ void VulkanRenderTargetCache::Dbz3RitLogFrame() {
+   }
+   REXGPU_INFO("dbz3: passo 4: {} assinaturas ({} prontas, {} banidas), {} feitos, {} desistencias; "
+               "aprender falhou: resolve diferente {}, outro alvo {}; inicio falhou: sem previsao {}, "
+-              "banida {}, a aprender {}, area {}, texturas {}, nao renderizavel {}, vista {}",
++              "banida {}, a aprender {}, area {}, texturas {} (varias {}), nao renderizavel {}, vista {}",
+               g_table.size(), ready, banned, g_ok, g_abort, g_learn_fail[0], g_learn_fail[1],
+               g_begin_fail[0], g_begin_fail[1], g_begin_fail[2], g_begin_fail[3], g_begin_fail[4],
+-              g_begin_fail[5], g_begin_fail[6]);
++              g_begin_many, g_begin_fail[5], g_begin_fail[6]);
+ }
+ 
+ void VulkanRenderTargetCache::Dbz3RitPassStart(uint64_t signature, uint32_t color_base_tiles,
+@@ -7600,6 +7601,14 @@ VkImageView VulkanRenderTargetCache::Dbz3RitBegin(VulkanTextureCache& texture_ca
+       xenos::Endian(p.endian), found, 4);
+   if (n != 1 || !texture_cache.Dbz3TextureIsRenderable(found[0])) {
+     ++g_begin_fail[n != 1 ? 4 : 5];
++    // 0059: 0 texturas ou varias (no RG Cube "texturas" era quase tudo).
++    if (n > 1) ++g_begin_many;
++    static uint32_t logged = 0;
++    if (n != 1 && logged < 8) {
++      ++logged;
++      REXGPU_INFO("dbz3: passo 4: destino {:08X} {}x{} (guest {}x{}) com {} texturas",
++                  p.dest, p.width, p.height, p.guest_width, p.guest_height, n);
++    }
+     return VK_NULL_HANDLE;
+   }
+   // 0091: o passe desenha na textura do tamanho dela no host (abaixo de 1x, a percentagem do

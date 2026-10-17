@@ -66,6 +66,11 @@ class RenderSelfTest(
         Opt("render targets diretos", mapOf("dbz3_rt_direct" to ("true" to "false"))),
         Opt("resolve direto na textura", mapOf("dbz3_direct_resolve_texture" to ("1" to "0"))),
         Opt("resolve sem memoria", mapOf("dbz3_direct_resolve_skip_memory" to ("true" to "false"))),
+        // Efeitos do jogo: mudam a imagem de proposito ("DIFERENTE" e o esperado); estao aqui
+        // pelos ms de GPU de cada um (linhas perf), para decidir as predefinicoes do Mali.
+        Opt("efeito: brilho (muda a imagem)", mapOf("dbz3_fx_bloom" to ("true" to "false"))),
+        Opt("efeito: profundidade de campo (muda a imagem)", mapOf("dbz3_fx_dof" to ("true" to "false"))),
+        Opt("efeito: FXAA do jogo (muda a imagem)", mapOf("dbz3_fx_fxaa" to ("true" to "false"))),
     )
 
     /** Estado de referencia: o que o jogo tem agora (o da config). */
