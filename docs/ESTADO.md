@@ -984,3 +984,30 @@ diferente?); `dbz3: dedupe:` e `dbz3: passo 4:` no log; perf a 720p vs 540p no C
   (general/imageStore, cópia, alvo de cor, nova…). Passo 4: "texturas" 1911 falhas a 720p; o 0059 diz
   se são 0 ou várias e regista os destinos.
 - O autoteste passa a medir também os efeitos (brilho, DOF, FXAA) para as predefinições do Mali.
+
+### 2026-10-17 14:43 — 3.º autoteste no RG Cube (720p, 60): o congelar funciona; v0.5.3 (patch 0060)
+
+- 0059 funcionou: "frame de 36 dwords no ring e 12 indirect buffers", 60 repetições, ruído 0,000%.
+  4249 repetições até ao fim.
+- Frame congelado de referência: **GPU 38,1 ms** (desenho 17,6/20 passes, resolve 13,9, transfer
+  1,9, outros 3,2). Fins de passe 25/f, dos quais 12/f "amostrar <- alvo de cor": é o próprio resolve
+  (o RT passa de alvo a leitura para o compute), ou seja, cada resolve = um fim de passe.
+- Ganhos medidos (desligar → GPU): transferências saltadas ~+20–25 ms, Clear 4x→1x ~+8, uploads antes
+  do passe ~+9–14, render targets diretos ~+13 a +68, resolve direto na textura +15–22, resolve sem
+  memória +14, restauros ignorados ~+4, restauro da profundidade ~+3,7, área do render ~+4,6. Dedupe,
+  draws nulos, descarte e passo 4: 0 neste frame (o passo 4 só tem 1 assinatura e está banida).
+- "TUDO desligado" dá a mesma imagem que a config: as otimizações por omissão estão certas neste frame.
+  As DIFERENTE do meio vêm de combinações (sub-opções do rt_direct desligadas sozinhas) e, a partir de
+  'sem transferências saltadas', de lixo que ficou numa textura que o frame congelado não reescreve
+  (céu claro + arco ciano em todas as fotos seguintes, ~10,8%). O autoteste agora confirma a volta à
+  referência e, se não voltar, tira uma nova.
+- Bug real: ao desligar o atalho resolve→textura, os resolves voltam a escrever a memória, as texturas
+  recarregam dela e `Dbz3NoteTextureLoadFromMemory` via os registos do resolve sem memória (≤2 frames)
+  → os 13 destinos ficaram "precisa da memória" para sempre e o resolve passou de 14 para 28 ms (os
+  custos dos efeitos foram medidos já com isto). 0060: um resolve que escreve a memória apaga o registo
+  do seu destino.
+- Efeitos (medidos com o resolve a 28): brilho ~3–4 ms (e nesta cena a imagem fica igual), DOF ~3,
+  FXAA do jogo ~4–5.
+- 0060 também: `dbz3_resolve_draw` (cópia por desenho, sem compute no meio dos fragmentos do Mali),
+  `dbz3_resolve_debug = 2` (fecha o passe mas não copia) e totais de GPU por categoria para o
+  autoteste escrever os ms de cada estado no relatório.

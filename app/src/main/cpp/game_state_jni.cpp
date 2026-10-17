@@ -387,3 +387,16 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_com_dfdx047_dragonfury_game_NativeGameState_nativePresentInfo(JNIEnv* env, jclass) {
   return env->NewStringUTF(rex::perf::GetPresentInfo().c_str());
 }
+
+// Totais de GPU desde o arranque (patch 0060), em microssegundos: [frames, total, outros,
+// desenho, transfer, resolve, texturas, swap]. O autoteste tira a diferenca por estado.
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_dfdx047_dragonfury_game_NativeGameState_nativeGpuTotals(JNIEnv* env, jclass) {
+  uint64_t totals[rex::perf::kGpuTotalsCount] = {};
+  rex::perf::GetGpuTotals(totals, rex::perf::kGpuTotalsCount);
+  jlong out[rex::perf::kGpuTotalsCount];
+  for (size_t i = 0; i < rex::perf::kGpuTotalsCount; ++i) out[i] = jlong(totals[i]);
+  jlongArray array = env->NewLongArray(jsize(rex::perf::kGpuTotalsCount));
+  if (array) env->SetLongArrayRegion(array, 0, jsize(rex::perf::kGpuTotalsCount), out);
+  return array;
+}

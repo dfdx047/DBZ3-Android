@@ -3,6 +3,22 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.5.3 — 2026-10-17
+
+### Fixes
+- A resolve that writes guest memory now clears the "skipped memory" record of its destination
+  (patch 0060). Before, switching the resolve shortcut off for a moment (or one frame where it
+  failed) marked every destination as "needs memory" for good and resolves doubled (14 → 28 ms on
+  the RG Cube).
+- Render self-test: GPU milliseconds per state are now in the report itself; after a state that
+  changed the picture the test checks that the config gives the reference again and takes a new
+  reference if a broken state left garbage in the frozen frame.
+
+### Experiments (self-test only)
+- `dbz3_resolve_draw`: resolve copies as a full-screen draw instead of compute (Mali).
+- `dbz3_resolve_debug = 2`: resolves only end the pass, without the copy, to split the copy cost
+  from the pass-end cost.
+
 ## 0.5.2 — 2026-10-17
 
 ### Fixes

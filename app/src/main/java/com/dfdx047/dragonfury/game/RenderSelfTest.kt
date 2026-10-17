@@ -39,8 +39,12 @@ class RenderSelfTest(
     private val surface: SurfaceView,
     private val onDone: () -> Unit,
 ) {
-    /** Otimizacao: rotulo + cvars que a ligam (valor "ligado" to "desligado"). */
-    private class Opt(val label: String, val cvars: Map<String, Pair<String, String>>)
+    /**
+     * Otimizacao: rotulo + cvars que a ligam (valor "ligado" to "desligado"). [kind]: OPT entra no
+     * "TUDO desligado"; EFFECT (efeitos do jogo) e PROBE (diagnosticos, so medem ms) mudam a
+     * imagem de proposito e ficam fora dele.
+     */
+    private class Opt(val label: String, val cvars: Map<String, Pair<String, String>>, val kind: Int = OPT)
 
     private val opts = listOf(
         // Cortes genericos do Dragon Burst (patches 0051-0054 daqui).
@@ -66,11 +70,17 @@ class RenderSelfTest(
         Opt("render targets diretos", mapOf("dbz3_rt_direct" to ("true" to "false"))),
         Opt("resolve direto na textura", mapOf("dbz3_direct_resolve_texture" to ("1" to "0"))),
         Opt("resolve sem memoria", mapOf("dbz3_direct_resolve_skip_memory" to ("true" to "false"))),
+        // 0060: a copia do resolve como desenho (fragmentos) em vez de compute (Mali).
+        Opt("resolve por desenho", mapOf("dbz3_resolve_draw" to ("true" to "false"))),
         // Efeitos do jogo: mudam a imagem de proposito ("DIFERENTE" e o esperado); estao aqui
-        // pelos ms de GPU de cada um (linhas perf), para decidir as predefinicoes do Mali.
-        Opt("efeito: brilho (muda a imagem)", mapOf("dbz3_fx_bloom" to ("true" to "false"))),
-        Opt("efeito: profundidade de campo (muda a imagem)", mapOf("dbz3_fx_dof" to ("true" to "false"))),
-        Opt("efeito: FXAA do jogo (muda a imagem)", mapOf("dbz3_fx_fxaa" to ("true" to "false"))),
+        // pelos ms de GPU de cada um, para decidir as predefinicoes do Mali.
+        Opt("efeito: brilho (muda a imagem)", mapOf("dbz3_fx_bloom" to ("true" to "false")), EFFECT),
+        Opt("efeito: profundidade de campo (muda a imagem)", mapOf("dbz3_fx_dof" to ("true" to "false")), EFFECT),
+        Opt("efeito: FXAA do jogo (muda a imagem)", mapOf("dbz3_fx_fxaa" to ("true" to "false")), EFFECT),
+        // Diagnosticos (0060): a imagem fica errada; so os ms contam. "so fecham o passe" separa
+        // o custo da copia (o que um resolve mais barato ganharia) do custo dos fins de passe.
+        Opt("medir: resolves so fecham o passe", mapOf("dbz3_resolve_debug" to ("2" to "0")), PROBE),
+        Opt("medir: resolves sem trabalho nenhum", mapOf("dbz3_resolve_debug" to ("1" to "0")), PROBE),
     )
 
     /** Estado de referencia: o que o jogo tem agora (o da config). */
@@ -125,23 +135,56 @@ class RenderSelfTest(
         // durante o teste (no 1.o autoteste do RG Cube, 17/10, era parte do "ruido").
         NativeGameState.setCvarsLive(mapOf(FREEZE to "true", OVERLAY to "false") + base)
         // Referencia: a config atual, duas fotos para medir o ruido.
-        after(3500) {
-            capture { a ->
-                after(600) {
-                    capture { b ->
-                        reference = a
-                        noise = if (a != null && b != null) diff(a, b).first else 0.0
-                        report.append(String.format(Locale.ROOT, "%-46s ruido %.3f%%\n", "referencia (config)", noise))
-                        if (noise > 5.0) {
-                            report.append("AVISO: a imagem nao ficou congelada (ruido acima de 5%): os vereditos abaixo\n")
-                            report.append("nao valem; os ms de GPU de cada estado (linhas perf) continuam a valer.\n")
+        measure(base, twoShots = true) { a, b, gpu ->
+            reference = a
+            noise = if (a != null && b != null) diff(a, b).first else 0.0
+            report.append(String.format(Locale.ROOT, "%-46s ruido %.3f%%%s\n", "referencia (config)", noise, gpu))
+            if (noise > 5.0) {
+                report.append("AVISO: a imagem nao ficou congelada (ruido acima de 5%): os vereditos abaixo\n")
+                report.append("nao valem; os ms de GPU de cada estado continuam a valer.\n")
+            }
+            log("autoteste: referencia, ruido %.3f%%%s".format(Locale.ROOT, noise, gpu))
+            step(0)
+        }
+    }
+
+    /**
+     * Aplica [cvars], espera o frame refeito estabilizar, tira a foto (duas com [twoShots]) e mede
+     * os ms de GPU por frame numa janela de ~6 s (totais do patch 0060; "" sem o build novo).
+     */
+    private fun measure(
+        cvars: Map<String, String>,
+        twoShots: Boolean = false,
+        done: (IntArray?, IntArray?, String) -> Unit,
+    ) {
+        NativeGameState.setCvarsLive(cvars)
+        after(1500) {
+            val g0 = NativeGameState.gpuTotals()
+            after(2000) {
+                capture { a ->
+                    val second: ((IntArray?) -> Unit) -> Unit = { k ->
+                        if (twoShots) after(600) { capture(k) } else k(null)
+                    }
+                    second { b ->
+                        after(if (twoShots) 3900L else 4500L) {
+                            done(a, b, gpuText(g0, NativeGameState.gpuTotals()))
                         }
-                        log("autoteste: referencia, ruido %.3f%%".format(Locale.ROOT, noise))
-                        after(4000) { step(0) }
                     }
                 }
             }
         }
+    }
+
+    /** " | GPU 38.1 ms (des 17.6 res 13.9 tr 1.9 out 3.2)" a partir de dois totais. */
+    private fun gpuText(a: LongArray?, b: LongArray?): String {
+        if (a == null || b == null || a.size < 8 || b.size < 8) return ""
+        val frames = b[0] - a[0]
+        if (frames <= 0) return " | GPU ? (sem dbz3_perf_logging)"
+        fun ms(i: Int) = (b[i] - a[i]) / 1000.0 / frames
+        return String.format(
+            Locale.ROOT, " | GPU %.1f ms (des %.1f res %.1f tr %.1f out %.1f)",
+            ms(1), ms(3), ms(5), ms(4), ms(2),
+        )
     }
 
     private fun step(i: Int) {
@@ -151,36 +194,69 @@ class RenderSelfTest(
         }
         val next: Map<String, String>
         val label: String
+        val kind: Int
         if (i == active.size) {
             label = "TUDO desligado"
-            next = active.flatMap { o -> o.cvars.map { it.key to it.value.second } }.toMap()
+            kind = OPT
+            // So as otimizacoes: os efeitos e os diagnosticos ficam como na config.
+            next = base + active.filter { it.kind == OPT }.flatMap { o -> o.cvars.map { it.key to it.value.second } }
         } else {
             val o = active[i]
+            kind = o.kind
             // Liga a que estava desligada na config, desliga a que estava ligada.
             val isOn = o.cvars.all { base[it.key] == it.value.first }
-            label = (if (isOn) "sem " else "com ") + o.label
+            label = if (o.kind == PROBE) o.label else (if (isOn) "sem " else "com ") + o.label
             next = base + o.cvars.mapValues { if (isOn) it.value.second else it.value.first }
         }
         showStatus("Autoteste do render ${i + 1}/${active.size + 1}: $label")
         log("autoteste: inicio '$label'")
-        NativeGameState.setCvarsLive(next)
+        measure(next) { img, _, gpu ->
+            val ref = reference
+            var same = true
+            val line = if (img == null || ref == null) {
+                String.format(Locale.ROOT, "%-46s sem foto%s\n", label, gpu)
+            } else {
+                val (pct, psnr) = diff(ref, img)
+                val verdict = when {
+                    kind == PROBE -> "(so mede)"
+                    pct <= noise * 2 + 0.05 -> "igual"
+                    pct < 2.0 -> "PEQUENA diferenca"
+                    else -> "DIFERENTE"
+                }
+                same = verdict == "igual"
+                String.format(Locale.ROOT, "%-46s %.3f%% pixels, PSNR %.1f dB -> %s%s\n", label, pct, psnr, verdict, gpu)
+            }
+            report.append(line)
+            log("autoteste: " + line.trim())
+            if (same || i == active.size) step(i + 1) else recheck(label) { step(i + 1) }
+        }
+    }
+
+    /**
+     * Depois de um estado que mudou a imagem: volta a config e confirma que o frame refeito volta
+     * a referencia. Se nao voltar (o estado deixou lixo numa textura que o frame nao reescreve:
+     * RG Cube 17/10 14:44, depois de 'sem transferencias saltadas' tudo dava ~10.8%), a foto nova
+     * passa a ser a referencia, para os estados seguintes nao herdarem a diferenca.
+     */
+    private fun recheck(prev: String, next: () -> Unit) {
+        NativeGameState.setCvarsLive(base)
         after(3500) {
             capture { img ->
                 val ref = reference
-                val line = if (img == null || ref == null) {
-                    String.format(Locale.ROOT, "%-46s sem foto\n", label)
-                } else {
-                    val (pct, psnr) = diff(ref, img)
-                    val verdict = when {
-                        pct <= noise * 2 + 0.05 -> "igual"
-                        pct < 2.0 -> "PEQUENA diferenca"
-                        else -> "DIFERENTE"
+                if (img != null && ref != null) {
+                    val (pct, _) = diff(ref, img)
+                    if (pct > noise * 2 + 0.05) {
+                        reference = img
+                        val note = String.format(
+                            Locale.ROOT,
+                            "  (de volta a config a imagem ficou %.3f%% diferente da referencia: '%s' deixou o frame mudado; nova referencia)\n",
+                            pct, prev,
+                        )
+                        report.append(note)
+                        log("autoteste: " + note.trim())
                     }
-                    String.format(Locale.ROOT, "%-46s %.3f%% pixels, PSNR %.1f dB -> %s\n", label, pct, psnr, verdict)
                 }
-                report.append(line)
-                log("autoteste: " + line.trim())
-                after(4500) { step(i + 1) }
+                after(500) { next() }
             }
         }
     }
@@ -189,7 +265,8 @@ class RenderSelfTest(
         // Volta tudo ao que estava (e descongela).
         NativeGameState.setCvarsLive(restoreMap())
         log("autoteste: fim")
-        report.append("\nCorrelacione com as linhas 'perf' do dragonfury_last.log pelos horarios 'autoteste:'.\n")
+        report.append("\nGPU = media por frame do frame congelado (~6 s em cada estado; des = desenho, res = resolve,\n")
+        report.append("tr = transferencias, out = outros). Mais detalhe nas linhas 'perf' do dragonfury_last.log.\n")
         try {
             File(AppPaths.logsDir, "autoteste.txt").writeText(report.toString())
         } catch (_: Exception) {
@@ -311,5 +388,8 @@ class RenderSelfTest(
     private companion object {
         const val FREEZE = "dbz3_freeze_frame"
         const val OVERLAY = "debug_overlay"
+        const val OPT = 0
+        const val EFFECT = 1
+        const val PROBE = 2
     }
 }

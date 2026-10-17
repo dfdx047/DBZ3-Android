@@ -145,6 +145,20 @@ object NativeGameState {
         }
     }
 
+    /**
+     * Totais de GPU desde o arranque (patch 0060, com dbz3_perf_logging), em microssegundos:
+     * frames, total, outros, desenho, transfer, resolve, texturas, swap. Null sem o build novo.
+     */
+    fun gpuTotals(): LongArray? {
+        if (!available) return null
+        return try {
+            nativeGpuTotals()
+        } catch (_: UnsatisfiedLinkError) {
+            null
+        }
+    }
+
+    @JvmStatic private external fun nativeGpuTotals(): LongArray?
     @JvmStatic private external fun nativeSetCvarsLive(names: Array<String>, values: Array<String>): Boolean
     @JvmStatic private external fun nativeGetCvar(name: String): String
     @JvmStatic private external fun nativeLogLine(line: String)

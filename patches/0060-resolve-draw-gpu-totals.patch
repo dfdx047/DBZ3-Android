@@ -1,0 +1,422 @@
+diff --git a/include/rex/graphics/vulkan/command_processor.h b/include/rex/graphics/vulkan/command_processor.h
+index 5f35549..79c4361 100644
+--- a/include/rex/graphics/vulkan/command_processor.h
++++ b/include/rex/graphics/vulkan/command_processor.h
+@@ -211,6 +211,10 @@ class VulkanCommandProcessor : public CommandProcessor {
+   // do inicio do passe atual em vez de o terminar, quando o passe ainda nao leu as paginas.
+   bool in_render_pass() const { return in_render_pass_; }
+   // DBZ3-Android: tempo de GPU por draw durante uma captura (patch 0034).
++  // DBZ3-Android (0060, dbz3_resolve_draw): passe avulso com uma so vista de cor (a textura
++  // de um resolve), so com dynamic rendering. Fecha o passe atual; fecha-se com EndRenderPass.
++  bool Dbz3CanBeginStandalonePass() const;
++  bool Dbz3BeginStandalonePass(VkImageView view, uint32_t width, uint32_t height);
+   void Dbz3DrawTimingBegin();
+   void Dbz3DrawTimestamp(xenos::PrimitiveType prim_type, uint32_t index_count);
+   void Dbz3DrawTimingReadback();
+diff --git a/include/rex/graphics/vulkan/render_target_cache.h b/include/rex/graphics/vulkan/render_target_cache.h
+index 02a9211..c2871d9 100644
+--- a/include/rex/graphics/vulkan/render_target_cache.h
++++ b/include/rex/graphics/vulkan/render_target_cache.h
+@@ -857,6 +857,13 @@ class VulkanRenderTargetCache final : public RenderTargetCache {
+   bool Dbz3BufferResolveToTexture(VulkanRenderTarget& rt, bool source_is_integer,
+                                   VulkanTextureCache& texture_cache, void* texture, uint32_t width,
+                                   uint32_t height, bool swap_rb);
++  // 0060 (dbz3_resolve_draw): a copia do resolve como um desenho de ecra inteiro na textura
++  // (passe de fragmentos) em vez de compute. Nos Mali o compute a meio do frame obriga a GPU a
++  // esvaziar os fragmentos antes (e o passe seguinte a esperar por ele).
++  VkPipeline Dbz3DrawCopyPipeline(bool source_is_integer);
++  bool Dbz3DrawToTexture(VulkanRenderTarget& rt, bool source_is_integer,
++                         VulkanTextureCache& texture_cache, void* texture, uint32_t width,
++                         uint32_t height, bool swap_rb);
+   bool Dbz3TryResolveDepthToTexture(const draw_util::ResolveInfo& resolve_info,
+                                     VulkanTextureCache& texture_cache, bool skip_memory);
+ 
+diff --git a/include/rex/perf/frame_rate.h b/include/rex/perf/frame_rate.h
+index e6fbee4..780c9b4 100644
+--- a/include/rex/perf/frame_rate.h
++++ b/include/rex/perf/frame_rate.h
+@@ -66,4 +66,11 @@ float GetDisplayRefreshRate();
+ void SetPresentInfo(const std::string& info);
+ std::string GetPresentInfo();
+ 
++// DBZ3-Android (0060): GPU time of the frames the profiler measured (dbz3_perf_logging), totals
++// since startup in microseconds: [0] frames, [1] total, [2..7] per category (other, draw,
++// transfer, resolve, textures, swap). The render self-test takes differences per state.
++constexpr size_t kGpuTotalsCount = 8;
++void AddGpuFrame(double total_ms, const double* category_ms, size_t category_count);
++void GetGpuTotals(uint64_t* out, size_t count);
++
+ }  // namespace rex::perf
+diff --git a/src/core/perf/frame_rate.cpp b/src/core/perf/frame_rate.cpp
+index 53f9166..9ab56ee 100644
+--- a/src/core/perf/frame_rate.cpp
++++ b/src/core/perf/frame_rate.cpp
+@@ -113,4 +113,23 @@ std::string GetPresentInfo() {
+   return g_present_info;
+ }
+ 
++namespace {
++std::array<std::atomic<uint64_t>, kGpuTotalsCount> g_gpu_totals{};
++}  // namespace
++
++void AddGpuFrame(double total_ms, const double* category_ms, size_t category_count) {
++  g_gpu_totals[0].fetch_add(1, std::memory_order_relaxed);
++  g_gpu_totals[1].fetch_add(uint64_t(std::max(total_ms, 0.0) * 1000.0), std::memory_order_relaxed);
++  for (size_t i = 0; i < category_count && i + 2 < kGpuTotalsCount; ++i) {
++    g_gpu_totals[i + 2].fetch_add(uint64_t(std::max(category_ms[i], 0.0) * 1000.0),
++                                  std::memory_order_relaxed);
++  }
++}
++
++void GetGpuTotals(uint64_t* out, size_t count) {
++  for (size_t i = 0; i < count && i < kGpuTotalsCount; ++i) {
++    out[i] = g_gpu_totals[i].load(std::memory_order_relaxed);
++  }
++}
++
+ }  // namespace rex::perf
+diff --git a/src/graphics/vulkan/command_processor.cpp b/src/graphics/vulkan/command_processor.cpp
+index bf24946..abd7ded 100644
+--- a/src/graphics/vulkan/command_processor.cpp
++++ b/src/graphics/vulkan/command_processor.cpp
+@@ -2676,6 +2676,8 @@ void FinishFrame(Reader& rd) {
+   for (uint32_t i = 0; i < prof::kCount; ++i) {
+     rd.win_cat[i] += rd.acc_cat[i];
+   }
++  // 0060: totais para o autoteste (ms de GPU por estado, sem ler o log).
++  rex::perf::AddGpuFrame(rd.acc_ms, rd.acc_cat.data(), rd.acc_cat.size());
+ }
+ 
+ bool ReadRange(Reader& rd, uint32_t first, uint32_t count, uint64_t* out) {
+@@ -4157,6 +4159,45 @@ bool VulkanCommandProcessor::SharedMemoryReadInCurrentPass(uint32_t start, uint3
+   return false;
+ }
+ 
++bool VulkanCommandProcessor::Dbz3CanBeginStandalonePass() const {
++  return REXCVAR_GET(vulkan_dynamic_rendering) && GetVulkanDevice()->properties().dynamicRendering;
++}
++
++bool VulkanCommandProcessor::Dbz3BeginStandalonePass(VkImageView view, uint32_t width,
++                                                     uint32_t height) {
++  assert_true(submission_open_);
++  if (!Dbz3CanBeginStandalonePass() || view == VK_NULL_HANDLE) {
++    return false;
++  }
++  // Fecha o passe do jogo e grava as barreiras pendentes (render target para leitura,
++  // textura para alvo de cor).
++  SubmitBarriers(true);
++  EndRenderPass();
++  VkRenderingAttachmentInfo color_attachment = {};
++  color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
++  color_attachment.imageView = view;
++  color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
++  color_attachment.resolveMode = VK_RESOLVE_MODE_NONE;
++  color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
++  color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
++  VkRenderingInfo rendering_info = {};
++  rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
++  rendering_info.renderArea.offset = {0, 0};
++  rendering_info.renderArea.extent = {width, height};
++  rendering_info.layerCount = 1;
++  rendering_info.colorAttachmentCount = 1;
++  rendering_info.pColorAttachments = &color_attachment;
++  deferred_command_buffer_.CmdVkBeginRendering(&rendering_info);
++  in_render_pass_ = true;
++  current_render_pass_ = VK_NULL_HANDLE;
++  current_framebuffer_ = nullptr;
++  // Nada de uploads gravados antes deste passe (hoist): nao e um passe do jogo.
++  render_pass_begin_position_ = SIZE_MAX;
++  pass_shared_memory_reads_.clear();
++  pass_shared_memory_reads_overflow_ = false;
++  return true;
++}
++
+ void VulkanCommandProcessor::EndRenderPass(const char* reason_file, uint32_t reason_line) {
+   assert_true(submission_open_);
+   if (!in_render_pass_) {
+diff --git a/src/graphics/vulkan/render_target_cache.cpp b/src/graphics/vulkan/render_target_cache.cpp
+index d2c1513..adb5bd2 100644
+--- a/src/graphics/vulkan/render_target_cache.cpp
++++ b/src/graphics/vulkan/render_target_cache.cpp
+@@ -74,7 +74,14 @@ REXCVAR_DEFINE_STRING(render_target_path_vulkan, "", "GPU/Vulkan",
+ //     "GPU");
+ 
+ REXCVAR_DEFINE_INT32(dbz3_resolve_debug, 0, "GPU",
+-                     "DBZ3-Android: 1 = resolves sem trabalho na GPU (so para medir o custo)");
++                     "DBZ3-Android: 1 = resolves sem trabalho na GPU (so para medir o custo); "
++                     "2 = so fecham o passe, sem a copia (0060: separa o custo da copia do "
++                     "do fim de passe)")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++REXCVAR_DEFINE_BOOL(dbz3_resolve_draw, false, "GPU",
++                    "DBZ3-Android (0060): resolves de cor para a textura com um desenho (passe de "
++                    "fragmentos) em vez de compute")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+ 
+ namespace rex::graphics::vulkan {
+ 
+@@ -1350,6 +1357,16 @@ bool VulkanRenderTargetCache::Resolve(const memory::Memory& memory,
+     }
+   }
+   if (resolve_info.copy_dest_extent_length && !copied) {
++    // 0060: este resolve escreve a memoria do guest: a partir daqui a memoria deste destino
++    // esta em dia e uma textura carregada dela ja nao le conteudo velho. Sem isto, desligar o
++    // atalho por um momento (autoteste, 17/10 14:45 no RG Cube) ou uma falha dele num frame
++    // marcava todos os destinos como "precisa da memoria" para sempre (resolve 14 -> 28 ms).
++    g_dbz3_skipped_memory.erase(
++        std::remove_if(g_dbz3_skipped_memory.begin(), g_dbz3_skipped_memory.end(),
++                       [&](const Dbz3SkippedMemoryRange& r) {
++                         return r.dest_base == resolve_info.copy_dest_base;
++                       }),
++        g_dbz3_skipped_memory.end());
+     draw_util::ResolveCopyShaderConstants copy_shader_constants;
+     uint32_t copy_group_count_x, copy_group_count_y;
+     draw_util::ResolveCopyShaderIndex copy_shader =
+@@ -6872,19 +6889,34 @@ bool VulkanRenderTargetCache::Dbz3TryResolveToTexture(const draw_util::ResolveIn
+                                       resolve_info.copy_dest_extent_length);
+     dbz3_gpuprof::CountSkippedMemory();
+   }
+-  // O render target fica pronto para leitura em compute.
++  // O render target fica pronto para leitura em compute (e nos fragmentos, com 0060).
++  const bool draw_copy = REXCVAR_GET(dbz3_resolve_draw) && samples == 1 &&
++                         command_processor_.Dbz3CanBeginStandalonePass();
++  const VkPipelineStageFlags read_stage =
++      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
++      (draw_copy ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT : VkPipelineStageFlags(0));
+   command_processor_.PushImageMemoryBarrier(
+       rt.image(), ui::vulkan::util::InitializeSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT),
+-      rt.current_stage_mask(), VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, rt.current_access_mask(),
++      rt.current_stage_mask(), read_stage, rt.current_access_mask(),
+       VK_ACCESS_SHADER_READ_BIT, rt.current_layout(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+-  rt.SetUsage(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT,
+-              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
++  rt.SetUsage(read_stage, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
++  // 0060, diagnostico (dbz3_resolve_debug = 2): fecha o passe como o resolve, sem a copia.
++  if (REXCVAR_GET(dbz3_resolve_debug) == 2) {
++    command_processor_.SubmitBarriers(true);
++    dbz3_gpuprof::CountDirectResolve();
++    return true;
++  }
+ 
+   bool any = false;
+   for (uint32_t i = 0; i < texture_count; ++i) {
+     void* texture = textures[i];
+     const uint32_t tex_height = std::min(height, texture_cache.Dbz3TextureHeight(texture));
+     const uint32_t tex_width = std::min(width, texture_cache.Dbz3TextureWidth(texture));
++    if (draw_copy && Dbz3DrawToTexture(rt, source_is_integer, texture_cache, texture, tex_width,
++                                       tex_height, swap_rb)) {
++      any = true;
++      continue;
++    }
+     if (texture_cache.Dbz3TextureHasStorage(texture)) {
+       const uint32_t variant = (samples > 1 ? 2u : 0u) + (source_is_integer ? 1u : 0u);
+       if (Dbz3StoreToTexture(variant, rt.GetDescriptorSetTransferSource(), texture_cache, texture,
+@@ -6905,6 +6937,198 @@ bool VulkanRenderTargetCache::Dbz3TryResolveToTexture(const draw_util::ResolveIn
+   return any;
+ }
+ 
++// 0060 (dbz3_resolve_draw): copia do resolve como desenho. Um triangulo de ecra inteiro, o
++// fragmento le o texel do render target na mesma posicao (como o compute variante 0/1).
++namespace {
++struct Dbz3DrawCopyState {
++  bool init_tried = false;
++  VkPipelineLayout layout = VK_NULL_HANDLE;
++  VkPipeline pipelines[2] = {VK_NULL_HANDLE, VK_NULL_HANDLE};  // [unorm, uint]
++  bool tried[2] = {false, false};
++  uint32_t logged = 0;
++};
++Dbz3DrawCopyState g_dbz3_draw_copy;
++}  // namespace
++
++VkPipeline VulkanRenderTargetCache::Dbz3DrawCopyPipeline(bool source_is_integer) {
++  Dbz3DrawCopyState& st = g_dbz3_draw_copy;
++  const ui::vulkan::VulkanDevice* const vulkan_device = command_processor_.GetVulkanDevice();
++  const ui::vulkan::VulkanDevice::Functions& dfn = vulkan_device->functions();
++  const VkDevice device = vulkan_device->device();
++  if (!st.init_tried) {
++    st.init_tried = true;
++    VkPushConstantRange push_range = {VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(uint32_t)};
++    VkPipelineLayoutCreateInfo layout_info = {};
++    layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
++    layout_info.setLayoutCount = 1;
++    layout_info.pSetLayouts = &descriptor_set_layout_sampled_image_;
++    layout_info.pushConstantRangeCount = 1;
++    layout_info.pPushConstantRanges = &push_range;
++    if (dfn.vkCreatePipelineLayout(device, &layout_info, nullptr, &st.layout) != VK_SUCCESS) {
++      st.layout = VK_NULL_HANDLE;
++      REXGPU_ERROR("dbz3: resolve por desenho: vkCreatePipelineLayout falhou");
++    }
++  }
++  const uint32_t index = source_is_integer ? 1 : 0;
++  if (st.layout == VK_NULL_HANDLE || st.tried[index]) {
++    return st.pipelines[index];
++  }
++  st.tried[index] = true;
++  const std::string vs_source =
++      "#version 450\n"
++      "void main() {\n"
++      "  vec2 p = vec2(float((gl_VertexIndex << 1) & 2), float(gl_VertexIndex & 2));\n"
++      "  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);\n"
++      "}\n";
++  std::string fs_source =
++      "#version 450\n"
++      "#extension GL_EXT_samplerless_texture_functions : require\n"
++      "layout(push_constant) uniform Constants { uint swap_rb; } pc;\n";
++  fs_source += std::string("layout(set = 0, binding = 0) uniform ") +
++               (source_is_integer ? "u" : "") + "texture2D src;\n";
++  fs_source += "layout(location = 0) out vec4 o;\n"
++               "void main() {\n"
++               "  ivec2 p = ivec2(gl_FragCoord.xy);\n";
++  fs_source += source_is_integer ? "  vec4 c = vec4(texelFetch(src, p, 0) & 0xFFu) / 255.0;\n"
++                                 : "  vec4 c = clamp(texelFetch(src, p, 0), 0.0, 1.0);\n";
++  fs_source += "  if (pc.swap_rb != 0u) c.rb = c.br;\n"
++               "  o = c;\n"
++               "}\n";
++  VkShaderModule modules[2] = {VK_NULL_HANDLE, VK_NULL_HANDLE};
++  const VkShaderStageFlagBits stages[2] = {VK_SHADER_STAGE_VERTEX_BIT,
++                                           VK_SHADER_STAGE_FRAGMENT_BIT};
++  const std::string* sources[2] = {&vs_source, &fs_source};
++  for (uint32_t i = 0; i < 2; ++i) {
++    std::vector<uint32_t> spirv;
++    std::string error;
++    if (!command_processor_.CompileGlslToSpirv(stages[i], *sources[i], spirv, error)) {
++      REXGPU_ERROR("dbz3: resolve por desenho: shader nao compilou: {}", error);
++      break;
++    }
++    VkShaderModuleCreateInfo module_info = {};
++    module_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
++    module_info.codeSize = spirv.size() * sizeof(uint32_t);
++    module_info.pCode = spirv.data();
++    if (dfn.vkCreateShaderModule(device, &module_info, nullptr, &modules[i]) != VK_SUCCESS) {
++      modules[i] = VK_NULL_HANDLE;
++      break;
++    }
++  }
++  if (modules[0] != VK_NULL_HANDLE && modules[1] != VK_NULL_HANDLE) {
++    VkPipelineShaderStageCreateInfo shader_stages[2] = {};
++    for (uint32_t i = 0; i < 2; ++i) {
++      shader_stages[i].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
++      shader_stages[i].stage = stages[i];
++      shader_stages[i].module = modules[i];
++      shader_stages[i].pName = "main";
++    }
++    VkPipelineVertexInputStateCreateInfo vertex_input_state = {};
++    vertex_input_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
++    VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {};
++    input_assembly_state.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
++    input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
++    VkPipelineViewportStateCreateInfo viewport_state = {};
++    viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
++    viewport_state.viewportCount = 1;
++    viewport_state.scissorCount = 1;
++    VkPipelineRasterizationStateCreateInfo rasterization_state = {};
++    rasterization_state.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
++    rasterization_state.polygonMode = VK_POLYGON_MODE_FILL;
++    rasterization_state.cullMode = VK_CULL_MODE_NONE;
++    rasterization_state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
++    rasterization_state.lineWidth = 1.0f;
++    VkPipelineMultisampleStateCreateInfo multisample_state = {};
++    multisample_state.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
++    multisample_state.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
++    VkPipelineDepthStencilStateCreateInfo depth_stencil_state = {};
++    depth_stencil_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
++    VkPipelineColorBlendAttachmentState blend_attachment = {};
++    blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
++                                      VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
++    VkPipelineColorBlendStateCreateInfo color_blend_state = {};
++    color_blend_state.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
++    color_blend_state.attachmentCount = 1;
++    color_blend_state.pAttachments = &blend_attachment;
++    const VkDynamicState dynamic_states[2] = {VK_DYNAMIC_STATE_VIEWPORT,
++                                              VK_DYNAMIC_STATE_SCISSOR};
++    VkPipelineDynamicStateCreateInfo dynamic_state = {};
++    dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
++    dynamic_state.dynamicStateCount = 2;
++    dynamic_state.pDynamicStates = dynamic_states;
++    const VkFormat color_format = VK_FORMAT_R8G8B8A8_UNORM;
++    VkPipelineRenderingCreateInfo rendering_create_info = {};
++    rendering_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
++    rendering_create_info.colorAttachmentCount = 1;
++    rendering_create_info.pColorAttachmentFormats = &color_format;
++    VkGraphicsPipelineCreateInfo pipeline_info = {};
++    pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
++    pipeline_info.pNext = &rendering_create_info;
++    pipeline_info.stageCount = 2;
++    pipeline_info.pStages = shader_stages;
++    pipeline_info.pVertexInputState = &vertex_input_state;
++    pipeline_info.pInputAssemblyState = &input_assembly_state;
++    pipeline_info.pViewportState = &viewport_state;
++    pipeline_info.pRasterizationState = &rasterization_state;
++    pipeline_info.pMultisampleState = &multisample_state;
++    pipeline_info.pDepthStencilState = &depth_stencil_state;
++    pipeline_info.pColorBlendState = &color_blend_state;
++    pipeline_info.pDynamicState = &dynamic_state;
++    pipeline_info.layout = st.layout;
++    pipeline_info.basePipelineIndex = -1;
++    if (dfn.vkCreateGraphicsPipelines(device, Dbz3GetDriverPipelineCache(), 1, &pipeline_info,
++                                      nullptr, &st.pipelines[index]) != VK_SUCCESS) {
++      st.pipelines[index] = VK_NULL_HANDLE;
++      REXGPU_ERROR("dbz3: resolve por desenho: vkCreateGraphicsPipelines falhou");
++    } else {
++      Dbz3MarkDriverPipelineCacheDirty();
++      REXGPU_INFO("dbz3: resolve por desenho ativo (origem {})",
++                  source_is_integer ? "uint" : "unorm");
++    }
++  }
++  for (VkShaderModule module : modules) {
++    if (module != VK_NULL_HANDLE) dfn.vkDestroyShaderModule(device, module, nullptr);
++  }
++  return st.pipelines[index];
++}
++
++bool VulkanRenderTargetCache::Dbz3DrawToTexture(VulkanRenderTarget& rt, bool source_is_integer,
++                                                VulkanTextureCache& texture_cache, void* texture,
++                                                uint32_t width, uint32_t height, bool swap_rb) {
++  if (!texture_cache.Dbz3TextureIsRenderable(texture)) {
++    return false;
++  }
++  const VkImageView view = texture_cache.Dbz3GetAttachmentView(texture, false);
++  const VkPipeline pipeline = Dbz3DrawCopyPipeline(source_is_integer);
++  if (view == VK_NULL_HANDLE || pipeline == VK_NULL_HANDLE) {
++    return false;
++  }
++  texture_cache.Dbz3BeginAttachmentWrite(texture);
++  if (!command_processor_.Dbz3BeginStandalonePass(view, width, height)) {
++    texture_cache.Dbz3EndAttachmentWrite(texture);
++    return false;
++  }
++  DeferredCommandBuffer& command_buffer = command_processor_.deferred_command_buffer();
++  command_processor_.BindExternalGraphicsPipeline(pipeline);
++  VkViewport viewport = {0.0f, 0.0f, float(width), float(height), 0.0f, 1.0f};
++  command_processor_.SetViewport(viewport);
++  VkRect2D scissor = {{0, 0}, {width, height}};
++  command_processor_.SetScissor(scissor);
++  const VkDescriptorSet source_set = rt.GetDescriptorSetTransferSource();
++  command_buffer.CmdVkBindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS,
++                                         g_dbz3_draw_copy.layout, 0, 1, &source_set, 0, nullptr);
++  const uint32_t swap = swap_rb ? 1u : 0u;
++  command_buffer.CmdVkPushConstants(g_dbz3_draw_copy.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0,
++                                    sizeof(swap), &swap);
++  command_buffer.CmdVkDraw(3, 1, 0, 0);
++  command_processor_.EndRenderPass();
++  texture_cache.Dbz3EndAttachmentWrite(texture);
++  if (g_dbz3_draw_copy.logged < 4) {
++    ++g_dbz3_draw_copy.logged;
++    REXGPU_INFO("dbz3: resolve por desenho {}x{} troca_rb={}", width, height, swap);
++  }
++  return true;
++}
++
+ // Caminho antigo (texturas sem STORAGE): compute -> buffer linear -> copia para a imagem.
+ bool VulkanRenderTargetCache::Dbz3BufferResolveToTexture(VulkanRenderTarget& rt,
+                                                          bool source_is_integer,
+@@ -7159,6 +7383,10 @@ bool VulkanRenderTargetCache::Dbz3TryResolveDepthToTexture(
+       VK_ACCESS_SHADER_READ_BIT, rt.current_layout(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+   rt.SetUsage(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT,
+               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
++  if (REXCVAR_GET(dbz3_resolve_debug) == 2) {
++    command_processor_.SubmitBarriers(true);
++    return true;
++  }
+ 
+   DeferredCommandBuffer& command_buffer = command_processor_.deferred_command_buffer();
+   for (uint32_t i = 0; i < target_count; ++i) {
