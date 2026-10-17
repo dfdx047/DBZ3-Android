@@ -1080,3 +1080,12 @@ diferente?); `dbz3: dedupe:` e `dbz3: passo 4:` no log; perf a 720p vs 540p no C
   GetResolveInfo) e a limpeza sai aí, para os cortes verem um resolve sem limpeza.
 - "com brilho"/"com DOF" a partir de tudo desligado davam +10 ms de resolve: transitório de religar
   (destinos "sem leitor" a voltarem), não o custo real (com tudo ligado eram 3 e 1,3 ms).
+
+### 2026-10-17 17:23 — 0.5.7 no Cube (720p sem efeitos); patch 0064 (v0.5.8)
+
+- 0063 resolveu o 1F35F000 (12 linhas só no arranque). O ciclo passou para 1EFC7000, a outra entrada
+  do FXAA aprendida: 365 "sem leitor" em ~4 min (~1,5/s, ~3 resolves por frame nesse destino) e
+  "lido a sério" a cada ~30 s. É uma cópia do ecrã que o jogo usa várias vezes por frame; uma das
+  leituras é real, por isso o dedupe matava e revivia o destino (e cada revivência lia conteúdo velho).
+- 0064: `revivals` por destino no dedupe; com 2 revivências nunca mais é dado como sem leitor.
+- Números iguais ao teste anterior: frame congelado 13,8 ms; luta a 720p 55 FPS (GPU ~17 ms).

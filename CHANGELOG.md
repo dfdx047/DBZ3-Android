@@ -3,6 +3,14 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.5.8 — 2026-10-17
+
+### Fixes
+- Resolve dedupe: a destination that a real draw reads again twice after being marked "no reader"
+  is never marked again (patch 0064). A screen copy the game reuses for several things per frame
+  (one of them the FXAA, when off) was dropped and revived about 1.5 times per second, and each
+  revival meant a draw reading stale content.
+
 ## 0.5.7 — 2026-10-17
 
 ### Fixes

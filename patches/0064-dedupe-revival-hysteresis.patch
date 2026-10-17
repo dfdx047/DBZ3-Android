@@ -1,0 +1,33 @@
+diff --git a/src/graphics/vulkan/render_target_cache.cpp b/src/graphics/vulkan/render_target_cache.cpp
+index cd02773..715c078 100644
+--- a/src/graphics/vulkan/render_target_cache.cpp
++++ b/src/graphics/vulkan/render_target_cache.cpp
+@@ -7536,6 +7536,11 @@ struct Entry {
+   bool read = false;
+   bool skipped_read = false;
+   bool dead = false;
++  // 0064: quantas vezes um draw feito voltou a ler o destino depois de "sem leitor". Com 2, o
++  // destino nunca mais e dado como sem leitor: no RG Cube (17/10 17:23) 1EFC7000, a copia do
++  // ecra que o jogo usa para varias coisas por frame (uma delas o FXAA desligado), morria e
++  // revivia ~1,5 vezes por segundo, e cada revivencia e um draw a ler conteudo velho.
++  uint32_t revivals = 0;
+ };
+ std::vector<Entry> g_entries;
+ bool g_key_valid = false;
+@@ -7549,6 +7554,7 @@ void MarkRead(uint32_t address) {
+       if (e.dead) {
+         e.dead = false;
+         e.streak = 0;
++        ++e.revivals;
+         if ((g_revived++ % 64) == 0) {
+           REXGPU_INFO("dbz3: resolves: {:08X} voltou a ser lido, volta a ser resolvido", e.start);
+         }
+@@ -7608,7 +7614,7 @@ bool Resolve(const draw_util::ResolveInfo& ri, bool may_skip) {
+         // Sem leitor nenhum desta vez: fica como esta (nao conta para nenhum lado).
+         e->streak = kDeadStreak;
+       }
+-    } else if (++e->streak >= kDeadStreak && !e->dead) {
++    } else if (++e->streak >= kDeadStreak && !e->dead && e->revivals < 2) {
+       e->dead = true;
+       REXGPU_INFO("dbz3: resolves: {:08X} ({} KB) sem leitor ha {} escritas, deixa de ser resolvido",
+                   start, length >> 10, e->streak);
