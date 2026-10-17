@@ -70,7 +70,7 @@ class RenderSelfTest(
         Opt("render targets diretos", mapOf("dbz3_rt_direct" to ("true" to "false"))),
         Opt("resolve direto na textura", mapOf("dbz3_direct_resolve_texture" to ("1" to "0"))),
         Opt("resolve sem memoria", mapOf("dbz3_direct_resolve_skip_memory" to ("true" to "false"))),
-        // 0060: a copia do resolve como desenho (fragmentos) em vez de compute (Mali).
+        // 0060/0061: a copia do resolve como desenho (fragmentos) em vez de compute (so Mali).
         Opt("resolve por desenho", mapOf("dbz3_resolve_draw" to ("true" to "false"))),
         // Efeitos do jogo: mudam a imagem de proposito ("DIFERENTE" e o esperado); estao aqui
         // pelos ms de GPU de cada um, para decidir as predefinicoes do Mali.
@@ -80,7 +80,6 @@ class RenderSelfTest(
         // Diagnosticos (0060): a imagem fica errada; so os ms contam. "so fecham o passe" separa
         // o custo da copia (o que um resolve mais barato ganharia) do custo dos fins de passe.
         Opt("medir: resolves so fecham o passe", mapOf("dbz3_resolve_debug" to ("2" to "0")), PROBE),
-        Opt("medir: resolves sem trabalho nenhum", mapOf("dbz3_resolve_debug" to ("1" to "0")), PROBE),
     )
 
     /** Estado de referencia: o que o jogo tem agora (o da config). */

@@ -1,0 +1,382 @@
+diff --git a/include/rex/graphics/vulkan/render_target_cache.h b/include/rex/graphics/vulkan/render_target_cache.h
+index c2871d9..853e50d 100644
+--- a/include/rex/graphics/vulkan/render_target_cache.h
++++ b/include/rex/graphics/vulkan/render_target_cache.h
+@@ -860,8 +860,10 @@ class VulkanRenderTargetCache final : public RenderTargetCache {
+   // 0060 (dbz3_resolve_draw): a copia do resolve como um desenho de ecra inteiro na textura
+   // (passe de fragmentos) em vez de compute. Nos Mali o compute a meio do frame obriga a GPU a
+   // esvaziar os fragmentos antes (e o passe seguinte a esperar por ele).
+-  VkPipeline Dbz3DrawCopyPipeline(bool source_is_integer);
+-  bool Dbz3DrawToTexture(VulkanRenderTarget& rt, bool source_is_integer,
++  // Variantes: 0 cor unorm, 1 cor uint, 2 profundidade -> R32F, 3 profundidade -> 8888 (0061).
++  VkPipeline Dbz3DrawCopyPipeline(uint32_t variant);
++  bool Dbz3ResolveDrawEnabled() const;
++  bool Dbz3DrawToTexture(VulkanRenderTarget& rt, uint32_t variant,
+                          VulkanTextureCache& texture_cache, void* texture, uint32_t width,
+                          uint32_t height, bool swap_rb);
+   bool Dbz3TryResolveDepthToTexture(const draw_util::ResolveInfo& resolve_info,
+diff --git a/include/rex/graphics/vulkan/texture_cache.h b/include/rex/graphics/vulkan/texture_cache.h
+index 90b1825..0d33625 100644
+--- a/include/rex/graphics/vulkan/texture_cache.h
++++ b/include/rex/graphics/vulkan/texture_cache.h
+@@ -74,6 +74,8 @@ class VulkanTextureCache final : public TextureCache {
+   // Dragon Burst (render nativo, passo 4): a textura como alvo de cor de um passe
+   // (COLOR_ATTACHMENT_OPTIMAL) e depois marcada como carregada e pronta para leitura.
+   bool Dbz3TextureIsRenderable(void* texture) const;
++  // 0061: pode ser o alvo de cor do resolve por desenho (8888 ou k_24_8 em R32F).
++  bool Dbz3TextureIsDrawTarget(void* texture) const;
+   // Vista para desenhar na textura. bgra: vista B8G8R8A8 da mesma imagem, para os resolves
+   // com troca de vermelho/azul (copy_dest_swap, todos os do pos do BL): o passe escreve a cor
+   // como o render target a teria e a imagem fica com R e B trocados, como o resolve deixaria.
+diff --git a/src/graphics/vulkan/render_target_cache.cpp b/src/graphics/vulkan/render_target_cache.cpp
+index adb5bd2..0af77c1 100644
+--- a/src/graphics/vulkan/render_target_cache.cpp
++++ b/src/graphics/vulkan/render_target_cache.cpp
+@@ -78,9 +78,13 @@ REXCVAR_DEFINE_INT32(dbz3_resolve_debug, 0, "GPU",
+                      "2 = so fecham o passe, sem a copia (0060: separa o custo da copia do "
+                      "do fim de passe)")
+     .lifecycle(rex::cvar::Lifecycle::kHotReload);
+-REXCVAR_DEFINE_BOOL(dbz3_resolve_draw, false, "GPU",
+-                    "DBZ3-Android (0060): resolves de cor para a textura com um desenho (passe de "
+-                    "fragmentos) em vez de compute")
++REXCVAR_DEFINE_BOOL(dbz3_resolve_draw, true, "GPU",
++                    "DBZ3-Android (0060/0061): resolves para a textura com um desenho (passe de "
++                    "fragmentos) em vez de compute. So nos Mali (no RG Cube, 17/10 15:24: resolve "
++                    "14,1 -> 9,9 ms, imagem igual), salvo dbz3_resolve_draw_any_gpu")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++REXCVAR_DEFINE_BOOL(dbz3_resolve_draw_any_gpu, false, "GPU",
++                    "DBZ3-Android (0061): dbz3_resolve_draw tambem fora dos Mali")
+     .lifecycle(rex::cvar::Lifecycle::kHotReload);
+ 
+ namespace rex::graphics::vulkan {
+@@ -6890,8 +6894,7 @@ bool VulkanRenderTargetCache::Dbz3TryResolveToTexture(const draw_util::ResolveIn
+     dbz3_gpuprof::CountSkippedMemory();
+   }
+   // O render target fica pronto para leitura em compute (e nos fragmentos, com 0060).
+-  const bool draw_copy = REXCVAR_GET(dbz3_resolve_draw) && samples == 1 &&
+-                         command_processor_.Dbz3CanBeginStandalonePass();
++  const bool draw_copy = samples == 1 && Dbz3ResolveDrawEnabled();
+   const VkPipelineStageFlags read_stage =
+       VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+       (draw_copy ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT : VkPipelineStageFlags(0));
+@@ -6903,6 +6906,9 @@ bool VulkanRenderTargetCache::Dbz3TryResolveToTexture(const draw_util::ResolveIn
+   // 0060, diagnostico (dbz3_resolve_debug = 2): fecha o passe como o resolve, sem a copia.
+   if (REXCVAR_GET(dbz3_resolve_debug) == 2) {
+     command_processor_.SubmitBarriers(true);
++    // 0061: as texturas ficam como "carregadas" (sem isto recarregavam da memoria e o autoteste
++    // media as cargas, 17/10 15:25).
++    for (uint32_t i = 0; i < texture_count; ++i) texture_cache.Dbz3EndAttachmentWrite(textures[i]);
+     dbz3_gpuprof::CountDirectResolve();
+     return true;
+   }
+@@ -6912,8 +6918,8 @@ bool VulkanRenderTargetCache::Dbz3TryResolveToTexture(const draw_util::ResolveIn
+     void* texture = textures[i];
+     const uint32_t tex_height = std::min(height, texture_cache.Dbz3TextureHeight(texture));
+     const uint32_t tex_width = std::min(width, texture_cache.Dbz3TextureWidth(texture));
+-    if (draw_copy && Dbz3DrawToTexture(rt, source_is_integer, texture_cache, texture, tex_width,
+-                                       tex_height, swap_rb)) {
++    if (draw_copy && Dbz3DrawToTexture(rt, source_is_integer ? 1u : 0u, texture_cache, texture,
++                                       tex_width, tex_height, swap_rb)) {
+       any = true;
+       continue;
+     }
+@@ -6942,38 +6948,53 @@ bool VulkanRenderTargetCache::Dbz3TryResolveToTexture(const draw_util::ResolveIn
+ namespace {
+ struct Dbz3DrawCopyState {
+   bool init_tried = false;
+-  VkPipelineLayout layout = VK_NULL_HANDLE;
+-  VkPipeline pipelines[2] = {VK_NULL_HANDLE, VK_NULL_HANDLE};  // [unorm, uint]
+-  bool tried[2] = {false, false};
++  VkPipelineLayout layouts[2] = {VK_NULL_HANDLE, VK_NULL_HANDLE};  // [cor, profundidade]
++  VkPipeline pipelines[4] = {};
++  bool tried[4] = {};
+   uint32_t logged = 0;
+ };
+ Dbz3DrawCopyState g_dbz3_draw_copy;
+ }  // namespace
+ 
+-VkPipeline VulkanRenderTargetCache::Dbz3DrawCopyPipeline(bool source_is_integer) {
++bool VulkanRenderTargetCache::Dbz3ResolveDrawEnabled() const {
++  if (!REXCVAR_GET(dbz3_resolve_draw) || !command_processor_.Dbz3CanBeginStandalonePass()) {
++    return false;
++  }
++  return REXCVAR_GET(dbz3_resolve_draw_any_gpu) ||
++         command_processor_.GetVulkanDevice()->properties().driverID ==
++             VK_DRIVER_ID_ARM_PROPRIETARY;
++}
++
++VkPipeline VulkanRenderTargetCache::Dbz3DrawCopyPipeline(uint32_t variant) {
+   Dbz3DrawCopyState& st = g_dbz3_draw_copy;
++  if (variant > 3) return VK_NULL_HANDLE;
+   const ui::vulkan::VulkanDevice* const vulkan_device = command_processor_.GetVulkanDevice();
+   const ui::vulkan::VulkanDevice::Functions& dfn = vulkan_device->functions();
+   const VkDevice device = vulkan_device->device();
+   if (!st.init_tried) {
+     st.init_tried = true;
+-    VkPushConstantRange push_range = {VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(uint32_t)};
+-    VkPipelineLayoutCreateInfo layout_info = {};
+-    layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+-    layout_info.setLayoutCount = 1;
+-    layout_info.pSetLayouts = &descriptor_set_layout_sampled_image_;
+-    layout_info.pushConstantRangeCount = 1;
+-    layout_info.pPushConstantRanges = &push_range;
+-    if (dfn.vkCreatePipelineLayout(device, &layout_info, nullptr, &st.layout) != VK_SUCCESS) {
+-      st.layout = VK_NULL_HANDLE;
+-      REXGPU_ERROR("dbz3: resolve por desenho: vkCreatePipelineLayout falhou");
++    const VkDescriptorSetLayout set_layouts[2] = {descriptor_set_layout_sampled_image_,
++                                                  descriptor_set_layout_sampled_image_x2_};
++    for (uint32_t i = 0; i < 2; ++i) {
++      VkPushConstantRange push_range = {VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(uint32_t)};
++      VkPipelineLayoutCreateInfo layout_info = {};
++      layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
++      layout_info.setLayoutCount = 1;
++      layout_info.pSetLayouts = &set_layouts[i];
++      layout_info.pushConstantRangeCount = 1;
++      layout_info.pPushConstantRanges = &push_range;
++      if (dfn.vkCreatePipelineLayout(device, &layout_info, nullptr, &st.layouts[i]) !=
++          VK_SUCCESS) {
++        st.layouts[i] = VK_NULL_HANDLE;
++        REXGPU_ERROR("dbz3: resolve por desenho: vkCreatePipelineLayout falhou");
++      }
+     }
+   }
+-  const uint32_t index = source_is_integer ? 1 : 0;
+-  if (st.layout == VK_NULL_HANDLE || st.tried[index]) {
+-    return st.pipelines[index];
++  const bool depth = variant >= 2;
++  if (st.layouts[depth ? 1 : 0] == VK_NULL_HANDLE || st.tried[variant]) {
++    return st.pipelines[variant];
+   }
+-  st.tried[index] = true;
++  st.tried[variant] = true;
+   const std::string vs_source =
+       "#version 450\n"
+       "void main() {\n"
+@@ -6983,17 +7004,36 @@ VkPipeline VulkanRenderTargetCache::Dbz3DrawCopyPipeline(bool source_is_integer)
+   std::string fs_source =
+       "#version 450\n"
+       "#extension GL_EXT_samplerless_texture_functions : require\n"
+-      "layout(push_constant) uniform Constants { uint swap_rb; } pc;\n";
+-  fs_source += std::string("layout(set = 0, binding = 0) uniform ") +
+-               (source_is_integer ? "u" : "") + "texture2D src;\n";
+-  fs_source += "layout(location = 0) out vec4 o;\n"
+-               "void main() {\n"
+-               "  ivec2 p = ivec2(gl_FragCoord.xy);\n";
+-  fs_source += source_is_integer ? "  vec4 c = vec4(texelFetch(src, p, 0) & 0xFFu) / 255.0;\n"
+-                                 : "  vec4 c = clamp(texelFetch(src, p, 0), 0.0, 1.0);\n";
+-  fs_source += "  if (pc.swap_rb != 0u) c.rb = c.br;\n"
+-               "  o = c;\n"
+-               "}\n";
++      "layout(push_constant) uniform Constants { uint swap_rb; } pc;\n"
++      "layout(location = 0) out vec4 o;\n";
++  if (!depth) {
++    const bool integer = variant == 1;
++    fs_source += std::string("layout(set = 0, binding = 0) uniform ") + (integer ? "u" : "") +
++                 "texture2D src;\n"
++                 "void main() {\n"
++                 "  ivec2 p = ivec2(gl_FragCoord.xy);\n";
++    fs_source += integer ? "  vec4 c = vec4(texelFetch(src, p, 0) & 0xFFu) / 255.0;\n"
++                         : "  vec4 c = clamp(texelFetch(src, p, 0), 0.0, 1.0);\n";
++    fs_source += "  if (pc.swap_rb != 0u) c.rb = c.br;\n"
++                 "  o = c;\n"
++                 "}\n";
++  } else {
++    // Igual as variantes 4/5 do compute (Dbz3StoreSource).
++    fs_source += "layout(set = 0, binding = 0) uniform texture2D src_depth;\n"
++                 "layout(set = 0, binding = 1) uniform utexture2D src_stencil;\n"
++                 "void main() {\n"
++                 "  ivec2 p = ivec2(gl_FragCoord.xy);\n"
++                 "  float d = clamp(texelFetch(src_depth, p, 0).r, 0.0, 1.0);\n";
++    if (variant == 2) {
++      fs_source += "  o = vec4(d, 0.0, 0.0, 0.0);\n";
++    } else {
++      fs_source += "  uint d24 = uint(d * 16777215.0 + 0.5);\n"
++                   "  uint st = texelFetch(src_stencil, p, 0).r & 0xFFu;\n"
++                   "  uint v = (d24 << 8u) | st;\n"
++                   "  o = vec4(uvec4(v, v >> 8u, v >> 16u, v >> 24u) & 0xFFu) / 255.0;\n";
++    }
++    fs_source += "}\n";
++  }
+   VkShaderModule modules[2] = {VK_NULL_HANDLE, VK_NULL_HANDLE};
+   const VkShaderStageFlagBits stages[2] = {VK_SHADER_STAGE_VERTEX_BIT,
+                                            VK_SHADER_STAGE_FRAGMENT_BIT};
+@@ -7043,8 +7083,10 @@ VkPipeline VulkanRenderTargetCache::Dbz3DrawCopyPipeline(bool source_is_integer)
+     VkPipelineDepthStencilStateCreateInfo depth_stencil_state = {};
+     depth_stencil_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+     VkPipelineColorBlendAttachmentState blend_attachment = {};
+-    blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+-                                      VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
++    blend_attachment.colorWriteMask =
++        variant == 2 ? VK_COLOR_COMPONENT_R_BIT
++                     : (VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
++                        VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT);
+     VkPipelineColorBlendStateCreateInfo color_blend_state = {};
+     color_blend_state.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+     color_blend_state.attachmentCount = 1;
+@@ -7055,7 +7097,8 @@ VkPipeline VulkanRenderTargetCache::Dbz3DrawCopyPipeline(bool source_is_integer)
+     dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+     dynamic_state.dynamicStateCount = 2;
+     dynamic_state.pDynamicStates = dynamic_states;
+-    const VkFormat color_format = VK_FORMAT_R8G8B8A8_UNORM;
++    const VkFormat color_format =
++        variant == 2 ? VK_FORMAT_R32_SFLOAT : VK_FORMAT_R8G8B8A8_UNORM;
+     VkPipelineRenderingCreateInfo rendering_create_info = {};
+     rendering_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+     rendering_create_info.colorAttachmentCount = 1;
+@@ -7073,32 +7116,32 @@ VkPipeline VulkanRenderTargetCache::Dbz3DrawCopyPipeline(bool source_is_integer)
+     pipeline_info.pDepthStencilState = &depth_stencil_state;
+     pipeline_info.pColorBlendState = &color_blend_state;
+     pipeline_info.pDynamicState = &dynamic_state;
+-    pipeline_info.layout = st.layout;
++    pipeline_info.layout = st.layouts[depth ? 1 : 0];
+     pipeline_info.basePipelineIndex = -1;
+     if (dfn.vkCreateGraphicsPipelines(device, Dbz3GetDriverPipelineCache(), 1, &pipeline_info,
+-                                      nullptr, &st.pipelines[index]) != VK_SUCCESS) {
+-      st.pipelines[index] = VK_NULL_HANDLE;
+-      REXGPU_ERROR("dbz3: resolve por desenho: vkCreateGraphicsPipelines falhou");
++                                      nullptr, &st.pipelines[variant]) != VK_SUCCESS) {
++      st.pipelines[variant] = VK_NULL_HANDLE;
++      REXGPU_ERROR("dbz3: resolve por desenho: vkCreateGraphicsPipelines falhou (variante {})",
++                   variant);
+     } else {
+       Dbz3MarkDriverPipelineCacheDirty();
+-      REXGPU_INFO("dbz3: resolve por desenho ativo (origem {})",
+-                  source_is_integer ? "uint" : "unorm");
++      REXGPU_INFO("dbz3: resolve por desenho ativo (variante {})", variant);
+     }
+   }
+   for (VkShaderModule module : modules) {
+     if (module != VK_NULL_HANDLE) dfn.vkDestroyShaderModule(device, module, nullptr);
+   }
+-  return st.pipelines[index];
++  return st.pipelines[variant];
+ }
+ 
+-bool VulkanRenderTargetCache::Dbz3DrawToTexture(VulkanRenderTarget& rt, bool source_is_integer,
++bool VulkanRenderTargetCache::Dbz3DrawToTexture(VulkanRenderTarget& rt, uint32_t variant,
+                                                 VulkanTextureCache& texture_cache, void* texture,
+                                                 uint32_t width, uint32_t height, bool swap_rb) {
+-  if (!texture_cache.Dbz3TextureIsRenderable(texture)) {
++  if (!texture_cache.Dbz3TextureIsDrawTarget(texture)) {
+     return false;
+   }
+   const VkImageView view = texture_cache.Dbz3GetAttachmentView(texture, false);
+-  const VkPipeline pipeline = Dbz3DrawCopyPipeline(source_is_integer);
++  const VkPipeline pipeline = Dbz3DrawCopyPipeline(variant);
+   if (view == VK_NULL_HANDLE || pipeline == VK_NULL_HANDLE) {
+     return false;
+   }
+@@ -7107,6 +7150,7 @@ bool VulkanRenderTargetCache::Dbz3DrawToTexture(VulkanRenderTarget& rt, bool sou
+     texture_cache.Dbz3EndAttachmentWrite(texture);
+     return false;
+   }
++  const VkPipelineLayout layout = g_dbz3_draw_copy.layouts[variant >= 2 ? 1 : 0];
+   DeferredCommandBuffer& command_buffer = command_processor_.deferred_command_buffer();
+   command_processor_.BindExternalGraphicsPipeline(pipeline);
+   VkViewport viewport = {0.0f, 0.0f, float(width), float(height), 0.0f, 1.0f};
+@@ -7114,17 +7158,17 @@ bool VulkanRenderTargetCache::Dbz3DrawToTexture(VulkanRenderTarget& rt, bool sou
+   VkRect2D scissor = {{0, 0}, {width, height}};
+   command_processor_.SetScissor(scissor);
+   const VkDescriptorSet source_set = rt.GetDescriptorSetTransferSource();
+-  command_buffer.CmdVkBindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS,
+-                                         g_dbz3_draw_copy.layout, 0, 1, &source_set, 0, nullptr);
++  command_buffer.CmdVkBindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1,
++                                         &source_set, 0, nullptr);
+   const uint32_t swap = swap_rb ? 1u : 0u;
+-  command_buffer.CmdVkPushConstants(g_dbz3_draw_copy.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+-                                    sizeof(swap), &swap);
++  command_buffer.CmdVkPushConstants(layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(swap), &swap);
+   command_buffer.CmdVkDraw(3, 1, 0, 0);
+   command_processor_.EndRenderPass();
+   texture_cache.Dbz3EndAttachmentWrite(texture);
+-  if (g_dbz3_draw_copy.logged < 4) {
++  if (g_dbz3_draw_copy.logged < 6) {
+     ++g_dbz3_draw_copy.logged;
+-    REXGPU_INFO("dbz3: resolve por desenho {}x{} troca_rb={}", width, height, swap);
++    REXGPU_INFO("dbz3: resolve por desenho variante {} {}x{} troca_rb={}", variant, width, height,
++                swap);
+   }
+   return true;
+ }
+@@ -7375,16 +7419,22 @@ bool VulkanRenderTargetCache::Dbz3TryResolveDepthToTexture(
+                                       resolve_info.copy_dest_extent_length);
+     dbz3_gpuprof::CountSkippedMemory();
+   }
++  const bool draw_copy = Dbz3ResolveDrawEnabled();
++  const VkPipelineStageFlags read_stage =
++      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
++      (draw_copy ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT : VkPipelineStageFlags(0));
+   command_processor_.PushImageMemoryBarrier(
+       rt.image(),
+       ui::vulkan::util::InitializeSubresourceRange(VK_IMAGE_ASPECT_DEPTH_BIT |
+                                                    VK_IMAGE_ASPECT_STENCIL_BIT),
+-      rt.current_stage_mask(), VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, rt.current_access_mask(),
++      rt.current_stage_mask(), read_stage, rt.current_access_mask(),
+       VK_ACCESS_SHADER_READ_BIT, rt.current_layout(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+-  rt.SetUsage(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT,
+-              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
++  rt.SetUsage(read_stage, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+   if (REXCVAR_GET(dbz3_resolve_debug) == 2) {
+     command_processor_.SubmitBarriers(true);
++    for (uint32_t i = 0; i < target_count; ++i) {
++      texture_cache.Dbz3EndAttachmentWrite(targets[i].texture);
++    }
+     return true;
+   }
+ 
+@@ -7394,6 +7444,11 @@ bool VulkanRenderTargetCache::Dbz3TryResolveDepthToTexture(
+         std::min(height, texture_cache.Dbz3TextureHeight(targets[i].texture));
+     const uint32_t tex_width =
+         std::min(width, texture_cache.Dbz3TextureWidth(targets[i].texture));
++    // 0061: profundidade -> R32F / 8888 por desenho.
++    if (draw_copy && Dbz3DrawToTexture(rt, targets[i].mode == 0 ? 2u : 3u, texture_cache,
++                                       targets[i].texture, tex_width, tex_height, false)) {
++      continue;
++    }
+     if (texture_cache.Dbz3TextureHasStorage(targets[i].texture) &&
+         Dbz3StoreToTexture(targets[i].mode == 0 ? 4u : 5u, rt.GetDescriptorSetTransferSource(),
+                            texture_cache, targets[i].texture, tex_width, tex_height, false, 1)) {
+diff --git a/src/graphics/vulkan/texture_cache.cpp b/src/graphics/vulkan/texture_cache.cpp
+index 78336ce..edcc403 100644
+--- a/src/graphics/vulkan/texture_cache.cpp
++++ b/src/graphics/vulkan/texture_cache.cpp
+@@ -1397,6 +1397,13 @@ std::unique_ptr<TextureCache::Texture> VulkanTextureCache::CreateTexture(Texture
+             }
+           }
+         }
++        // 0061: as k_24_8 (R32F) do atalho de profundidade tambem recebem o resolve por desenho
++        // (dbz3_resolve_draw); R32_SFLOAT como alvo de cor e obrigatorio no Vulkan.
++        if (dbz3_rit_textures && key.format == xenos::TextureFormat::k_24_8 &&
++            (format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT)) {
++          image_create_info.usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
++          dbz3_renderable = true;
++        }
+       }
+     }
+   }
+@@ -2282,7 +2289,9 @@ VkImageView VulkanTextureCache::VulkanTexture::Dbz3GetAttachmentView(bool bgra)
+   view_info.pNext = &usage_info;
+   view_info.image = image_;
+   view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+-  view_info.format = bgra ? VK_FORMAT_B8G8R8A8_UNORM : VK_FORMAT_R8G8B8A8_UNORM;
++  view_info.format = key().format == xenos::TextureFormat::k_24_8 ? VK_FORMAT_R32_SFLOAT
++                    : bgra                                       ? VK_FORMAT_B8G8R8A8_UNORM
++                                                                 : VK_FORMAT_R8G8B8A8_UNORM;
+   view_info.components = {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
+                           VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY};
+   view_info.subresourceRange = ui::vulkan::util::InitializeSubresourceRange();
+@@ -2370,6 +2379,14 @@ bool VulkanTextureCache::Dbz3TextureIsRenderable(void* texture_opaque) const {
+          (!t.key().scaled_resolve || IsDrawResolutionDownscaled());
+ }
+ 
++bool VulkanTextureCache::Dbz3TextureIsDrawTarget(void* texture_opaque) const {
++  const auto& t = *static_cast<VulkanTexture*>(static_cast<Texture*>(texture_opaque));
++  return t.dbz3_renderable() &&
++         (t.key().format == xenos::TextureFormat::k_8_8_8_8 ||
++          t.key().format == xenos::TextureFormat::k_24_8) &&
++         (!t.key().scaled_resolve || IsDrawResolutionDownscaled());
++}
++
+ void VulkanTextureCache::Dbz3BeginAttachmentWrite(void* texture_opaque) {
+   VulkanTexture& vulkan_texture =
+       *static_cast<VulkanTexture*>(static_cast<Texture*>(texture_opaque));

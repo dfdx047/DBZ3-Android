@@ -3,6 +3,17 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.5.4 — 2026-10-17
+
+### Performance (Mali)
+- Resolve copies are now drawn into the texture (a fragment pass) instead of a compute dispatch
+  on Mali GPUs, for color and now also depth resolves (patches 0060/0061). On the RG Cube the color
+  part alone took resolves from 14.1 to 9.9 ms per frame (39.5 → 35.1 ms GPU at 720p) with an
+  identical picture. Other GPUs keep compute (`dbz3_resolve_draw_any_gpu` to try it there).
+
+### Fixes
+- Self-test probe "resolves only end the pass" no longer makes the textures reload from memory.
+
 ## 0.5.3 — 2026-10-17
 
 ### Fixes

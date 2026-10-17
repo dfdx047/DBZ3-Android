@@ -1011,3 +1011,19 @@ diferente?); `dbz3: dedupe:` e `dbz3: passo 4:` no log; perf a 720p vs 540p no C
 - 0060 também: `dbz3_resolve_draw` (cópia por desenho, sem compute no meio dos fragmentos do Mali),
   `dbz3_resolve_debug = 2` (fecha o passe mas não copia) e totais de GPU por categoria para o
   autoteste escrever os ms de cada estado no relatório.
+
+### 2026-10-17 15:21 — 4.º autoteste no RG Cube (0.5.3, 720p): resolve por desenho; v0.5.4 (patch 0061)
+
+- Referência: GPU 39,5 ms (des 19,3, res 14,1, tr 1,9, out 2,7). Os ms por estado já vêm no relatório.
+- **Resolve por desenho: 35,1 ms (res 14,1 → 9,9), imagem igual.** Só os resolves de cor passavam por
+  ele; 0061 faz também os de profundidade (R32F e 8888 a partir do D24S8; as texturas k_24_8 passam a
+  ter COLOR_ATTACHMENT) e liga-o por omissão nos Mali (driverID ARM; `dbz3_resolve_draw_any_gpu` para
+  os outros).
+- O fix do 0060 funcionou: "sem resolve direto na textura" já não deixou destinos "precisa da memória".
+- Efeitos (agora sem a poluição): brilho −3,2 ms (12% da imagem nesta cena), DOF −1,6 (0,3%), FXAA do
+  jogo −5,4 (9%).
+- A sonda `dbz3_resolve_debug = 2` media cargas de texturas (sem a cópia as texturas recarregavam da
+  memória e todos os destinos ficavam "precisa da memória"): 0061 marca-as como carregadas. A sonda 1
+  saiu do autoteste.
+- A verificação de volta à referência funcionou: 'Clear 4x→1x' deixou 0,07%, 'sem transferências
+  saltadas' 13,9% e 'sem render targets diretos' 6,6% de mudança permanente no frame congelado.
