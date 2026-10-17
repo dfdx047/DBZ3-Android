@@ -323,3 +323,67 @@ Java_com_dfdx047_dragonfury_game_NativeGameState_nativeSetCvars(JNIEnv* env, jcl
   dbz3::settings::SaveUserSettings();
   return ok ? JNI_TRUE : JNI_FALSE;
 }
+
+// ---------------------------------------------------------------------------
+// Autoteste do render (RenderSelfTest.kt) e 120 FPS (patches 0056/0057): ler e mudar cvars do
+// SDK ao vivo SEM gravar o dbz3_user.toml (os valores de teste nao podem ficar se o jogo
+// fechar a meio), linha no log da sessao, Hz da tela para o presenter e a linha "como os
+// quadros chegam a tela".
+// ---------------------------------------------------------------------------
+#include <rex/logging.h>
+#include <rex/perf/frame_rate.h>
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_dfdx047_dragonfury_game_NativeGameState_nativeSetCvarsLive(JNIEnv* env, jclass,
+                                                                   jobjectArray names,
+                                                                   jobjectArray values) {
+  if (!rex::Runtime::instance()) return JNI_FALSE;
+  const jsize n = env->GetArrayLength(names);
+  bool ok = true;
+  for (jsize i = 0; i < n; ++i) {
+    auto jn = static_cast<jstring>(env->GetObjectArrayElement(names, i));
+    auto jv = static_cast<jstring>(env->GetObjectArrayElement(values, i));
+    const char* cn = env->GetStringUTFChars(jn, nullptr);
+    const char* cv = env->GetStringUTFChars(jv, nullptr);
+    ok = rex::cvar::SetFlagByName(cn, cv) && ok;
+    env->ReleaseStringUTFChars(jn, cn);
+    env->ReleaseStringUTFChars(jv, cv);
+    env->DeleteLocalRef(jn);
+    env->DeleteLocalRef(jv);
+  }
+  return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_dfdx047_dragonfury_game_NativeGameState_nativeGetCvar(JNIEnv* env, jclass, jstring name) {
+  if (!rex::Runtime::instance()) return env->NewStringUTF("");
+  const char* cn = env->GetStringUTFChars(name, nullptr);
+  const std::string value = rex::cvar::GetFlagByName(cn);
+  env->ReleaseStringUTFChars(name, cn);
+  return env->NewStringUTF(value.c_str());
+}
+
+// Linha no log do jogo (o autoteste marca cada estado para as linhas "perf").
+extern "C" JNIEXPORT void JNICALL
+Java_com_dfdx047_dragonfury_game_NativeGameState_nativeLogLine(JNIEnv* env, jclass, jstring line) {
+  const char* c = env->GetStringUTFChars(line, nullptr);
+  REXLOG_INFO("dbz3: {}", c);
+  env->ReleaseStringUTFChars(line, c);
+}
+
+// Taxa real da tela: o presenter so gera quadros interpolados se a tela chegar a ~1,8x os FPS
+// do jogo. Pode vir antes do runtime arrancar (o valor fica guardado).
+extern "C" JNIEXPORT void JNICALL
+Java_com_dfdx047_dragonfury_game_NativeGameState_nativeSetDisplayHz(JNIEnv*, jclass, jfloat hz) {
+  static std::atomic<int> logged_hz{-1};
+  rex::perf::SetDisplayRefreshRate(hz);
+  const int rounded = int(hz + 0.5f);
+  if (rex::Runtime::instance() && logged_hz.exchange(rounded) != rounded) {
+    REXLOG_INFO("dbz3: tela a {:.2f} Hz", hz);
+  }
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_dfdx047_dragonfury_game_NativeGameState_nativePresentInfo(JNIEnv* env, jclass) {
+  return env->NewStringUTF(rex::perf::GetPresentInfo().c_str());
+}

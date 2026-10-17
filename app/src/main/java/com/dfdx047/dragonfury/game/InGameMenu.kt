@@ -103,6 +103,8 @@ interface InGameActions {
     fun exitToLauncher()
     /** Pede ao runtime uma captura de frames (logs/capture, ficheiros .dfc) para o renderizador nativo. */
     fun captureFrames()
+    /** Autoteste do render (RenderSelfTest): so numa luta. Devolve false se nao deu para comecar. */
+    fun startSelfTest(): Boolean = false
 }
 
 /** Painel de vidro fosco por cima do jogo pausado. */
@@ -270,6 +272,23 @@ private fun InGameMenuCard(prefs: LauncherPrefs, actions: InGameActions) {
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(R.string.ingame_capture), maxLines = 1)
+        }
+        // Autoteste do render: congela a luta, troca cada otimizacao e compara a imagem; no fim
+        // exporta os logs para Download/. So numa luta.
+        var selfTestRefused by remember { mutableStateOf(false) }
+        OutlinedButton(
+            onClick = { selfTestRefused = !actions.startSelfTest() },
+            enabled = actions.isInBattle(),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.ingame_selftest), maxLines = 1)
+        }
+        if (selfTestRefused || !actions.isInBattle()) {
+            Text(
+                stringResource(R.string.ingame_selftest_only_fight),
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.7f),
+            )
         }
         // Sair para o launcher: pede confirmacao com um segundo toque.
         var confirmExit by remember { mutableStateOf(false) }

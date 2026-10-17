@@ -43,6 +43,10 @@ public class GameActivity extends SDLActivity {
     private static final String TAG = "dbz3";
 
     private GameOverlay mOverlay;
+    private static GameActivity sInstance;
+    /** Taxa de saida pedida a tela (60, ou 120 com o 120 FPS interpolado). */
+    private int mOutputHz = 60;
+    private android.hardware.display.DisplayManager.DisplayListener mDisplayListener;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -71,7 +75,12 @@ public class GameActivity extends SDLActivity {
         super.onCreate(savedInstanceState);
 
         enterImmersive();
-        requestSixtyHz();
+        sInstance = this;
+        // 60 Hz, ou 120 Hz com o 120 FPS interpolado (patch 0057).
+        mOutputHz = com.dfdx047.dragonfury.data.DisplayRates.wantedHz(this);
+        installSurfaceRateCallback();
+        watchDisplay();
+        requestDisplayRate(mOutputHz);
         // Jogo com carga constante: pede ao sistema para nao deixar a GPU/CPU cair em
         // estados de poupanca entre frames (buracos de 10-15 ms na GPU, logs de
         // 2026-10-13). "env:DF_NO_SUSTAINED = 1" no cvars.txt desliga, para A/B.
@@ -143,6 +152,17 @@ public class GameActivity extends SDLActivity {
 
     @Override
     protected void onDestroy() {
+        if (sInstance == this) {
+            sInstance = null;
+        }
+        if (mDisplayListener != null) {
+            android.hardware.display.DisplayManager dm =
+                    (android.hardware.display.DisplayManager) getSystemService(DISPLAY_SERVICE);
+            if (dm != null) {
+                dm.unregisterDisplayListener(mDisplayListener);
+            }
+            mDisplayListener = null;
+        }
         if (mOverlay != null) {
             mOverlay.onDestroy();
             mOverlay = null;
@@ -188,70 +208,142 @@ public class GameActivity extends SDLActivity {
         return super.dispatchTouchEvent(event);
     }
 
+    /** Superficie do jogo (autoteste do render: fotos por PixelCopy). */
+    public static android.view.SurfaceView gameSurface() {
+        return mSurface;
+    }
+
+    /** A atividade do jogo em curso (para o menu mudar a taxa da tela). */
+    public static GameActivity current() {
+        return sInstance;
+    }
+
     /**
-     * O jogo gera 60 frames/s por um relogio proprio (o vblank do Xenos), que nao
-     * esta preso ao ecra. Num ecra de 120 Hz com FIFO cada frame fica 2 vblanks
-     * na tela, mas basta o relogio oscilar 1 ms para alguns ficarem 1 ou 3
-     * (8 ms / 25 ms): e o "stutter" que se ve mesmo com o contador nos 60. O
-     * preferredRefreshRate sozinho e so uma sugestao que varios fabricantes
-     * ignoram, por isso pedimos o modo de 60 Hz pelo id e, alem disso, marcamos
-     * a superficie do SDL como fonte fixa de 60 FPS (API 30).
+     * O jogo gera 60 frames/s por um relogio proprio (o vblank do Xenos), que nao esta preso ao
+     * ecra. Num ecra de 120 Hz com FIFO e o jogo a 60, cada frame fica 2 vblanks na tela, mas
+     * basta o relogio oscilar 1 ms para alguns ficarem 1 ou 3 (8 ms / 25 ms): e o "stutter" que
+     * se ve mesmo com o contador nos 60. O preferredRefreshRate sozinho e so uma sugestao que
+     * varios fabricantes ignoram, por isso pedimos o modo pelo id e, alem disso, marcamos a
+     * superficie do SDL como fonte fixa desse numero de FPS (API 30).
+     *
+     * Antes (requestSixtyHz) era sempre 60 Hz. Agora a taxa segue a escolha do jogador: 60 Hz
+     * para 30/60 FPS e 120 Hz para o 120 FPS interpolado (o jogo a 60, com um quadro gerado entre
+     * cada dois pelo presenter, patch 0057). Sem modo de 120 Hz na tela fica o de 60 Hz, com um
+     * aviso no log (o launcher ja esconde o 120 FPS nessas telas). A taxa real da tela vai para o
+     * runtime (NativeGameState.setDisplayHz), que so gera quadros se ela chegar.
      */
-    private void requestSixtyHz() {
+    public void requestDisplayRate(int hz) {
+        mOutputHz = hz;
         WindowManager.LayoutParams params = getWindow().getAttributes();
-        params.preferredRefreshRate = 60.0f;
         StringBuilder modes = new StringBuilder();
+        Display.Mode best = null;
         try {
             Display display = getWindowManager().getDefaultDisplay();
-            Display.Mode current = display.getMode();
-            Display.Mode best = null;
             for (Display.Mode m : display.getSupportedModes()) {
                 modes.append(String.format(Locale.ROOT, " %d:%dx%d@%.2f", m.getModeId(),
                         m.getPhysicalWidth(), m.getPhysicalHeight(), m.getRefreshRate()));
-                if (m.getPhysicalWidth() != current.getPhysicalWidth()
-                        || m.getPhysicalHeight() != current.getPhysicalHeight()) {
-                    continue;
-                }
-                if (Math.abs(m.getRefreshRate() - 60.0f) < 1.0f) {
-                    best = m;
-                }
             }
-            if (best != null) {
-                params.preferredDisplayModeId = best.getModeId();
+            best = com.dfdx047.dragonfury.data.DisplayRates.pickMode(display, hz);
+            if (best == null && hz != 60) {
+                Log.w(TAG, String.format(Locale.ROOT,
+                        "Ecra: sem modo de %d Hz nesta tela (maximo %.0f Hz): fica o de 60 Hz",
+                        hz, com.dfdx047.dragonfury.data.DisplayRates.maxRefreshHz(display)));
+                mOutputHz = 60;
+                best = com.dfdx047.dragonfury.data.DisplayRates.pickMode(display, 60);
             }
-            Log.i(TAG, String.format(Locale.ROOT, "Ecra: atual %.2f Hz, modo pedido %s, modos:%s",
-                    display.getRefreshRate(), best != null ? String.valueOf(best.getModeId()) : "nenhum de 60 Hz",
+            params.preferredRefreshRate = best != null ? best.getRefreshRate() : mOutputHz;
+            params.preferredDisplayModeId = best != null ? best.getModeId() : 0;
+            Log.i(TAG, String.format(Locale.ROOT, "Ecra: atual %.2f Hz, pedido %d Hz, modo pedido %s, modos:%s",
+                    display.getRefreshRate(), hz,
+                    best != null ? best.getModeId() + " (" + Math.round(best.getRefreshRate()) + " Hz)"
+                            : "nenhum de " + mOutputHz + " Hz",
                     modes));
         } catch (RuntimeException e) {
-            Log.w(TAG, "Ecra: nao foi possivel escolher o modo de 60 Hz", e);
+            Log.w(TAG, "Ecra: nao foi possivel escolher o modo de " + hz + " Hz", e);
+            params.preferredRefreshRate = mOutputHz;
         }
         getWindow().setAttributes(params);
+        applySurfaceFrameRate();
+        reportDisplayRate();
+    }
 
-        if (mSurface != null) {
-            mSurface.getHolder().addCallback(new SurfaceHolder.Callback() {
-                @Override
-                public void surfaceCreated(SurfaceHolder holder) {
-                }
-
-                @Override
-                public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-                    try {
-                        holder.getSurface().setFrameRate(60.0f, Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE);
-                    } catch (RuntimeException e) {
-                        Log.w(TAG, "Surface.setFrameRate falhou", e);
-                    }
-                    // O sistema muda o modo com algum atraso: regista o que ficou.
-                    mSurface.postDelayed(() -> {
-                        Display d = getWindowManager().getDefaultDisplay();
-                        Log.i(TAG, String.format(Locale.ROOT, "Ecra durante o jogo: %.2f Hz", d.getRefreshRate()));
-                    }, 3000);
-                }
-
-                @Override
-                public void surfaceDestroyed(SurfaceHolder holder) {
-                }
-            });
+    /** Surface.setFrameRate com a taxa de saida atual (fonte fixa). */
+    private void applySurfaceFrameRate() {
+        if (mSurface == null) {
+            return;
         }
+        Surface surface = mSurface.getHolder().getSurface();
+        if (surface == null || !surface.isValid()) {
+            return;
+        }
+        try {
+            surface.setFrameRate((float) mOutputHz, Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE);
+        } catch (RuntimeException e) {
+            Log.w(TAG, "Surface.setFrameRate falhou", e);
+        }
+    }
+
+    private void installSurfaceRateCallback() {
+        if (mSurface == null) {
+            return;
+        }
+        mSurface.getHolder().addCallback(new SurfaceHolder.Callback() {
+            @Override
+            public void surfaceCreated(SurfaceHolder holder) {
+            }
+
+            @Override
+            public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+                applySurfaceFrameRate();
+                // O sistema muda o modo com algum atraso: regista o que ficou.
+                mSurface.postDelayed(() -> {
+                    Display d = getWindowManager().getDefaultDisplay();
+                    Log.i(TAG, String.format(Locale.ROOT, "Ecra durante o jogo: %.2f Hz (pedido %d Hz)",
+                            d.getRefreshRate(), mOutputHz));
+                    reportDisplayRate();
+                }, 3000);
+            }
+
+            @Override
+            public void surfaceDestroyed(SurfaceHolder holder) {
+            }
+        });
+    }
+
+    /** A taxa real da tela vai para o runtime (o presenter so gera quadros se ela chegar). */
+    private void reportDisplayRate() {
+        try {
+            float hz = getWindowManager().getDefaultDisplay().getRefreshRate();
+            NativeGameState.INSTANCE.setDisplayHz(hz);
+        } catch (RuntimeException e) {
+            Log.w(TAG, "Ecra: taxa da tela indisponivel", e);
+        }
+    }
+
+    /** O modo da tela muda com atraso (ou o sistema muda-o sozinho): mantem o runtime a par. */
+    private void watchDisplay() {
+        android.hardware.display.DisplayManager dm =
+                (android.hardware.display.DisplayManager) getSystemService(DISPLAY_SERVICE);
+        if (dm == null) {
+            return;
+        }
+        mDisplayListener = new android.hardware.display.DisplayManager.DisplayListener() {
+            @Override
+            public void onDisplayAdded(int displayId) {
+            }
+
+            @Override
+            public void onDisplayRemoved(int displayId) {
+            }
+
+            @Override
+            public void onDisplayChanged(int displayId) {
+                if (displayId == Display.DEFAULT_DISPLAY) {
+                    reportDisplayRate();
+                }
+            }
+        };
+        dm.registerDisplayListener(mDisplayListener, new android.os.Handler(android.os.Looper.getMainLooper()));
     }
 
     /**

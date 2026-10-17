@@ -1,0 +1,269 @@
+diff --git a/include/rex/graphics/command_processor.h b/include/rex/graphics/command_processor.h
+index 037e672..226aafb 100644
+--- a/include/rex/graphics/command_processor.h
++++ b/include/rex/graphics/command_processor.h
+@@ -253,6 +253,12 @@ class CommandProcessor {
+ 
+   uint32_t counter_ = 0;
+ 
++  // DBZ3-Android (dbz3_freeze_frame, autoteste do render): a GPU para logo depois de uma troca
++  // e repete o ultimo frame completo (os comandos copiados do ring e dos indirect buffers), com
++  // os registos do inicio dele, ~60 vezes por segundo, ate a cvar voltar a false.
++  void Dbz3FreezeReplay();
++  void Dbz3FreezeWriteRegisters(const std::vector<uint32_t>& values);
++
+   uint32_t primary_buffer_ptr_ = 0;
+   uint32_t primary_buffer_size_ = 0;
+ 
+diff --git a/src/graphics/command_processor.cpp b/src/graphics/command_processor.cpp
+index e0c9c05..4139317 100644
+--- a/src/graphics/command_processor.cpp
++++ b/src/graphics/command_processor.cpp
+@@ -43,6 +43,12 @@
+ 
+ REXCVAR_DEFINE_BOOL(vsync, true, "GPU", "Enable vertical sync");
+ 
++REXCVAR_DEFINE_BOOL(dbz3_freeze_frame, false, "GPU",
++                    "DBZ3-Android: congela a imagem para o autoteste do render: a GPU para depois "
++                    "de uma troca e repete esse frame (o jogo fica a espera), com as otimizacoes "
++                    "a mudar ao vivo")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++
+ REXCVAR_DEFINE_BOOL(clear_memory_page_state, true, "GPU",
+                     "Refresh page-valid state from GPU-written memory at frame end. "
+                     "Disable for minor CPU overhead reduction, but may break memory coherency.")
+@@ -109,6 +115,36 @@ bool Dbz3IsRimLightShader(const Shader& shader) {
+ // (esperando a que el guest escriba un registro/memoria). Lo lee la linea `perf`.
+ std::atomic<uint64_t> g_dbz3_regmem_wait_us{0};
+ 
++// DBZ3-Android (dbz3_freeze_frame): estado do congelamento. Tudo na thread do command processor.
++// O Budokai 3 nao tem um "congelar a luta" como o freeze_game do Burst Limit: aqui e a GPU que
++// para. Depois da troca que fecha o frame F, o ring deixa de ser lido (o jogo, a espera da GPU,
++// para em 1-2 frames) e F e executado outra vez a partir de copias dos seus comandos (ring e
++// indirect buffers, que o jogo pode reutilizar), com os registos do inicio de F; as
++// interrupcoes e as esperas de registo/memoria sao ignoradas nas repeticoes. Ao descongelar
++// voltam os registos do ponto de paragem e o ring continua de onde parou.
++namespace dbz3_freeze {
++enum class State { kOff, kRecording, kFrozen };
++State g_state = State::kOff;
++const memory::RingBuffer* g_primary_reader = nullptr;
++bool g_stop_after_packet = false;
++uint32_t g_stop_index = 0;
++bool g_replaying = false;
++uint32_t g_start_index = 0;
++std::vector<uint32_t> g_start_regs;
++std::vector<uint32_t> g_resume_regs;
++std::vector<uint8_t> g_ring_copy;
++// Indirect buffers de F: endereco fisico, dwords, copia.
++struct Ib {
++  uint32_t ptr;
++  uint32_t count;
++  std::vector<uint8_t> data;
++};
++std::vector<Ib> g_ibs;
++bool g_ibs_overflow = false;
++uint64_t g_replays = 0;
++std::chrono::steady_clock::time_point g_next_replay;
++}  // namespace dbz3_freeze
++
+ using namespace rex::graphics::xenos;
+ 
+ namespace {
+@@ -237,6 +273,20 @@ void CommandProcessor::WorkerThreadMain() {
+       fn();
+     }
+ 
++    // DBZ3-Android (dbz3_freeze_frame): congelado - repete o frame em vez de ler o ring.
++    if (dbz3_freeze::g_state == dbz3_freeze::State::kFrozen) {
++      if (REXCVAR_GET(dbz3_freeze_frame)) {
++        Dbz3FreezeReplay();
++        continue;
++      }
++      Dbz3FreezeWriteRegisters(dbz3_freeze::g_resume_regs);
++      dbz3_freeze::g_state = dbz3_freeze::State::kOff;
++      dbz3_freeze::g_ring_copy.clear();
++      dbz3_freeze::g_ibs.clear();
++      REXGPU_INFO("dbz3: congelar: retomado depois de {} repeticoes do frame",
++                  dbz3_freeze::g_replays);
++    }
++
+     uint32_t write_ptr_index = write_ptr_index_.load();
+     if (write_ptr_index == 0xBAADF00D || read_ptr_index_ == write_ptr_index) {
+       SCOPE_profile_cpu_i("gpu", "rex::graphics::CommandProcessor::Stall");
+@@ -646,6 +696,7 @@ uint32_t CommandProcessor::ExecutePrimaryBuffer(uint32_t read_index, uint32_t wr
+   memory::RingBuffer reader(memory_->TranslatePhysical(primary_buffer_ptr_), primary_buffer_size_);
+   reader.set_read_offset(read_index * sizeof(uint32_t));
+   reader.set_write_offset(write_index * sizeof(uint32_t));
++  dbz3_freeze::g_primary_reader = &reader;
+   do {
+     if (!ExecutePacket(&reader)) {
+       // This probably should be fatal - but we're going to continue anyways.
+@@ -653,7 +704,15 @@ uint32_t CommandProcessor::ExecutePrimaryBuffer(uint32_t read_index, uint32_t wr
+       assert_always();
+       break;
+     }
++    // DBZ3-Android (dbz3_freeze_frame): para logo a seguir a troca que fecha o frame gravado.
++    if (dbz3_freeze::g_stop_after_packet) {
++      dbz3_freeze::g_stop_after_packet = false;
++      dbz3_freeze::g_primary_reader = nullptr;
++      OnPrimaryBufferEnd();
++      return dbz3_freeze::g_stop_index;
++    }
+   } while (reader.read_count());
++  dbz3_freeze::g_primary_reader = nullptr;
+ 
+   OnPrimaryBufferEnd();
+ 
+@@ -943,6 +1002,10 @@ bool CommandProcessor::ExecutePacketType3_INTERRUPT(memory::RingBuffer* reader,
+ 
+   // generate interrupt from the command stream
+   uint32_t cpu_mask = reader->ReadAndSwap<uint32_t>();
++  if (dbz3_freeze::g_replaying) {
++    // Repeticao de um frame congelado: o jogo ja recebeu estas interrupcoes.
++    return true;
++  }
+   for (int n = 0; n < 6; n++) {
+     if (cpu_mask & (1 << n)) {
+       if (graphics_system_) {
+@@ -990,9 +1053,93 @@ bool CommandProcessor::ExecutePacketType3_XE_SWAP(memory::RingBuffer* reader, ui
+   IssueSwap(frontbuffer_ptr, frontbuffer_width, frontbuffer_height);
+ 
+   ++counter_;
++
++  // DBZ3-Android (dbz3_freeze_frame): grava o frame entre duas trocas do ring principal e para.
++  if (!dbz3_freeze::g_replaying && reader == dbz3_freeze::g_primary_reader) {
++    namespace fz = dbz3_freeze;
++    const uint32_t index = uint32_t(reader->read_offset() / sizeof(uint32_t));
++    const bool want = REXCVAR_GET(dbz3_freeze_frame);
++    const RegisterFile& regs = *register_file_;
++    if (fz::g_state == fz::State::kRecording && want && !fz::g_ibs_overflow) {
++      // F = [g_start_index, index) no ring (com voltas). Copia os comandos.
++      const uint32_t ring_dwords = primary_buffer_size_ / sizeof(uint32_t);
++      const uint32_t dwords = (index + ring_dwords - fz::g_start_index) % ring_dwords;
++      const uint8_t* ring = memory_->TranslatePhysical(primary_buffer_ptr_);
++      fz::g_ring_copy.resize(size_t(dwords) * 4);
++      for (uint32_t i = 0; i < dwords; ++i) {
++        std::memcpy(fz::g_ring_copy.data() + size_t(i) * 4,
++                    ring + size_t((fz::g_start_index + i) % ring_dwords) * 4, 4);
++      }
++      fz::g_resume_regs.assign(regs.values, regs.values + RegisterFile::kRegisterCount);
++      fz::g_state = fz::State::kFrozen;
++      fz::g_stop_after_packet = true;
++      fz::g_stop_index = index;
++      fz::g_replays = 0;
++      fz::g_next_replay = std::chrono::steady_clock::now();
++      REXGPU_INFO("dbz3: congelar: frame de {} dwords no ring e {} indirect buffers; a GPU repete-o",
++                  dwords, fz::g_ibs.size());
++    } else if (want) {
++      // Inicio de F: os registos e a posicao no ring.
++      fz::g_state = fz::State::kRecording;
++      fz::g_start_index = index;
++      fz::g_start_regs.assign(regs.values, regs.values + RegisterFile::kRegisterCount);
++      fz::g_ibs.clear();
++      fz::g_ibs_overflow = false;
++    } else {
++      fz::g_state = fz::State::kOff;
++    }
++  }
+   return true;
+ }
+ 
++void CommandProcessor::Dbz3FreezeWriteRegisters(const std::vector<uint32_t>& values) {
++  if (values.size() != RegisterFile::kRegisterCount) {
++    return;
++  }
++  RegisterFile& regs = *register_file_;
++  for (uint32_t i = 0; i < RegisterFile::kRegisterCount; ++i) {
++    // Sem os registos com efeitos fora da GPU (escrita na memoria, LUT da gama, coerencia).
++    if ((i >= XE_GPU_REG_SCRATCH_REG0 && i <= XE_GPU_REG_SCRATCH_REG7) ||
++        i == XE_GPU_REG_SCRATCH_ADDR || i == XE_GPU_REG_SCRATCH_UMSK ||
++        i == XE_GPU_REG_COHER_STATUS_HOST || i == XE_GPU_REG_DC_LUT_RW_INDEX ||
++        i == XE_GPU_REG_DC_LUT_SEQ_COLOR || i == XE_GPU_REG_DC_LUT_PWL_DATA ||
++        i == XE_GPU_REG_DC_LUT_30_COLOR) {
++      continue;
++    }
++    if (regs.values[i] != values[i]) {
++      WriteRegister(i, values[i]);
++    }
++  }
++}
++
++void CommandProcessor::Dbz3FreezeReplay() {
++  namespace fz = dbz3_freeze;
++  // ~60 vezes por segundo, como o jogo.
++  const auto now = std::chrono::steady_clock::now();
++  if (now < fz::g_next_replay) {
++    rex::thread::Sleep(std::chrono::duration_cast<std::chrono::milliseconds>(
++                           fz::g_next_replay - now) +
++                       std::chrono::milliseconds(1));
++    return;
++  }
++  fz::g_next_replay = std::max(fz::g_next_replay + std::chrono::microseconds(16667),
++                               now - std::chrono::milliseconds(50));
++  Dbz3FreezeWriteRegisters(fz::g_start_regs);
++  fz::g_replaying = true;
++  if (!fz::g_ring_copy.empty()) {
++    memory::RingBuffer reader(fz::g_ring_copy.data(), fz::g_ring_copy.size());
++    reader.set_write_offset(fz::g_ring_copy.size());
++    do {
++      if (!ExecutePacket(&reader)) {
++        break;
++      }
++    } while (reader.read_count());
++  }
++  fz::g_replaying = false;
++  OnPrimaryBufferEnd();
++  ++fz::g_replays;
++}
++
+ bool CommandProcessor::ExecutePacketType3_INDIRECT_BUFFER(memory::RingBuffer* reader,
+                                                           uint32_t packet, uint32_t count) {
+   // indirect buffer dispatch
+@@ -1000,6 +1147,35 @@ bool CommandProcessor::ExecutePacketType3_INDIRECT_BUFFER(memory::RingBuffer* re
+   uint32_t list_length = reader->ReadAndSwap<uint32_t>();
+   assert_zero(list_length & ~0xFFFFF);
+   list_length &= 0xFFFFF;
++  // DBZ3-Android (dbz3_freeze_frame): grava os indirect buffers do frame e, nas repeticoes,
++  // executa as copias (o jogo pode reescrever a memoria deles enquanto espera).
++  if (dbz3_freeze::g_state != dbz3_freeze::State::kOff) {
++    namespace fz = dbz3_freeze;
++    const uint32_t ib_ptr = GpuToCpu(list_ptr);
++    if (fz::g_replaying) {
++      for (fz::Ib& ib : fz::g_ibs) {
++        if (ib.ptr == ib_ptr && ib.count == list_length) {
++          memory::RingBuffer ib_reader(ib.data.data(), ib.data.size());
++          ib_reader.set_write_offset(ib.data.size());
++          do {
++            if (!ExecutePacket(&ib_reader)) {
++              break;
++            }
++          } while (ib_reader.read_count());
++          return true;
++        }
++      }
++    } else if (fz::g_state == fz::State::kRecording) {
++      if (fz::g_ibs.size() < 4096 && list_length) {
++        fz::Ib ib{ib_ptr, list_length, {}};
++        const uint8_t* src = memory_->TranslatePhysical(ib_ptr);
++        ib.data.assign(src, src + size_t(list_length) * 4);
++        fz::g_ibs.push_back(std::move(ib));
++      } else {
++        fz::g_ibs_overflow = true;
++      }
++    }
++  }
+   ExecuteIndirectBuffer(GpuToCpu(list_ptr), list_length);
+   return true;
+ }
+@@ -1018,6 +1194,11 @@ bool CommandProcessor::ExecutePacketType3_WAIT_REG_MEM(memory::RingBuffer* reade
+ 
+   bool is_memory = (wait_info & 0x10) != 0;
+ 
++  if (dbz3_freeze::g_replaying) {
++    // Repeticao de um frame congelado: a condicao ja foi cumprida da primeira vez.
++    return true;
++  }
++
+   bool matched = false;
+   do {
+     uint32_t value = 0;

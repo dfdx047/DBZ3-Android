@@ -1,0 +1,150 @@
+diff --git a/src/graphics/pipeline/render_target/cache.cpp b/src/graphics/pipeline/render_target/cache.cpp
+index 0192f58..b931036 100644
+--- a/src/graphics/pipeline/render_target/cache.cpp
++++ b/src/graphics/pipeline/render_target/cache.cpp
+@@ -53,13 +53,15 @@ REXCVAR_DEFINE_STRING(dbz3_rt_restore_shaders, "6E57A6E305D5D69B,ADCA7FBBCBF53B5
+     .lifecycle(rex::cvar::Lifecycle::kHotReload);
+ REXCVAR_DEFINE_BOOL(dbz3_rt_restore_identity_only, true, "GPU",
+                     "DBZ3-Android: so conta como restauro um draw cujos vertices sao uma copia "
+-                    "identidade de ecra inteiro");
++                    "identidade de ecra inteiro")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+ // DBZ3-Android: a eliminacao de resolves de PROFUNDIDADE errava de vez em quando (o jogo lia
+ // a copia da profundidade nesse frame: "eliminado mas lido a serio" 7x num Mali e 18x num
+ // Exynos em ~4 min, 2026-10-14) e esse frame saia com a profundidade velha nos efeitos
+ // (piscada). Desligado: so os resolves de cor podem ser eliminados.
+ REXCVAR_DEFINE_BOOL(dbz3_rt_elide_depth_resolves, false, "GPU",
+-                    "DBZ3-Android: permite eliminar tambem resolves de profundidade");
++                    "DBZ3-Android: permite eliminar tambem resolves de profundidade")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+ REXCVAR_DEFINE_BOOL(dbz3_rt_elide_restores, true, "GPU",
+                     "DBZ3-Android: com dbz3_rt_direct, ignora os restauros de ecra inteiro e os "
+                     "resolves que so serviam para eles")
+@@ -69,6 +71,44 @@ REXCVAR_DEFINE_BOOL(dbz3_rt_direct, false, "GPU",
+                     "(cada configuracao guarda a sua imagem)")
+     .lifecycle(rex::cvar::Lifecycle::kHotReload);
+ 
++// DBZ3-Android (Dragon Burst 0073/0075/0076/0078): as partes do modo direto que nao tinham
++// interruptor proprio, para o autoteste separar qual muda a imagem. No Burst Limit o modo
++// direto fazia sumir um lutador no Mali e o desfoque do fundo precisava das transferencias
++// profundidade -> cor. No Budokai 3 os valores por omissao sao os de antes (todas as
++// transferencias saltadas): o autoteste diz se alguma faz falta.
++REXCVAR_DEFINE_BOOL(dbz3_rt_direct_drop_transfers, true, "GPU",
++                    "DBZ3-Android: com dbz3_rt_direct, salta as transferencias entre imagens do "
++                    "host (desligado: faz todas, como sem modo direto)")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++REXCVAR_DEFINE_BOOL(dbz3_rt_direct_clear_siblings, true, "GPU",
++                    "DBZ3-Android: com dbz3_rt_direct, os clears por resolve limpam tambem as "
++                    "imagens com a mesma base")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++// Cada uma mantem so um tipo de transferencia (origem -> destino) com o modo direto ligado.
++REXCVAR_DEFINE_BOOL(dbz3_rt_keep_dd, false, "GPU",
++                    "DBZ3-Android: com dbz3_rt_direct, mantem as transferencias profundidade -> "
++                    "profundidade")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++REXCVAR_DEFINE_BOOL(dbz3_rt_keep_cd, false, "GPU",
++                    "DBZ3-Android: com dbz3_rt_direct, mantem as transferencias cor -> profundidade")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++REXCVAR_DEFINE_BOOL(dbz3_rt_keep_dc, false, "GPU",
++                    "DBZ3-Android: com dbz3_rt_direct, mantem as transferencias profundidade -> cor")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++// Pares profundidade -> cor (so contam com dbz3_rt_keep_dc ligado; todos ligados por omissao).
++REXCVAR_DEFINE_BOOL(dbz3_rt_dc_base0_to_pitch13, true, "GPU",
++                    "DBZ3-Android: transferencia D@0 -> C@0 pitch 13 (1040)")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++REXCVAR_DEFINE_BOOL(dbz3_rt_dc_base0_to_pitch16, true, "GPU",
++                    "DBZ3-Android: transferencia D@0 -> C@0 pitch 16 (1280)")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++REXCVAR_DEFINE_BOOL(dbz3_rt_dc_other, true, "GPU",
++                    "DBZ3-Android: as outras transferencias profundidade -> cor")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++REXCVAR_DEFINE_BOOL(dbz3_rt_keep_cc, false, "GPU",
++                    "DBZ3-Android: com dbz3_rt_direct, mantem as transferencias cor -> cor")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++
+ namespace rex::graphics {
+ 
+ void RenderTargetCache::GetPSIColorFormatInfo(xenos::ColorRenderTargetFormat format,
+@@ -1162,7 +1202,7 @@ bool RenderTargetCache::PrepareHostRenderTargetsResolveClear(
+   // passe de 512x512 do Budokai 3 que usa a mesma profundidade) tambem sao limpas, porque
+   // sem transferencias nada lhes traria a limpeza.
+   dbz3_direct_clear_siblings_.clear();
+-  if (rt_direct) {
++  if (rt_direct && REXCVAR_GET(dbz3_rt_direct_clear_siblings)) {
+     for (const auto& it : render_targets_) {
+       RenderTarget* rt = it.second;
+       if (!rt || rt == depth_render_target || rt == color_render_target) continue;
+@@ -1303,16 +1343,30 @@ bool RenderTargetCache::Dbz3DirectAllowsTransfer(RenderTargetKey source, RenderT
+   if (!REXCVAR_GET(dbz3_rt_direct)) {
+     return true;
+   }
+-  const bool allowed = source.base_tiles == dest.base_tiles &&
+-                       source.pitch_tiles_at_32bpp == dest.pitch_tiles_at_32bpp &&
+-                       source.is_depth == dest.is_depth &&
+-                       source.resource_format == dest.resource_format &&
+-                       source.msaa_samples != dest.msaa_samples;
+-  // Diagnostico: as primeiras transferencias saltadas/mantidas, para ver que passes
+-  // dependem de conteudo herdado.
+-  static uint32_t logged = 0;
+-  if (logged < 120) {
+-    ++logged;
++  const bool kept = source.base_tiles == dest.base_tiles &&
++                    source.pitch_tiles_at_32bpp == dest.pitch_tiles_at_32bpp &&
++                    source.is_depth == dest.is_depth &&
++                    source.resource_format == dest.resource_format &&
++                    source.msaa_samples != dest.msaa_samples;
++  bool keep_dc = REXCVAR_GET(dbz3_rt_keep_dc);
++  if (keep_dc && source.is_depth && !dest.is_depth) {
++    if (source.base_tiles == 0 && dest.base_tiles == 0 && dest.pitch_tiles_at_32bpp == 13) {
++      keep_dc = REXCVAR_GET(dbz3_rt_dc_base0_to_pitch13);
++    } else if (source.base_tiles == 0 && dest.base_tiles == 0 && dest.pitch_tiles_at_32bpp == 16) {
++      keep_dc = REXCVAR_GET(dbz3_rt_dc_base0_to_pitch16);
++    } else {
++      keep_dc = REXCVAR_GET(dbz3_rt_dc_other);
++    }
++  }
++  const bool keep_kind = source.is_depth
++                             ? (dest.is_depth ? REXCVAR_GET(dbz3_rt_keep_dd) : keep_dc)
++                             : (dest.is_depth ? REXCVAR_GET(dbz3_rt_keep_cd) : REXCVAR_GET(dbz3_rt_keep_cc));
++  const bool allowed = kept || keep_kind || !REXCVAR_GET(dbz3_rt_direct_drop_transfers);
++  // Diagnostico: cada par origem -> destino diferente uma vez (antes eram as 120 primeiras,
++  // todas do mesmo par), para ver que passes dependem de conteudo herdado.
++  static std::unordered_set<uint64_t> logged_pairs;
++  const uint64_t pair = (uint64_t(source.key) << 32) | dest.key;
++  if (logged_pairs.size() < 512 && logged_pairs.insert(pair).second) {
+     REXGPU_INFO("dbz3: rt_direct transferencia {}: {}{}@{} pitch{} {}x -> {}{}@{} pitch{} {}x",
+                 allowed ? "mantida" : "saltada", source.is_depth ? "D" : "C",
+                 uint32_t(source.resource_format), uint32_t(source.base_tiles),
+diff --git a/src/graphics/vulkan/pipeline_cache.cpp b/src/graphics/vulkan/pipeline_cache.cpp
+index b7a41b2..75c040a 100644
+--- a/src/graphics/vulkan/pipeline_cache.cpp
++++ b/src/graphics/vulkan/pipeline_cache.cpp
+@@ -536,8 +536,14 @@ void VulkanPipelineCache::InitializeShaderStorage(const std::filesystem::path& c
+   // pipelines guardados, que vem a seguir.
+   {
+     const ui::vulkan::VulkanDevice* const vulkan_device = command_processor_.GetVulkanDevice();
+-    Dbz3InitDriverPipelineCache(vulkan_device->functions(), vulkan_device->device(),
+-                                shader_storage_root / "vulkan_driver_pipelines.bin");
++    // Dragon Burst (0076): um ficheiro por driver (sistema da Qualcomm, Turnip, ...): a cache de
++    // um driver nao serve ao outro e o da Qualcomm nao e de confiar com dados alheios.
++    Dbz3InitDriverPipelineCache(
++        vulkan_device->functions(), vulkan_device->device(),
++        shader_storage_root /
++            fmt::format("vulkan_driver_pipelines_{}_{:08X}.bin",
++                        uint32_t(vulkan_device->properties().driverID),
++                        vulkan_device->properties().driverVersion));
+   }
+ 
+   // Initialize the pipeline storage stream - read pipeline descriptions and
+@@ -3657,6 +3663,11 @@ bool VulkanPipelineCache::EnsurePipelineCreated(const PipelineCreationArguments&
+     for (uint32_t i = 0; i < xenos::kMaxColorRenderTargets; ++i) {
+       if (key.depth_and_color_used & (1 << (1 + i))) {
+         color_attachment_formats[i] = render_target_cache_.GetColorVulkanFormat(color_formats[i]);
++        // Dragon Burst (passo 4): desenho direto numa vista B8G8R8A8 de uma textura.
++        if (i == 0 && key.dbz3_color_0_bgra &&
++            color_attachment_formats[0] == VK_FORMAT_R8G8B8A8_UNORM) {
++          color_attachment_formats[0] = VK_FORMAT_B8G8R8A8_UNORM;
++        }
+         color_attachment_count = i + 1;
+       }
+     }

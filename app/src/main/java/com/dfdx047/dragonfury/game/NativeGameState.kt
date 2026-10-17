@@ -92,6 +92,65 @@ object NativeGameState {
         }
     }
 
+    /**
+     * Muda cvars do SDK ao vivo SEM gravar nada (autoteste do render: os valores de teste nao
+     * podem ficar no dbz3_user.toml se o jogo fechar a meio).
+     */
+    fun setCvarsLive(values: Map<String, String>): Boolean {
+        if (!available || values.isEmpty()) return false
+        return try {
+            nativeSetCvarsLive(values.keys.toTypedArray(), values.values.toTypedArray())
+        } catch (e: UnsatisfiedLinkError) {
+            false
+        }
+    }
+
+    /** Valor atual de uma cvar ("" sem jogo ou se o build nao a conhece). */
+    fun getCvar(name: String): String {
+        if (!available) return ""
+        return try {
+            nativeGetCvar(name)
+        } catch (e: UnsatisfiedLinkError) {
+            ""
+        }
+    }
+
+    /** Escreve uma linha no log do jogo (dragonfury_last.log). */
+    fun logLine(line: String) {
+        if (!available) return
+        try {
+            nativeLogLine(line)
+        } catch (_: UnsatisfiedLinkError) {
+        }
+    }
+
+    /**
+     * Taxa real da tela (Hz) para o presenter (patch 0057): so gera quadros interpolados se a tela
+     * tiver pelo menos ~1,8x os FPS do jogo. Pode ser chamado antes do jogo arrancar.
+     */
+    fun setDisplayHz(hz: Float) {
+        try {
+            nativeSetDisplayHz(hz)
+        } catch (_: UnsatisfiedLinkError) {
+        }
+    }
+
+    /** Como os quadros chegam a tela: modo de apresentacao, Hz, interpolacao (autoteste). */
+    fun presentInfo(): String {
+        if (!available) return ""
+        return try {
+            nativePresentInfo()
+        } catch (_: UnsatisfiedLinkError) {
+            ""
+        }
+    }
+
+    @JvmStatic private external fun nativeSetCvarsLive(names: Array<String>, values: Array<String>): Boolean
+    @JvmStatic private external fun nativeGetCvar(name: String): String
+    @JvmStatic private external fun nativeLogLine(line: String)
+    @JvmStatic private external fun nativeSetDisplayHz(hz: Float)
+    @JvmStatic private external fun nativePresentInfo(): String
+
     /** Solta a pausa sem condicoes (ao fechar o jogo). */
     fun forceResume() {
         if (!available) return

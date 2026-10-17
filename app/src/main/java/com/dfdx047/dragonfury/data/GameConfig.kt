@@ -17,6 +17,9 @@ import java.io.File
 data class GameConfig(
     // Desempenho / imagem
     val resolutionScale: Int = 1,             // dbz3_resolution_scale 1-3 (720p x N; so escalas inteiras)
+    // Abaixo de 720p (patches 0055: draw_resolution_percent no Vulkan + atalhos exatos): 100, 75
+    // (540p, todos os tamanhos do Budokai 3 exatos) ou 50 (360p). So com resolutionScale = 1.
+    val resolutionPercent: Int = 100,         // draw_resolution_percent
     val presentEffect: String = "fsr",        // dbz3_present_effect bilinear|cas|fsr
     val fsrRender: String = "native",         // dbz3_fsr_render native|quality|balanced|performance|ultra_performance
     val fsrSharpness: Double = 0.2,           // dbz3_fsr_sharpness 0-2 (0 = mais nitido)
@@ -27,6 +30,9 @@ data class GameConfig(
     val rimLight: Double = 1.0,               // dbz3_hd_rim_light 0-1 (brilho HD)
     val dither: Boolean = false,              // dbz3_present_dither
     val frameCap: Int = 60,                   // dbz3_frame_cap (30 ou 60) + dbz3_frameskip (30 = 1)
+    // 120 FPS interpolado (patch 0057): o jogo a 60 e o presenter gera um quadro entre cada dois,
+    // com a tela a 120 Hz (GameActivity.requestDisplayRate). So em telas de 110 Hz ou mais.
+    val frameInterp: Boolean = false,         // dbz3_frame_interpolation
     val showFps: Boolean = false,             // dbz3_show_fps
     val letterbox: Boolean = true,            // present_letterbox (16:9 com barras / esticar)
     // Jogo
@@ -62,6 +68,7 @@ data class GameConfig(
         // So escalas inteiras: o renderizador nao suporta 1.5x. 4x ficou de fora (memoria
         // demais para um telemovel: o buffer de resolves escalados e 512 MB x escala^2).
         "dbz3_resolution_scale" to resolutionScale.coerceIn(1, MAX_RESOLUTION_SCALE),
+        "draw_resolution_percent" to effectivePercent,
         "dbz3_present_effect" to presentEffect,
         "dbz3_fsr_render" to fsrRender,
         "dbz3_fsr_sharpness" to fsrSharpness.coerceIn(0.0, 2.0),
@@ -71,10 +78,11 @@ data class GameConfig(
         "dbz3_anisotropic" to anisotropic.coerceIn(0, 5),
         "dbz3_hd_rim_light" to rimLight.coerceIn(0.0, 1.0),
         "dbz3_present_dither" to dither,
-        "dbz3_frame_cap" to frameCap,
+        "dbz3_frame_cap" to if (frameInterp) 60 else frameCap,
         // 30 FPS de verdade: o jogo continua a 60 e so metade dos frames e desenhada
         // (patch 0023). Antes o limite so atrasava a apresentacao e a GPU fazia tudo.
-        "dbz3_frameskip" to if (frameCap in 1..30) 1 else 0,
+        "dbz3_frameskip" to if (!frameInterp && frameCap in 1..30) 1 else 0,
+        "dbz3_frame_interpolation" to frameInterp,
         "dbz3_show_fps" to showFps,
         "present_letterbox" to letterbox,
         "dbz3_language" to gameLanguage.coerceIn(1, 6),
@@ -102,7 +110,23 @@ data class GameConfig(
         "vulkan_sparse_shared_memory" to false,
     )
 
+    /** Percentagem que o jogo usa: abaixo de 100 so a 1x. */
+    val effectivePercent: Int
+        get() = if (resolutionScale > 1) 100 else resolutionPercent.let { if (it in PERCENTS) it else 100 }
+
+    /** Taxa de saida que esta config pede a tela (120 com a interpolacao, senao 60). */
+    val outputHz: Int get() = if (frameInterp) 120 else 60
+
+    /** Resolucao escolhida como uma so lista: (escala, percentagem). */
+    val resolutionChoice: Pair<Int, Int> get() = resolutionScale to effectivePercent
+
+    fun withResolution(choice: Pair<Int, Int>): GameConfig =
+        copy(resolutionScale = choice.first.coerceIn(1, MAX_RESOLUTION_SCALE),
+            resolutionPercent = if (choice.first > 1) 100 else choice.second)
+
     companion object {
+        /** Abaixo de 720p: 75% (960x540) e 50% (640x360) dao os tamanhos do jogo sem arredondar. */
+        val PERCENTS = listOf(50, 75, 100)
         val EFFECTS = listOf("bilinear", "cas", "fsr")
         val FSR_RENDER = listOf("native", "quality", "balanced", "performance", "ultra_performance")
         val FXAA = listOf("none", "fxaa", "fxaa_extreme")
@@ -129,6 +153,7 @@ data class GameConfig(
             }
             return GameConfig(
                 resolutionScale = int("dbz3_resolution_scale", d.resolutionScale).coerceIn(1, MAX_RESOLUTION_SCALE),
+                resolutionPercent = int("draw_resolution_percent", d.resolutionPercent).let { if (it in PERCENTS) it else 100 },
                 // fsr3/dlss vindos do PC caem para o FSR 1, que funciona no Vulkan.
                 presentEffect = str("dbz3_present_effect", d.presentEffect).let { if (it in EFFECTS) it else "fsr" },
                 fsrRender = str("dbz3_fsr_render", d.fsrRender).let { if (it in FSR_RENDER) it else "native" },
@@ -140,6 +165,7 @@ data class GameConfig(
                 rimLight = dbl("dbz3_hd_rim_light", d.rimLight),
                 dither = bool("dbz3_present_dither", d.dither),
                 frameCap = int("dbz3_frame_cap", d.frameCap).let { if (it in 1..30) 30 else 60 },
+                frameInterp = bool("dbz3_frame_interpolation", d.frameInterp),
                 showFps = bool("dbz3_show_fps", d.showFps),
                 letterbox = bool("present_letterbox", d.letterbox),
                 gameLanguage = int("dbz3_language", d.gameLanguage),

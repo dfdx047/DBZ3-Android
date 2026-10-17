@@ -3,6 +3,30 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.5.0 — 2026-10-17
+
+### Performance (renderer, patches 0050–0057, ported from Dragon Burst)
+- Generic emulation-waste cuts, all live-switchable for the self-test: repeated resolves and
+  resolves read only by skipped draws are skipped (`dbz3_resolve_dedupe`), draws that write
+  nothing are skipped (`dbz3_skip_null_draws`), passes that start with an opaque full quad don't
+  load color (`dbz3_discard_full_overwrite`), and passes that end in a color copy to a texture are
+  learned and drawn straight into that texture (`dbz3_render_into_texture`, off on Turnip).
+- Each part of direct render targets has its own switch (`dbz3_rt_direct_drop_transfers`,
+  `dbz3_rt_direct_clear_siblings`, `dbz3_rt_keep_dd/cd/dc/cc`); the defaults keep 0.4.0 behavior.
+- Driver pipeline cache: one file per Vulkan driver (system vs Turnip).
+- Internal resolution below 720p: **540p** (75%, every size of the game stays exact, the safe
+  choice for Mali) and **360p** (50%). The fast resolve-to-texture paths keep working below 1x.
+
+### Features
+- **120 FPS (interpolated)** on 110 Hz+ screens: the game runs at 60 and the presenter generates a
+  frame between every two; the screen is no longer forced to 60 Hz (it follows the chosen rate).
+- **Render self-test** (in-game menu, during a fight): freezes the picture on the GPU, toggles each
+  optimization, compares screenshots, writes `logs/autoteste.txt` + JPGs and exports the logs zip
+  to Download/ by itself.
+- Detailed logs: frame captures now include the GPU readback of every resolve; new lines for the
+  dedupe, discard and render-into-texture steps; `game_fps` / `presented_fps` / `interp=` in the
+  perf line.
+
 ## 0.4.0 — 2026-10-16
 
 ### Launcher

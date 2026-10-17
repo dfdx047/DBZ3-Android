@@ -61,7 +61,7 @@ Exynos recentes) devem rodar na velocidade cheia ou perto disso. Relatos são be
 | Aba | O que faz |
 |---|---|
 | **Início** | Animação de choque de ki, jogar, importar o jogo (.iso ou pasta), links da comunidade (YouTube, Discord, GitHub, Ko-fi), atalhos. |
-| **Desempenho** | Modo 30 FPS, resolução interna (1x/2x/3x), efeitos do jogo (bloom, profundidade de campo, FXAA), filtros de imagem (FSR 1, CAS, nitidez), proporção, dicas de desempenho. |
+| **Desempenho** | 30/60/120 FPS, resolução interna (360p–2160p), efeitos do jogo (bloom, profundidade de campo, FXAA), filtros de imagem (FSR 1, CAS, nitidez), proporção, dicas de desempenho. |
 | **Controles** | Controles por toque (layouts para menus, lutas e o mapa do Dragon Universe; editor na tela, opacidade, vibração) e controle físico (zona morta, vibração). |
 | **Mods** | Instalar mods a partir de `.zip` (mesmo formato da pasta `mods/` da versão de PC). |
 | **Texturas** | Importar e gerenciar packs de texturas HD. |
@@ -96,7 +96,13 @@ método reaproveitável em [`docs/GUIA_PORT_XBOX360_ANDROID.md`](docs/GUIA_PORT_
 - **Desempenho → Modo 30 FPS**: o jogo continua rodando na velocidade cheia e desenha um frame sim,
   outro não, entregue num ritmo fixo de 30 FPS.
 - **Desempenho → Efeitos do jogo**: desligue bloom, profundidade de campo e FXAA.
-- Mantenha a resolução interna em **1x**.
+- **Desempenho → Resolução interna → 540p**: desenha 56% dos pixels e todos os tamanhos do jogo
+  ficam exatos (360p é a mais leve).
+- Em telas de 120 Hz, **Desempenho → Taxa de quadros → 120 (interp.)** gera um quadro entre cada
+  dois (precisa de 60 FPS estáveis antes).
+- Depois de cada atualização, o **autoteste do render** (menu do jogo, numa luta) diz qual
+  otimização muda a imagem na sua GPU e quanto cada uma vale; no fim o zip dos logs vai para
+  Download/.
 
 ## Drivers
 

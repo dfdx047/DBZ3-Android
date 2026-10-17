@@ -61,7 +61,7 @@ Exynos recientes) deberían ir a velocidad completa o cerca. Se agradecen report
 | Pestaña | Qué hace |
 |---|---|
 | **Inicio** | Animación de choque de ki, jugar, importar el juego (.iso o carpeta), enlaces de la comunidad (YouTube, Discord, GitHub, Ko-fi), atajos. |
-| **Rendimiento** | Modo 30 FPS, resolución interna (1x/2x/3x), efectos del juego (bloom, profundidad de campo, FXAA), filtros de imagen (FSR 1, CAS, nitidez), proporción, consejos de rendimiento. |
+| **Rendimiento** | 30/60/120 FPS, resolución interna (360p–2160p), efectos del juego (bloom, profundidad de campo, FXAA), filtros de imagen (FSR 1, CAS, nitidez), proporción, consejos de rendimiento. |
 | **Controles** | Controles táctiles (diseños para menús, combates y el mapa de Dragon Universe; editor en pantalla, opacidad, vibración) y mando físico (zona muerta, vibración). |
 | **Mods** | Instalar mods desde `.zip` (mismo formato que la carpeta `mods/` de la versión de PC). |
 | **Texturas** | Importar y gestionar packs de texturas HD. |
@@ -98,7 +98,13 @@ Mali-G57: 13 → 22–24 FPS. El registro completo de mediciones está en
 - **Rendimiento → Modo 30 FPS**: el juego sigue a velocidad completa y dibuja un frame de cada dos,
   mostrado a un ritmo constante de 30 FPS.
 - **Rendimiento → Efectos del juego**: desactiva bloom, profundidad de campo y FXAA.
-- Deja la resolución interna en **1x**.
+- **Rendimiento → Resolución interna → 540p**: dibuja el 56% de los píxeles y todos los tamaños del
+  juego quedan exactos (360p es la más ligera).
+- En pantallas de 120 Hz, **Rendimiento → Tasa de fotogramas → 120 (interp.)** genera un frame entre
+  cada dos (necesita 60 FPS estables antes).
+- Después de cada actualización, la **autoprueba del render** (menú del juego, en un combate) dice qué
+  optimización cambia la imagen en tu GPU y cuánto vale cada una; al final el zip de logs va a
+  Download/.
 
 ## Drivers
 

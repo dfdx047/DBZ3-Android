@@ -360,7 +360,7 @@
     <string name="tab_controls">Controles</string>
     <string name="perf_frameskip">Modo 30 FPS (frameskip)</string>
     <string name="perf_frameskip_sub">El juego sigue a velocidad normal, pero solo se dibuja uno de cada dos frames: más o menos la mitad del trabajo de GPU. Recomendado para GPU Mali.</string>
-    <string name="perf_resolution_sub">El juego renderiza a 720p × este valor. Por ahora solo funcionan múltiplos enteros (escalas fraccionarias como 1,5x aún no son compatibles).</string>
+    <string name="perf_resolution_sub">El juego renderiza a esta resolución: 720p × 1-3, o por debajo de 720p (540p, 360p) para GPU débiles. 1080p no se ofrece (necesitaría una escala de 1,5x).</string>
     <string name="perf_resolution_mem">2x y 3x necesitan mucha más memoria de GPU. En GPU Mali mantén 1x.</string>
     <string name="perf_effects_title">Efectos del juego</string>
     <string name="perf_effects_sub">Desactivarlos ayuda a las GPU débiles (como Mali).</string>
@@ -418,4 +418,12 @@
     <string name="about_port_text">Dragon Fury lleva esa recompilación a Android: launcher propio (importar desde el .iso, mods, texturas, drivers), controles táctiles y un camino de GPU hecho para las GPU de móvil (Adreno y Mali), con drivers Turnip opcionales.</string>
     <string name="about_credits_title">Créditos y licencia</string>
     <string name="about_license">Proyecto original © 2026 NovaPowers, licencia MIT. Port Android por dfdx047.</string>
+    <string name="ingame_selftest">Autoprueba del render (diagnóstico)</string>
+    <string name="ingame_selftest_only_fight">Solo en un combate: congela la imagen, cambia cada optimización y compara (~3 min). Al final los logs van a Download/.</string>
+    <string name="perf_fps_title">Tasa de fotogramas</string>
+    <string name="perf_fps_sub">30 dibuja uno de cada dos frames (el juego mantiene su velocidad normal). 120 genera un frame entre cada dos del juego, en pantallas de 120 Hz.</string>
+    <string name="perf_fps_120_interp">120 (interp.)</string>
+    <string name="perf_fps_120_interp_note">120 FPS interpolado: el juego corre a 60 y la pantalla pasa a 120 Hz; un frame de pantalla más de latencia y un poco más de GPU (~1-2 ms en móviles rápidos). Necesita 60 FPS estables.</string>
+    <string name="perf_fps_120_unavailable">Esta pantalla llega a %1$d Hz: los 120 FPS necesitan una pantalla de 110 Hz o más.</string>
+    <string name="perf_resolution_below">Por debajo de 720p el juego se dibuja en una esquina de los objetivos de 720p y la imagen se estira a la pantalla (con FSR 1). 540p mantiene exactos todos los tamaños del juego y es la opción segura para GPU Mali; 360p es la más ligera.</string>
 </resources>

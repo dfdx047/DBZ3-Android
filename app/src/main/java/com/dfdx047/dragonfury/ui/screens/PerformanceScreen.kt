@@ -22,12 +22,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.dfdx047.dragonfury.R
-import com.dfdx047.dragonfury.data.GameConfig
+import com.dfdx047.dragonfury.data.DisplayRates
 import com.dfdx047.dragonfury.ui.LauncherViewModel
 import com.dfdx047.dragonfury.ui.components.Level
 import com.dfdx047.dragonfury.ui.components.SectionCard
@@ -69,19 +71,55 @@ fun PerformanceScreen(vm: LauncherViewModel) {
             }
             Text(stringResource(R.string.settings_api_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             HorizontalDivider()
-            // frameCap 30 grava dbz3_frame_cap = 30 e dbz3_frameskip = 1 (GameConfig.toToml).
-            SettingSwitch(
-                stringResource(R.string.perf_frameskip),
-                stringResource(R.string.perf_frameskip_sub),
-                checked = c.frameCap == 30,
-            ) { on -> vm.updateConfig { it.copy(frameCap = if (on) 30 else 60) } }
+            // 30 grava dbz3_frame_cap = 30 e dbz3_frameskip = 1; 120 (interpolado, patch 0057) grava
+            // dbz3_frame_interpolation e a tela passa a 120 Hz. As opcoes de 120 so aparecem em
+            // telas de 110 Hz ou mais (DisplayRates).
+            val context = LocalContext.current
+            val maxHz = remember { DisplayRates.maxRefreshHz(context) }
+            val has120 = maxHz >= DisplayRates.MIN_120_HZ
+            val fps = when {
+                c.frameInterp && has120 -> 120
+                c.frameCap == 30 -> 30
+                else -> 60
+            }
             SettingSegmented(
+                title = stringResource(R.string.perf_fps_title),
+                subtitle = stringResource(R.string.perf_fps_sub),
+                options = buildList {
+                    add(30 to "30 FPS")
+                    add(60 to "60 FPS")
+                    if (has120) add(120 to stringResource(R.string.perf_fps_120_interp))
+                },
+                selected = fps,
+                onSelect = { v ->
+                    vm.updateConfig {
+                        when (v) {
+                            30 -> it.copy(frameCap = 30, frameInterp = false)
+                            120 -> it.copy(frameCap = 60, frameInterp = true)
+                            else -> it.copy(frameCap = 60, frameInterp = false)
+                        }
+                    }
+                },
+            )
+            when {
+                fps == 120 -> StatusLine(stringResource(R.string.perf_fps_120_interp_note), Level.INFO)
+                !has120 -> StatusLine(stringResource(R.string.perf_fps_120_unavailable, maxHz.roundToInt()), Level.INFO)
+            }
+            // Resolucao: 360p e 540p (abaixo de 1x, patch 0055) ou 720p x 1-3.
+            SettingDropdown(
                 title = stringResource(R.string.settings_resolution),
                 subtitle = stringResource(R.string.perf_resolution_sub),
-                options = (1..GameConfig.MAX_RESOLUTION_SCALE).map { s -> s to "${s}x (${720 * s}p)" },
-                selected = c.resolutionScale,
-                onSelect = { v -> vm.updateConfig { it.copy(resolutionScale = v) } },
+                options = listOf(
+                    (1 to 50) to "360p (50%)",
+                    (1 to 75) to "540p (75%)",
+                    (1 to 100) to "720p (1x)",
+                    (2 to 100) to "1440p (2x)",
+                    (3 to 100) to "2160p (3x)",
+                ),
+                selected = c.resolutionChoice,
+                onSelect = { v -> vm.updateConfig { it.withResolution(v) } },
             )
+            if (c.effectivePercent < 100) StatusLine(stringResource(R.string.perf_resolution_below), Level.INFO)
             if (c.resolutionScale >= 2) StatusLine(stringResource(R.string.perf_resolution_mem), Level.INFO)
             if (c.resolutionScale >= 3) StatusLine(stringResource(R.string.settings_resolution_warn), Level.WARN)
             SettingSwitch(stringResource(R.string.settings_show_fps), checked = c.showFps) { on -> vm.updateConfig { it.copy(showFps = on) } }

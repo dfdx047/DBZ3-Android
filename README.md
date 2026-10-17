@@ -61,7 +61,7 @@ Exynos) are expected to run it at or near full speed. Reports are welcome.
 | Tab | What it does |
 |---|---|
 | **Home** | Ki clash animation, play, import the game (.iso or folder), community links (YouTube, Discord, GitHub, Ko-fi), shortcuts. |
-| **Performance** | 30 FPS mode, internal resolution (1x/2x/3x), game effects (bloom, depth of field, FXAA), image filters (FSR 1, CAS, sharpness), aspect ratio, performance tips. |
+| **Performance** | 30/60/120 FPS, internal resolution (360p–2160p), game effects (bloom, depth of field, FXAA), image filters (FSR 1, CAS, sharpness), aspect ratio, performance tips. |
 | **Controls** | Touch controls (layouts for menus, fights and the Dragon Universe map; on-screen editor, opacity, vibration) and physical controller (dead zone, rumble). |
 | **Mods** | Install mods from `.zip` (same format as the PC version's `mods/` folder). |
 | **Textures** | Import and manage HD texture packs. |
@@ -97,7 +97,13 @@ reusable method in [`docs/GUIA_PORT_XBOX360_ANDROID.md`](docs/GUIA_PORT_XBOX360_
 - **Performance → 30 FPS mode**: the game keeps running at full speed and draws every other frame,
   presented at an even 30 FPS.
 - **Performance → Game effects**: turn off bloom, depth of field and FXAA.
-- Keep the internal resolution at **1x**.
+- **Performance → Internal resolution → 540p**: draws 56% of the pixels and every size of the game
+  stays exact (360p is the lightest).
+- On 120 Hz screens, **Performance → Frame rate → 120 (interp.)** generates a frame between every
+  two (needs a steady 60 FPS first).
+- After each update, the **render self-test** (in-game menu, during a fight) tells which
+  optimization changes the picture on your GPU and how much each one is worth; the logs zip goes to
+  Download/ at the end.
 
 ## Drivers
 

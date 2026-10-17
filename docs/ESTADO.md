@@ -889,3 +889,65 @@ App (v0.3.1):
 Por testar: voltar do segundo plano (luta e menus); FXAA/brilho/DOF desligados; Mali-G77 e G57 com a
 renderArea justa (esperado: muito menos "desenho"/"resolve" por fim de passe); Turnip no SD480+ e no RP5
 sem a opção manual; Odin 3 com o Turnip que falhava (a aba Drivers diz se caiu para o do sistema).
+
+### 2026-10-17 — v0.5.0: cortes do Dragon Burst, autoteste, abaixo de 720p, 120 FPS (patches 0050–0057)
+
+Base: `docs/pt-BR/RESUMO_BURST_LIMIT.md` do OptXbox, §2 (primeiro os cortes genéricos, depois medir, render
+nativo só se um passe continuar no topo). Os patches do Dragon Burst foram aplicados sobre o SDK do BL
+(fork `burstlimit`, 465f9ef) para ter o código final de cada passo e portados à mão para o DF (o DF não
+tem os passos 1–3b do BL, o `DBZ3_DRAW_RET` nem o `freeze_game`).
+
+SDK:
+- **0050** (DB 0058) captura `.dfc`: no 1.º frame cada resolve é lido de volta da GPU (registo 8,
+  `resolve_readback=1`); durante a leitura os atalhos sem memória/elisão ficam desligados.
+- **0051** (DB 0068 sem o post_lite + 0069) `dbz3_resolve_dedupe`: resolve repetido (sem draws, mesmos
+  parâmetros, destino já com a imagem) e destino lido só por draws saltados (efeitos desligados,
+  restauros, pré-passo 4x, restauro da profundidade) durante 120 escritas deixam de ser resolvidos;
+  `dbz3_skip_null_draws`. Linha `dbz3: dedupe: N draws nulos, M resolves repetidos e K sem leitor`.
+- **0052** (DB 0070) `dbz3_discard_full_overwrite`: só com dynamic rendering. No DF a área do Clear()
+  do D3D (scissor 8192) é o retângulo **interior** dos vértices; num passe limitado a área justa
+  (`dbz3_tight_render_area`) fica desligada (alargar escreveria lixo).
+- **0053** (DB 0073/0075/0076/0078/0079) interruptores do modo direto (`dbz3_rt_direct_drop_transfers`,
+  `_clear_siblings`, `dbz3_rt_keep_dd/cd/dc/cc`, pares `dbz3_rt_dc_*`) e cache de pipelines por driver.
+  **Por omissão como na 0.4.0** (keep_* desligados): o autoteste diz se algum faz falta no B3.
+- **0054** (DB 0071–0074, 0077, 0078) passo 4 `dbz3_render_into_texture` (BGRA, texturas sem STORAGE,
+  render pass sem dynamic rendering, desligado no Turnip). Diferenças do DF: só com
+  `dbz3_direct_resolve_skip_memory` (não escreve a memória), nunca num destino de `g_dbz3_need_memory`, o
+  intervalo entra no `g_dbz3_skipped_memory` (deteção de leitura pela memória), e um restauro que copia
+  de volta uma textura feita pelo passo 4 nunca é elidido (`Dbz3RitIsStaleSource`). Todas as chaves do
+  autoteste passaram a `HotReload` (efeitos, área justa, pré-passo 4x, clear_to_1x, restauro, elisão da
+  profundidade, early transition).
+- **0055** (BL 94a1274 genérico + DB 0089 + partes da 0091 que servem ao DF) `draw_resolution_percent`
+  no Vulkan: RTs a 1x, jogo no canto, viewport/scissor escalados, resolves e texturas de dados resolvidos
+  no tamanho menor (páginas resolvidas seguidas também abaixo de 1x), `ps_param_gen`, amostras de
+  oclusão, área do descarte (para dentro) e da área justa (para fora). O atalho resolve → textura, o modo
+  sem memória e o passo 4 continuam abaixo de 1x (guest vs host: `dbz3_guest_width/height`,
+  `Dbz3TextureWidth/Height`). Logs `Rendering below 1x: 75% (960x540 of 1280x720)` e `dbz3: resolucao
+  interna`. Tamanhos do B3 (1280x720, 320x184, 160x96, 80x48, 512x512) exatos a 75% e a 50%.
+- **0056** `dbz3_freeze_frame` (novo, não existe no DB): a GPU para logo depois da troca que fecha o
+  frame F e repete F a ~60 Hz a partir de cópias do ring e dos indirect buffers, com os registos do
+  início de F; interrupções e WAIT_REG_MEM são ignorados nas repetições; ao descongelar voltam os
+  registos do ponto de paragem e o ring continua. O jogo fica à espera da GPU (para em 1–2 frames).
+- **0057** (DB 0092) interpolação de frames no presenter (`dbz3_frame_interpolation`, qualidade 1),
+  `PresentStats`, Hz da tela, linha `Apresentacao`, `game_fps`/`presented_fps`/`interp=` na perf. FPS do
+  jogo para o presenter = 60/(1+frameskip) (o B3 não tem `frame_rate`).
+
+App:
+- `GameActivity.requestDisplayRate(hz)` + `DisplayRates` (substitui o `requestSixtyHz`): 60 Hz ou 120 Hz
+  com o 120 FPS interpolado; a taxa real vai para o runtime (`NativeGameState.setDisplayHz`).
+- Desempenho: taxa de quadros 30/60/120 (o 120 só aparece em telas ≥ 110 Hz) e resolução
+  360p/540p/720p/1440p/2160p (`draw_resolution_percent` + `dbz3_resolution_scale`).
+- `RenderSelfTest` (menu do jogo, só numa luta): congela com `dbz3_freeze_frame`, referência = config
+  atual, uma chave de cada vez, "TUDO desligado", `logs/autoteste.txt` + JPGs, exporta o zip sozinho.
+  JNI novos: `nativeSetCvarsLive` (sem gravar o toml), `nativeGetCvar`, `nativeLogLine`,
+  `nativeSetDisplayHz`, `nativePresentInfo`.
+
+Sombra/silhueta 512x512 (pitch 560): na captura do Dimensity 1100 (Mali-G77, 14/10 19:20) são 42 draws
+em 2 frames (21 por frame, os dois lutadores), 11 206 índices, **3,98 ms de 168 ms (2,4%)** do tempo por
+draw (que no Mali é inflado pelo flush por draw). É limitado por vértices/overhead, não por
+preenchimento: baixar só a sombra pouparia < 1%. **Decisão: não vira opção.** A 540p o passe já vai a
+384x384 com o resto. A/B pela linha perf no RG Cube só se o autoteste/perf mostrar o contrário.
+
+Por testar (RP5, RG Cube, Odin 3): autoteste em cada um (tudo "igual"? algum `com transferencias …`
+diferente?); `dbz3: dedupe:` e `dbz3: passo 4:` no log; perf a 720p vs 540p no Cube (esperado: cargas
+~0 a 540p, GPU bem abaixo de 42 ms); 120 interpolado no Odin 3 (`presented_fps` ~120, `interp=`).

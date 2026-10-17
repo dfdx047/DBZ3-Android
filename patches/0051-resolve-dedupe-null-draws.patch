@@ -1,0 +1,300 @@
+diff --git a/src/graphics/vulkan/command_processor.cpp b/src/graphics/vulkan/command_processor.cpp
+index 7745360..329dd23 100644
+--- a/src/graphics/vulkan/command_processor.cpp
++++ b/src/graphics/vulkan/command_processor.cpp
+@@ -96,9 +96,48 @@ REXCVAR_DEFINE_BOOL(dbz3_clear_to_1x, true, "GPU",
+ REXCVAR_DEFINE_BOOL(dbz3_skip_msaa_prepass, false, "GPU",
+                     "DBZ3-Android: salta o pre-passo 4x MSAA (pitch 640) do inicio do frame");
+ REXCVAR_DECLARE(bool, dbz3_rt_direct);
++REXCVAR_DEFINE_BOOL(dbz3_skip_null_draws, true, "GPU/Vulkan",
++                    "DBZ3-Android: salta draws que nao escrevem nada (sem cor, sem "
++                    "profundidade/stencil, sem memexport, fora de consultas de oclusao)")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++REXCVAR_DEFINE_BOOL(dbz3_resolve_dedupe, true, "GPU/Vulkan",
++                    "DBZ3-Android: salta resolves que repetem o que o destino ja tem (sem draws "
++                    "desde o anterior) e os de destinos lidos so por draws saltados (aprendido "
++                    "ao longo de 120 escritas)")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+ 
+ namespace rex::graphics::vulkan {
+ 
++// DBZ3-Android (Dragon Burst 0068/0069): resolves repetidos ou sem leitor (definido em
++// render_target_cache.cpp).
++namespace dbz3_resolve_dedupe {
++extern bool g_dirty;
++extern uint64_t g_null_draws;
++void MarkRead(uint32_t address);
++void MarkSkippedRead(uint32_t address);
++void LogFrame();
++}  // namespace dbz3_resolve_dedupe
++
++namespace {
++// As texturas que um draw (feito ou saltado) amostra.
++template <typename F>
++void Dbz3ForEachSampled(const RegisterFile& regs, Shader* vs, Shader* ps, F&& f) {
++  for (Shader* shader : {vs, ps}) {
++    if (!shader) continue;
++    for (const Shader::TextureBinding& binding : shader->texture_bindings()) {
++      const xenos::xe_gpu_texture_fetch_t fetch = regs.GetTextureFetch(binding.fetch_constant);
++      if (fetch.type == xenos::FetchConstantType::kTexture) {
++        f((uint32_t(fetch.base_address) << 12) & 0x1FFFFFFF);
++      }
++    }
++  }
++}
++// Draw saltado por uma otimizacao: um destino que so draws assim leem deixa de ser resolvido.
++void Dbz3MarkSkippedDraw(const RegisterFile& regs, Shader* vs, Shader* ps) {
++  Dbz3ForEachSampled(regs, vs, ps, [](uint32_t a) { dbz3_resolve_dedupe::MarkSkippedRead(a); });
++}
++}  // namespace
++
+ // DBZ3-Android: "30 FPS" de verdade (dbz3_frameskip). O jogo continua a correr a
+ // 60 (a logica segue o vblank do guest), mas so 1 em cada (N+1) frames e desenhado:
+ // nos outros, os comandos de estado sao processados e os draws, resolves e queries
+@@ -2748,6 +2787,9 @@ static void Dbz3LogGuestPerformanceVulkan() {
+ 
+ void VulkanCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr, uint32_t frontbuffer_width,
+                                        uint32_t frontbuffer_height) {
++  // O presenter le a imagem final (conta como leitura).
++  dbz3_resolve_dedupe::MarkRead(frontbuffer_ptr & 0x1FFFFFFF);
++  dbz3_resolve_dedupe::LogFrame();
+   Dbz3LogGuestPerformanceVulkan();
+   SCOPE_profile_cpu_f("gpu");
+   if (!dbz3_frameskip::g_skip_frame) {
+@@ -4400,6 +4442,17 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
+     }
+     draw_util::AddMemExportRanges(regs, *pixel_shader, memexport_ranges_);
+   }
++  // DBZ3-Android (dbz3_skip_null_draws, Dragon Burst 0068): sem cor (mascara 0 ou PS sem
++  // saida), sem profundidade nem stencil e sem memexport, o draw nao muda nada - salvo numa
++  // consulta de oclusao, onde as amostras contam.
++  if (is_rasterization_done && !pixel_shader && !memexport_used_vertex &&
++      !active_occlusion_query_.valid && REXCVAR_GET(dbz3_skip_null_draws)) {
++    const reg::RB_DEPTHCONTROL null_depth = draw_util::GetNormalizedDepthControl(regs);
++    if (!null_depth.z_enable && !null_depth.stencil_enable) {
++      ++dbz3_resolve_dedupe::g_null_draws;
++      return true;
++    }
++  }
+   // DBZ3-Android (dbz3_skip_msaa_prepass): no inicio de cada frame o Budokai 3 desenha
+   // cor e profundidade num render target 4x MSAA com pitch 640 (o mesmo EDRAM que o ecra
+   // 1x 1280) a partir do frame anterior, e o render target cache transfere isso para a
+@@ -4409,6 +4462,7 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
+     const auto surface_info = regs.Get<reg::RB_SURFACE_INFO>();
+     if (surface_info.msaa_samples == xenos::MsaaSamples::k4X &&
+         surface_info.surface_pitch == 640) {
++      Dbz3MarkSkippedDraw(regs, vertex_shader, pixel_shader);
+       return true;
+     }
+   }
+@@ -4436,6 +4490,7 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
+       if (pixel_shader && pixel_shader->ucode_data_hash() == UINT64_C(0x555EBAAEF8F61839)) {
+         g_dbz3_bloom_frame = g_dbz3_frame_index + 1;
+       }
++      Dbz3MarkSkippedDraw(regs, vertex_shader, pixel_shader);
+       return true;
+     }
+   }
+@@ -4465,6 +4520,7 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
+       }
+     }
+     if (fx_skip) {
++      Dbz3MarkSkippedDraw(regs, vertex_shader, pixel_shader);
+       return true;
+     }
+   }
+@@ -4487,6 +4543,7 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
+           REXGPU_INFO("dbz3: restauro da profundidade via cor (base {}) saltado",
+                       uint32_t(depth_info.depth_base));
+         }
++        Dbz3MarkSkippedDraw(regs, vertex_shader, restore_ps);
+         return true;
+       }
+     }
+@@ -4649,6 +4706,7 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
+     if (render_target_cache_->Dbz3IsRedundantRestore(sampled_bases, sampled_count, index_count,
+                                                      pixel_shader->ucode_data_hash(),
+                                                      dbz3_identity_copy)) {
++      Dbz3MarkSkippedDraw(regs, vertex_shader, pixel_shader);
+       return true;
+     }
+   }
+@@ -5170,6 +5228,11 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
+     }
+   }
+ 
++  // dbz3_resolve_dedupe: o draw foi feito - o render target mudou e as texturas que leu
++  // foram lidas.
++  dbz3_resolve_dedupe::g_dirty = true;
++  Dbz3ForEachSampled(regs, vertex_shader, pixel_shader,
++                     [](uint32_t a) { dbz3_resolve_dedupe::MarkRead(a); });
+   return true;
+ }
+ 
+diff --git a/src/graphics/vulkan/render_target_cache.cpp b/src/graphics/vulkan/render_target_cache.cpp
+index 32d661c..2196f4b 100644
+--- a/src/graphics/vulkan/render_target_cache.cpp
++++ b/src/graphics/vulkan/render_target_cache.cpp
+@@ -78,6 +78,11 @@ REXCVAR_DEFINE_INT32(dbz3_resolve_debug, 0, "GPU",
+ 
+ namespace rex::graphics::vulkan {
+ 
++// DBZ3-Android: resolves repetidos ou sem leitor (definido no fim do ficheiro).
++namespace dbz3_resolve_dedupe {
++bool Resolve(const draw_util::ResolveInfo& resolve_info, bool may_skip);
++}  // namespace dbz3_resolve_dedupe
++
+ // DBZ3-Android: cache de pipelines do driver (pipeline_cache.cpp).
+ VkPipelineCache Dbz3GetDriverPipelineCache();
+ void Dbz3MarkDriverPipelineCacheDirty();
+@@ -1250,6 +1255,17 @@ bool VulkanRenderTargetCache::Resolve(const memory::Memory& memory,
+     }
+   }
+ 
++  // DBZ3-Android (dbz3_resolve_dedupe, Dragon Burst 0068/0069): resolves repetidos ou sem
++  // leitor. Os que limpam o render target fazem-se sempre (e contam como mudanca dele).
++  if (resolve_info.copy_dest_extent_length &&
++      rex::cvar::GetFlagByName("dbz3_resolve_dedupe") == "true") {
++    const bool clears = resolve_info.IsClearingColor() || resolve_info.IsClearingDepth();
++    if (dbz3_resolve_dedupe::Resolve(resolve_info,
++                                     !clears && !dbz3_capture::WantsResolveReadback())) {
++      return true;
++    }
++  }
++
+   const ui::vulkan::VulkanDevice* const vulkan_device = command_processor_.GetVulkanDevice();
+   const ui::vulkan::VulkanDevice::Functions& dfn = vulkan_device->functions();
+   const VkDevice device = vulkan_device->device();
+@@ -7145,4 +7161,132 @@ bool VulkanRenderTargetCache::Dbz3TryResolveDepthToTexture(
+   return true;
+ }
+ 
++// ---------------------------------------------------------------------------
++// DBZ3-Android (Dragon Burst 0068/0069): resolves repetidos ou sem leitor (dbz3_resolve_dedupe).
++// 1) Repetido: sem draws desde o ultimo resolve e com os mesmos parametros, o render
++//    target tem o mesmo conteudo - se o destino ja o recebeu, nao ha nada a copiar.
++// 2) Sem leitor: um destino cujas escritas so sao lidas por draws saltados (efeitos
++//    desligados, restauros e pre-passos saltados) durante 120 escritas
++//    seguidas deixa de ser resolvido. Escritas sem leitor nenhum nao contam (ex.: o brilho
++//    entre rounds, quando a composicao nao corre - os logs de 16/10 07:32 mostraram que
++//    "nenhum leitor" sozinho apanhava destinos que voltam a ser lidos). Se um draw feito o
++//    voltar a ler, volta a ser resolvido (esse frame usa o conteudo antigo).
++// ---------------------------------------------------------------------------
++namespace dbz3_resolve_dedupe {
++bool g_dirty = true;
++uint64_t g_null_draws = 0;
++uint64_t g_same = 0;
++uint64_t g_dead = 0;
++uint64_t g_revived = 0;
++uint64_t g_frames = 0;
++
++constexpr uint32_t kDeadStreak = 120;
++
++struct Entry {
++  uint32_t start = 0;
++  uint32_t length = 0;
++  uint32_t streak = 0;
++  bool written = false;
++  bool read = false;
++  bool skipped_read = false;
++  bool dead = false;
++};
++std::vector<Entry> g_entries;
++bool g_key_valid = false;
++uint32_t g_key[7] = {};
++std::vector<uint32_t> g_holders;
++
++void MarkRead(uint32_t address) {
++  for (Entry& e : g_entries) {
++    if (address >= e.start && address < e.start + e.length) {
++      e.read = true;
++      if (e.dead) {
++        e.dead = false;
++        e.streak = 0;
++        if ((g_revived++ % 64) == 0) {
++          REXGPU_INFO("dbz3: resolves: {:08X} voltou a ser lido, volta a ser resolvido", e.start);
++        }
++      }
++    }
++  }
++}
++
++void MarkSkippedRead(uint32_t address) {
++  for (Entry& e : g_entries) {
++    if (address >= e.start && address < e.start + e.length) e.skipped_read = true;
++  }
++}
++
++void LogFrame() {
++  if ((++g_frames % 3000) == 1) {
++    uint32_t dead = 0;
++    for (const Entry& e : g_entries) dead += e.dead ? 1 : 0;
++    REXGPU_INFO(
++        "dbz3: dedupe: {} draws nulos, {} resolves repetidos e {} sem leitor saltados "
++        "({} destinos sem leitor agora)",
++        g_null_draws, g_same, g_dead, dead);
++  }
++}
++
++bool Resolve(const draw_util::ResolveInfo& ri, bool may_skip) {
++  const uint32_t start = ri.copy_dest_extent_start & 0x1FFFFFFF;
++  const uint32_t length = ri.copy_dest_extent_length;
++  const draw_util::ResolveEdramInfo& src = ri.IsCopyingDepth() ? ri.depth_edram_info : ri.color_edram_info;
++  const uint32_t key[7] = {ri.rb_copy_control.value, ri.copy_dest_info.value, src.packed,
++                           ri.coordinate_info.packed, ri.height_div_8,
++                           ri.copy_dest_coordinate_info.packed, ri.copy_dest_base - ri.copy_dest_extent_start};
++  const bool clears = ri.IsClearingColor() || ri.IsClearingDepth();
++  const bool same_content = g_key_valid && !g_dirty && std::memcmp(key, g_key, sizeof(key)) == 0;
++  if (may_skip && same_content &&
++      std::find(g_holders.begin(), g_holders.end(), start) != g_holders.end()) {
++    ++g_same;
++    return true;
++  }
++  Entry* e = nullptr;
++  for (Entry& it : g_entries) {
++    if (it.start == start) {
++      e = &it;
++      break;
++    }
++  }
++  if (!e) {
++    if (g_entries.size() >= 256) g_entries.erase(g_entries.begin());
++    g_entries.push_back(Entry{start, length});
++    e = &g_entries.back();
++  }
++  e->length = std::max(e->length, length);
++  if (e->written) {
++    if (e->read || !e->skipped_read) {
++      e->streak = 0;
++      if (e->dead && !e->read) {
++        // Sem leitor nenhum desta vez: fica como esta (nao conta para nenhum lado).
++        e->streak = kDeadStreak;
++      }
++    } else if (++e->streak >= kDeadStreak && !e->dead) {
++      e->dead = true;
++      REXGPU_INFO("dbz3: resolves: {:08X} ({} KB) sem leitor ha {} escritas, deixa de ser resolvido",
++                  start, length >> 10, e->streak);
++    }
++  }
++  e->written = true;
++  e->read = false;
++  e->skipped_read = false;
++  // Quem tem agora o conteudo do render target (para o caso 1).
++  if (!same_content) {
++    g_holders.clear();
++    std::memcpy(g_key, key, sizeof(key));
++    g_key_valid = true;
++  }
++  g_dirty = clears;  // um clear muda o render target depois da copia
++  g_holders.erase(std::remove(g_holders.begin(), g_holders.end(), start), g_holders.end());
++  if (may_skip && e->dead) {
++    ++g_dead;
++    return true;  // o destino fica com o conteudo antigo: nao entra nos que o tem
++  }
++  g_holders.push_back(start);
++  return false;
++}
++}  // namespace dbz3_resolve_dedupe
++
++
+ }  // namespace rex::graphics::vulkan
