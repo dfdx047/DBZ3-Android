@@ -1027,3 +1027,13 @@ diferente?); `dbz3: dedupe:` e `dbz3: passo 4:` no log; perf a 720p vs 540p no C
   saiu do autoteste.
 - A verificação de volta à referência funcionou: 'Clear 4x→1x' deixou 0,07%, 'sem transferências
   saltadas' 13,9% e 'sem render targets diretos' 6,6% de mudança permanente no frame congelado.
+
+### 2026-10-17 16:01 — 5.º autoteste no RG Cube (0.5.4, 720p): resolve por desenho de cor e profundidade
+
+- Referência: **GPU 29,5 ms** (des 17,3, res 6,3, tr 1,7, out 2,7), contra 39,5 na 0.5.3. As variantes de
+  profundidade (2 e 3) criaram-se e correram; "sem resolve por desenho" volta a 39,5 com a imagem igual.
+- Sonda "resolves só fecham o passe" (agora válida): 23,7 ms, res 0 → as cópias custam ~6 ms; o resto
+  são passes.
+- Efeitos: brilho −3,0 ms (3% da imagem nesta cena), DOF −1,3 (0,3%), FXAA do jogo −5,6 (4%). Os três
+  desligados dariam ~19,6 ms a 720p.
+- O que pesa agora é o desenho (17 ms em ~20 passes por frame).
