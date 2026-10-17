@@ -1051,3 +1051,14 @@ diferente?); `dbz3: dedupe:` e `dbz3: passo 4:` no log; perf a 720p vs 540p no C
   suas texturas veio neste frame de um resolve do mesmo render target (base, pitch, MSAA) que não
   limpou (ou cuja limpeza foi tirada). Se limpou, desenha-se esse frame e a entrada fica aprendida
   (a limpeza sai a partir do seguinte). Logs: "FXAA desligado: entrada … aprendida" / "draw mantido".
+
+### 2026-10-17 16:29 — 0.5.5 no Cube: entra com os efeitos desligados; 60 FPS a 540p
+
+- Com os três efeitos desligados desde o arranque o jogo renderiza: logo nos menus "FXAA desligado:
+  entrada 1F35F000 / 1EFC7000 (resolve com limpeza do mesmo render target base 0 pitch 16) aprendida".
+  Nenhum "draw mantido".
+- Luta a 540p sem efeitos: 60,0 FPS estáveis (max_frame_ms ~18–21), GPU 13–18 ms. Autoteste: frame
+  congelado 11,2 ms (des 5,9, res 2,4, out 1,9); "com FXAA" quase igual à referência (0,07%), ou seja o
+  FXAA desligado agora sai certo.
+- Ainda a medir: "com brilho" a 540p custa +9 ms (res 2,4 → 8,2): a cadeia pequena do brilho fica cara
+  abaixo de 1x.
