@@ -1,0 +1,56 @@
+diff --git a/src/graphics/vulkan/render_target_cache.cpp b/src/graphics/vulkan/render_target_cache.cpp
+index 3b67d88..cd02773 100644
+--- a/src/graphics/vulkan/render_target_cache.cpp
++++ b/src/graphics/vulkan/render_target_cache.cpp
+@@ -1234,6 +1234,19 @@ bool VulkanRenderTargetCache::Resolve(const memory::Memory& memory,
+ 
+   dbz3_gpuprof::CountResolve(uint32_t(resolve_info.coordinate_info.width_div_8) * 8,
+                              resolve_info.height_div_8 * 8);
++  // DBZ3-Android (0062/0063): par resolve -> efeito (FXAA/DOF desligados, command_processor.cpp).
++  // Regista-se aqui, antes de qualquer atalho que acabe o Resolve mais cedo (rt_direct,
++  // dedupe...): no RG Cube (17/10 16:47) o resolve da entrada do FXAA era eliminado por eles, o
++  // efeito ficava sem par nesse frame e voltava a ser desenhado ("lido a serio"), num ciclo. A
++  // limpeza sai ja aqui, para os atalhos verem um resolve sem limpeza (e o poderem saltar).
++  if (resolve_info.copy_dest_extent_length && !resolve_info.IsCopyingDepth() &&
++      Dbz3PostFxNoteResolve(resolve_info.copy_dest_base,
++                            uint32_t(resolve_info.color_edram_info.base_tiles),
++                            uint32_t(resolve_info.color_edram_info.pitch_tiles),
++                            uint32_t(resolve_info.color_edram_info.msaa_samples),
++                            resolve_info.IsClearingColor())) {
++    resolve_info.rb_copy_control.color_clear_enable = 0;
++  }
+   // DBZ3-Android: descricao dos resolves grandes (uma vez por combinacao), para o
+   // atalho render target -> textura: origem, destino, formato, endian e troca R/B.
+   if (dbz3_gpuprof::g_state.enabled &&
+@@ -1296,14 +1309,6 @@ bool VulkanRenderTargetCache::Resolve(const memory::Memory& memory,
+     const bool clears = resolve_info.IsClearingColor() || resolve_info.IsClearingDepth();
+     if (dbz3_resolve_dedupe::Resolve(resolve_info,
+                                      !clears && !dbz3_capture::WantsResolveReadback())) {
+-      // 0062: conta como resolve deste frame para o par resolve -> efeito (sem ele, saltar o
+-      // efeito fazia o dedupe saltar a copia e no frame seguinte o efeito voltava a desenhar).
+-      if (!resolve_info.IsCopyingDepth()) {
+-        Dbz3PostFxNoteResolve(resolve_info.copy_dest_base,
+-                              uint32_t(resolve_info.color_edram_info.base_tiles),
+-                              uint32_t(resolve_info.color_edram_info.pitch_tiles),
+-                              uint32_t(resolve_info.color_edram_info.msaa_samples), false);
+-      }
+       return true;
+     }
+   }
+@@ -1535,15 +1540,7 @@ bool VulkanRenderTargetCache::Resolve(const memory::Memory& memory,
+   // textura que o FXAA le e LIMPA a cor; o FXAA voltava a desenhar o ecra a partir dessa
+   // textura. Sem o FXAA o ecra tem de ficar como esta para o resolve do frontbuffer, por isso
+   // a limpeza da cor e saltada (o frame seguinte comeca com o Clear() do D3D, que cobre tudo).
+-  // 0062: o par resolve -> efeito e aprendido (Dbz3PostFxNoteResolve, command_processor.cpp).
+-  if (resolve_info.copy_dest_extent_length && !resolve_info.IsCopyingDepth() &&
+-      Dbz3PostFxNoteResolve(resolve_info.copy_dest_base,
+-                            uint32_t(resolve_info.color_edram_info.base_tiles),
+-                            uint32_t(resolve_info.color_edram_info.pitch_tiles),
+-                            uint32_t(resolve_info.color_edram_info.msaa_samples),
+-                            resolve_info.IsClearingColor())) {
+-    resolve_info.rb_copy_control.color_clear_enable = 0;
+-  }
++  // 0062/0063: a limpeza da entrada de um efeito desligado ja saiu no inicio do Resolve.
+ 
+   // Clearing.
+   bool cleared = false;

@@ -1068,3 +1068,15 @@ diferente?); `dbz3: dedupe:` e `dbz3: passo 4:` no log; perf a 720p vs 540p no C
 - `DriverRepository.isMali()` (/dev/mali0 ou /sys/class/misc/mali0; senão SoC MediaTek/Unisoc, HARDWARE
   mt*/ums*; Adreno nunca). Migração única (`mali_preset_applied`): `withMaliPreset()` = 540p (só se
   estava em 720p 1x) e brilho/DOF/FXAA do jogo desligados. Linha informativa na aba Desempenho.
+
+### 2026-10-17 16:47 — 0.5.6 a 720p sem efeitos no Cube; patch 0063 (v0.5.7)
+
+- 720p sem efeitos: frame congelado 13,8 ms (des 7,4, res 3,0, out 1,9); na luta 55–57 FPS com GPU
+  13–17 ms. 540p continua a ser o que segura 60.
+- Log cheio de "1F35F000 sem leitor há 120 escritas" e "resolve 1F35F000 #0 eliminado mas lido a
+  sério": a entrada do FXAA (desligado) era eliminada pelo rt_direct/dedupe, que retornam antes do
+  registo do 0062 → nesse frame o FXAA não tinha par e era desenhado (lido a sério) → o resolve
+  voltava. 0063: `Dbz3PostFxNoteResolve` passa para o início do Resolve (logo a seguir ao
+  GetResolveInfo) e a limpeza sai aí, para os cortes verem um resolve sem limpeza.
+- "com brilho"/"com DOF" a partir de tudo desligado davam +10 ms de resolve: transitório de religar
+  (destinos "sem leitor" a voltarem), não o custo real (com tudo ligado eram 3 e 1,3 ms).

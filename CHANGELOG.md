@@ -3,6 +3,14 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.5.7 — 2026-10-17
+
+### Fixes
+- With the game's FXAA off, the copy that feeds it could be removed by the other resolve cuts,
+  so in those frames the FXAA was drawn again and the cuts switched back on, in a loop (patch
+  0063). The copy is now recorded before any cut, and its screen clear is dropped up front, so
+  the cuts can also skip the copy itself.
+
 ## 0.5.6 — 2026-10-17
 
 ### Mali GPUs
