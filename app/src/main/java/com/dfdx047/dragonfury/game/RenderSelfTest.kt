@@ -84,7 +84,7 @@ class RenderSelfTest(
     private var shot = 0
 
     fun start() {
-        val all = opts.flatMap { it.cvars.keys } + FREEZE
+        val all = opts.flatMap { it.cvars.keys } + FREEZE + OVERLAY
         original = all.associateWith { NativeGameState.getCvar(it) }
         active = opts.filter { o -> o.cvars.keys.all { original[it].orEmpty().isNotEmpty() } }
         // Valores normalizados (o direct_resolve_texture pode estar a 2 nos testes de cor).
@@ -116,7 +116,9 @@ class RenderSelfTest(
         report.append("Config: " + base.entries.joinToString(" ") { "${it.key}=${it.value}" } + "\n\n")
         showStatus("Autoteste do render: a congelar a luta...")
         log("autoteste: inicio (${active.size} otimizacoes)")
-        NativeGameState.setCvarsLive(mapOf(FREEZE to "true") + base)
+        // O painel de FPS (debug_overlay) e desenhado na imagem do jogo e muda a cada frame: fora
+        // durante o teste (no 1.o autoteste do RG Cube, 17/10, era parte do "ruido").
+        NativeGameState.setCvarsLive(mapOf(FREEZE to "true", OVERLAY to "false") + base)
         // Referencia: a config atual, duas fotos para medir o ruido.
         after(3500) {
             capture { a ->
@@ -125,6 +127,10 @@ class RenderSelfTest(
                         reference = a
                         noise = if (a != null && b != null) diff(a, b).first else 0.0
                         report.append(String.format(Locale.ROOT, "%-46s ruido %.3f%%\n", "referencia (config)", noise))
+                        if (noise > 5.0) {
+                            report.append("AVISO: a imagem nao ficou congelada (ruido acima de 5%): os vereditos abaixo\n")
+                            report.append("nao valem; os ms de GPU de cada estado (linhas perf) continuam a valer.\n")
+                        }
                         log("autoteste: referencia, ruido %.3f%%".format(Locale.ROOT, noise))
                         after(4000) { step(0) }
                     }
@@ -176,7 +182,7 @@ class RenderSelfTest(
 
     private fun finish() {
         // Volta tudo ao que estava (e descongela).
-        NativeGameState.setCvarsLive(original.filterValues { it.isNotEmpty() } + (FREEZE to "false"))
+        NativeGameState.setCvarsLive(restoreMap())
         log("autoteste: fim")
         report.append("\nCorrelacione com as linhas 'perf' do dragonfury_last.log pelos horarios 'autoteste:'.\n")
         try {
@@ -204,9 +210,13 @@ class RenderSelfTest(
     /** Se a atividade fechar a meio: descongela e repoe as otimizacoes. */
     fun abort() {
         main.removeCallbacksAndMessages(null)
-        NativeGameState.setCvarsLive(original.filterValues { it.isNotEmpty() } + (FREEZE to "false"))
+        NativeGameState.setCvarsLive(restoreMap())
         worker.quitSafely()
     }
+
+    /** Tudo como estava antes do teste (descongelado). */
+    private fun restoreMap(): Map<String, String> =
+        original.filterValues { it.isNotEmpty() } + (FREEZE to "false")
 
     // ------------------------------------------------------------------ fotos
 
@@ -295,5 +305,6 @@ class RenderSelfTest(
 
     private companion object {
         const val FREEZE = "dbz3_freeze_frame"
+        const val OVERLAY = "debug_overlay"
     }
 }

@@ -951,3 +951,23 @@ preenchimento: baixar só a sombra pouparia < 1%. **Decisão: não vira opção.
 Por testar (RP5, RG Cube, Odin 3): autoteste em cada um (tudo "igual"? algum `com transferencias …`
 diferente?); `dbz3: dedupe:` e `dbz3: passo 4:` no log; perf a 720p vs 540p no Cube (esperado: cargas
 ~0 a 540p, GPU bem abaixo de 42 ms); 120 interpolado no Odin 3 (`presented_fps` ~120, `interp=`).
+
+### 2026-10-17 14:09 — 1.º autoteste (RG Cube, 540p, modo 30 FPS) e v0.5.1 (patch 0058)
+
+- **O congelar não pegou**: nenhuma linha `dbz3: congelar`, ruído 50% e a luta acabou durante o teste
+  (última foto no menu "Battle Again?"). Causa provável: um indirect buffer de 0 dwords marcava
+  "excesso" e a gravação recomeçava em todos os frames; limite de 4096 IBs também curto. 0058: IBs vazios
+  ignorados, limite 65 536 IBs / 96 MB, repetição pela ordem gravada (cursor) e avisos no log (troca fora
+  do ring principal, frame grande demais, 60 repetições). O autoteste desliga o painel de FPS
+  (`debug_overlay`, desenhado na imagem) e avisa quando o ruído passa de 5%.
+- As chaves mudam ao vivo (a linha perf acompanha cada estado). GPU por frame desenhado a **540p**:
+  ~29 ms (desenho 13, resolve 9,5, transfer 2, outros 3,6; resolves 10,3/f, todos pelo atalho;
+  cargas 0) contra 42–50 ms a 720p antes: **30 FPS estáveis no Cube**. Sem cada parte (ms/frame):
+  transferências saltadas 43, limpar irmãs 58, keep cd/dc 42–45, RT diretos 78, resolve direto 45,
+  TUDO desligado 109.
+- `dedupe`: 0/0/0 (com todos os efeitos ligados não há resolves sem leitor). Passo 4: 1 assinatura
+  (bloom 240x135), 1 feito e depois banida; o resto falha em "texturas" (n ≠ 1 a 75%).
+- Descarte: só o bloom passa; recusados por cobertura desconhecida o FXAA (VS A505100C5BC9C52F, PS
+  F5F4…) e o restauro (VS 95DD91E3E9AE3A74, PS ADCA…). Próximo: ler o layout desses VS na captura e
+  aceitar se cobrirem o scissor.
+- Fins de passe 30/f, metade por "barreira de imagem (amostrar)" (14/f): alvo seguinte no Mali.

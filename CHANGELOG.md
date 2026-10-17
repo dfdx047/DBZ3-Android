@@ -3,6 +3,13 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.5.1 — 2026-10-17
+
+### Fixes
+- Render self-test: the picture now really freezes (patch 0058: empty indirect buffers no longer
+  stopped the recording, larger frames fit, replays follow the recorded order); the FPS panel is
+  hidden during the test and the report warns when the noise is too high to trust the verdicts.
+
 ## 0.5.0 — 2026-10-17
 
 ### Performance (renderer, patches 0050–0057, ported from Dragon Burst)

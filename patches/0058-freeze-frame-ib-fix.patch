@@ -1,0 +1,114 @@
+diff --git a/src/graphics/command_processor.cpp b/src/graphics/command_processor.cpp
+index 4139317..e4cbdcd 100644
+--- a/src/graphics/command_processor.cpp
++++ b/src/graphics/command_processor.cpp
+@@ -141,6 +141,13 @@ struct Ib {
+ };
+ std::vector<Ib> g_ibs;
+ bool g_ibs_overflow = false;
++// 0058: bytes copiados, cursor das repeticoes (os indirect buffers repetem-se pela mesma ordem)
++// e diagnostico (o 0056 nunca congelou no RG Cube, 17/10 14:09, sem linha nenhuma).
++size_t g_ib_bytes = 0;
++size_t g_ib_cursor = 0;
++uint64_t g_ib_misses = 0;
++uint32_t g_overflow_logs = 0;
++uint32_t g_off_primary_logs = 0;
+ uint64_t g_replays = 0;
+ std::chrono::steady_clock::time_point g_next_replay;
+ }  // namespace dbz3_freeze
+@@ -1055,6 +1062,13 @@ bool CommandProcessor::ExecutePacketType3_XE_SWAP(memory::RingBuffer* reader, ui
+   ++counter_;
+ 
+   // DBZ3-Android (dbz3_freeze_frame): grava o frame entre duas trocas do ring principal e para.
++  if (!dbz3_freeze::g_replaying && reader != dbz3_freeze::g_primary_reader &&
++      dbz3_freeze::g_off_primary_logs < 4 && REXCVAR_GET(dbz3_freeze_frame)) {
++    ++dbz3_freeze::g_off_primary_logs;
++    REXGPU_WARN("dbz3: congelar: troca fora do ring principal (reader {} principal {}); sem congelar",
++                static_cast<const void*>(reader),
++                static_cast<const void*>(dbz3_freeze::g_primary_reader));
++  }
+   if (!dbz3_freeze::g_replaying && reader == dbz3_freeze::g_primary_reader) {
+     namespace fz = dbz3_freeze;
+     const uint32_t index = uint32_t(reader->read_offset() / sizeof(uint32_t));
+@@ -1079,11 +1093,18 @@ bool CommandProcessor::ExecutePacketType3_XE_SWAP(memory::RingBuffer* reader, ui
+       REXGPU_INFO("dbz3: congelar: frame de {} dwords no ring e {} indirect buffers; a GPU repete-o",
+                   dwords, fz::g_ibs.size());
+     } else if (want) {
++      if (fz::g_state == fz::State::kRecording && fz::g_ibs_overflow && fz::g_overflow_logs < 4) {
++        ++fz::g_overflow_logs;
++        REXGPU_WARN("dbz3: congelar: frame grande demais para copiar ({} indirect buffers, {} KB); "
++                    "tenta o seguinte",
++                    fz::g_ibs.size(), fz::g_ib_bytes >> 10);
++      }
+       // Inicio de F: os registos e a posicao no ring.
+       fz::g_state = fz::State::kRecording;
+       fz::g_start_index = index;
+       fz::g_start_regs.assign(regs.values, regs.values + RegisterFile::kRegisterCount);
+       fz::g_ibs.clear();
++      fz::g_ib_bytes = 0;
+       fz::g_ibs_overflow = false;
+     } else {
+       fz::g_state = fz::State::kOff;
+@@ -1126,6 +1147,7 @@ void CommandProcessor::Dbz3FreezeReplay() {
+                                now - std::chrono::milliseconds(50));
+   Dbz3FreezeWriteRegisters(fz::g_start_regs);
+   fz::g_replaying = true;
++  fz::g_ib_cursor = 0;
+   if (!fz::g_ring_copy.empty()) {
+     memory::RingBuffer reader(fz::g_ring_copy.data(), fz::g_ring_copy.size());
+     reader.set_write_offset(fz::g_ring_copy.size());
+@@ -1137,7 +1159,10 @@ void CommandProcessor::Dbz3FreezeReplay() {
+   }
+   fz::g_replaying = false;
+   OnPrimaryBufferEnd();
+-  ++fz::g_replays;
++  if (++fz::g_replays == 60) {
++    REXGPU_INFO("dbz3: congelar: 60 repeticoes; indirect buffers fora de ordem {}",
++                fz::g_ib_misses);
++  }
+ }
+ 
+ bool CommandProcessor::ExecutePacketType3_INDIRECT_BUFFER(memory::RingBuffer* reader,
+@@ -1152,24 +1177,30 @@ bool CommandProcessor::ExecutePacketType3_INDIRECT_BUFFER(memory::RingBuffer* re
+   if (dbz3_freeze::g_state != dbz3_freeze::State::kOff) {
+     namespace fz = dbz3_freeze;
+     const uint32_t ib_ptr = GpuToCpu(list_ptr);
++    if (!list_length) {
++      return true;
++    }
+     if (fz::g_replaying) {
+-      for (fz::Ib& ib : fz::g_ibs) {
+-        if (ib.ptr == ib_ptr && ib.count == list_length) {
+-          memory::RingBuffer ib_reader(ib.data.data(), ib.data.size());
+-          ib_reader.set_write_offset(ib.data.size());
+-          do {
+-            if (!ExecutePacket(&ib_reader)) {
+-              break;
+-            }
+-          } while (ib_reader.read_count());
+-          return true;
+-        }
++      // 0058: pela ordem da gravacao (o mesmo endereco pode ter sido reusado no frame).
++      if (fz::g_ib_cursor < fz::g_ibs.size() && fz::g_ibs[fz::g_ib_cursor].ptr == ib_ptr &&
++          fz::g_ibs[fz::g_ib_cursor].count == list_length) {
++        fz::Ib& ib = fz::g_ibs[fz::g_ib_cursor++];
++        memory::RingBuffer ib_reader(ib.data.data(), ib.data.size());
++        ib_reader.set_write_offset(ib.data.size());
++        do {
++          if (!ExecutePacket(&ib_reader)) {
++            break;
++          }
++        } while (ib_reader.read_count());
++        return true;
+       }
++      ++fz::g_ib_misses;
+     } else if (fz::g_state == fz::State::kRecording) {
+-      if (fz::g_ibs.size() < 4096 && list_length) {
++      if (fz::g_ibs.size() < 65536 && fz::g_ib_bytes + size_t(list_length) * 4 <= (96u << 20)) {
+         fz::Ib ib{ib_ptr, list_length, {}};
+         const uint8_t* src = memory_->TranslatePhysical(ib_ptr);
+         ib.data.assign(src, src + size_t(list_length) * 4);
++        fz::g_ib_bytes += ib.data.size();
+         fz::g_ibs.push_back(std::move(ib));
+       } else {
+         fz::g_ibs_overflow = true;
