@@ -1246,3 +1246,12 @@ traz as operações por concluir e o modo seguinte entra sozinho.
   NonWritable (24) por Coherent (23) em OpDecorate/OpMemberDecorate no Turnip A6xx → ldib.
 - 0071: linha "dbz3: textura WxH fmt=… no caminho da GPU: <motivo>" (uma por formato/motivo).
 - As texturas 960x720 + 2×480x360 fmt=2 (k_8) carregadas no CPU são os planos Y/U/V dos vídeos.
+
+### 2026-10-18 20:15 — v0.6.8: resolves escrevem sempre a memória no Turnip A6xx (patch 0072)
+- 0.6.7 (sem isam) não mudou nada no RP5 → o isam não era a causa do HUD/menus.
+- No autoteste de 0.6.6 a foto "sem resolve sem memoria" (`dbz3_direct_resolve_skip_memory=false`)
+  sai completa, com HUD; "sem resolve direto na textura" mostra o HUD às riscas. Logo o que falha
+  no Turnip A6xx é o resolve só para a textura (sem escrever a memória).
+- 0072: em `Resolve()` e em `Dbz3RitBegin` o modo sem memória fica desligado com
+  `Dbz3TurnipA6xxSafe()` (o passo 4 / render into texture depende dele e também fica desligado).
+- 0070 fica (inofensivo); a confirmar se é preciso.

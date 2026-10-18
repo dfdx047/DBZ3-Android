@@ -3,6 +3,14 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.8 — 2026-10-18
+
+### Fixes
+- **Turnip on Adreno 6xx: HUD and menus.** 0.6.7 changed nothing on the RP5. The 0.6.6
+  self-test already showed the answer: with `dbz3_direct_resolve_skip_memory=false` the fight
+  frame is complete (HUD included). On Turnip + Adreno 6xx resolves now always write game memory
+  (no texture-only resolves, no render-into-texture), SDK patch 0072.
+
 ## 0.6.7 — 2026-10-18
 
 ### Fixes

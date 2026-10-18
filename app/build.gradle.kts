@@ -45,8 +45,8 @@ android {
         // estao todos disponiveis no bionic.
         minSdk = 30
         targetSdk = 35
-        versionCode = 23
-        versionName = "0.6.7"
+        versionCode = 24
+        versionName = "0.6.8"
 
         ndk {
             abiFilters += listOf("arm64-v8a")

@@ -10,7 +10,7 @@ GPU caía (VK_ERROR_DEVICE_LOST). Turnip em Adreno 7xx/8xx não tinha estes prob
 |---|---|---|
 | GPU cai no ecrã título | timestamps/queries de oclusão e otimizações de passes | 0065 (modo seguro) |
 | Geometria certa, texturas pretas, sem HUD | leituras **vetoriais** (uvec4) de SSBO `NonWritable` nos compute shaders de carga de texturas: o ir3 usa `isam` e o resultado sai errado | 0069 (carga no CPU), 0070 (sem isam) |
-| HUD/menus/efeitos em falta ou às riscas | as mesmas leituras, nas texturas vindas de resolves | 0070 |
+| HUD/menus em falta | resolves "só para a textura" (sem escrever a memória do guest) | 0072 (resolve escreve sempre a memória) |
 | maxStorageBufferRange 128 MB | limite das vistas de 8 bits; com a memória partida em 4 buffers a imagem saía errada | `dbz3_vk_turnip_single_shared_buffer` (um buffer de 512 MB) |
 
 ## Correções a portar
@@ -28,9 +28,11 @@ GPU caía (VK_ERROR_DEVICE_LOST). Turnip em Adreno 7xx/8xx não tinha estes prob
    descompressão DXT1/3/5/DXN/DXT5A/565/4444, staging buffer + `vkCmdCopyBufferToImage`. Só
    2D simples; páginas escritas pela GPU (`SharedMemory::Dbz3RangeHasGpuWrittenPages`) ficam
    na GPU.
-7. **Sem isam** (0070): em `CreateComputePipeline` (versão com SPIR-V), trocar `NonWritable`
+7. **Resolves escrevem sempre a memória** (0072): sem `dbz3_direct_resolve_skip_memory` nem
+   render-into-texture no Turnip A6xx.
+8. **Sem isam** (0070, não confirmado como necessário): em `CreateComputePipeline` (versão com SPIR-V), trocar `NonWritable`
    (24) por `Coherent` (23) em OpDecorate/OpMemberDecorate quando `Dbz3TurnipA6xxSafe()`.
-8. **Diagnóstico**: registo das operações de GPU antes de um DEVICE_LOST (`dbz3_gpulog.h`), e a
+9. **Diagnóstico**: registo das operações de GPU antes de um DEVICE_LOST (`dbz3_gpulog.h`), e a
    linha "no caminho da GPU: <motivo>" (0071).
 
 ## Do lado do launcher
