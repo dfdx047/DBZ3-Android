@@ -70,12 +70,13 @@ public class GameActivity extends SDLActivity {
         // de cada vez que um pipeline faltava (travadinhas), e a sincrona custa
         // menos de 1 ms por frame com a cache do driver. O cvars.txt pode mudar.
         setEnv("REX_DBZ3_ASYNC_SHADERS", "false");
-        // 0.6.15: o pre-passo 4x MSAA do inicio do frame fica saltado (dbz3_skip_msaa_prepass).
-        // No mapa do Dragon Universe ele estragava o ceu (manchas pretas, nuvens escuras) com o
-        // "Clear 4x direto em 1x"; o autoteste no mapa (RP5, 18/10 21:55) deu o ceu certo so com
-        // ele saltado ou sem esse clear, e nas lutas saltar da a mesma imagem (todos os
-        // autotestes) e poupa GPU (no Mali ~17 ms). O cvars.txt pode voltar a liga-lo.
-        setEnv("REX_DBZ3_SKIP_MSAA_PREPASS", "true");
+        // 0.6.16: o "Clear 4x direto em 1x" (dbz3_clear_to_1x) fica desligado. No mapa do
+        // Dragon Universe ele estragava o ceu (manchas pretas, nuvens escuras): no autoteste do
+        // mapa (RP5, 18/10 21:55) o ceu so saia certo sem ele ou com o pre-passo 4x saltado, e
+        // saltar o pre-passo (0.6.15) deixou os menus pretos. Nas lutas com o driver do sistema
+        // desligado da a mesma imagem. No Turnip dos Adreno 6xx continua ligado (ali desliga-lo
+        // deixava riscos nas lutas) - ver applyTurnipCompat. O cvars.txt pode mudar.
+        setEnv("REX_DBZ3_CLEAR_TO_1X", "false");
         applyLowRamLimits();
         applyTurnipCompat();
         applyCvarOverrides(new File(appDir, "cvars.txt"));
@@ -612,6 +613,9 @@ public class GameActivity extends SDLActivity {
         // Os niveis so valem para o Turnip num Adreno 6xx (nos 7xx/8xx o Turnip vai sem flags
         // ate a GPU cair, como antes).
         boolean a6xx = driver != null && isAdreno6xx();
+        if (a6xx) {
+            setEnv("REX_DBZ3_CLEAR_TO_1X", "true");
+        }
         if (driver != null && (autoLevel > 0 || a6xx)) {
             flags |= a6xx ? turnipAutoFlags(autoLevel) : turnipAutoFlagsOther(autoLevel);
             if (autoLevel >= (a6xx ? 4 : 3)) {

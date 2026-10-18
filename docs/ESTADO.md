@@ -1320,3 +1320,6 @@ traz as operações por concluir e o modo seguinte entra sozinho.
   Nas lutas o pre-passo saltado deu sempre "igual" (sistema e Turnip).
 - 0.6.15: o launcher liga `dbz3_skip_msaa_prepass` por omissão (env, o cvars.txt pode mudar).
   GPU no mapa: 14.1 → 13.5 ms.
+- 0.6.15 deixou o menu principal preto (o pre-passo 4x é preciso ali). 0.6.16: pre-passo volta;
+  em vez disso `dbz3_clear_to_1x=false` por omissão (env no GameActivity), exceto Turnip A6xx.
+  A confirmar: menus, céu do DU e lutas com o driver do sistema.

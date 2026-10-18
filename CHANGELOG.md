@@ -3,6 +3,14 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.16 — 2026-10-18
+
+### Fixes
+- 0.6.15 turned the main menu black: the start-of-frame 4x pre-pass is needed there. It runs again,
+  and instead "Clear 4x straight to 1x" (`dbz3_clear_to_1x`) is off by default, the other setting
+  that gave a correct Dragon Universe sky in the self-test (fights look the same with the system
+  driver). On Turnip + Adreno 6xx it stays on (turning it off there left stripes in fights).
+
 ## 0.6.15 — 2026-10-18
 
 ### Fixes
