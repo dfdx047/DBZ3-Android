@@ -1,0 +1,22 @@
+diff --git a/src/graphics/vulkan/command_processor.cpp b/src/graphics/vulkan/command_processor.cpp
+index 2f7fa2a..53af2ad 100644
+--- a/src/graphics/vulkan/command_processor.cpp
++++ b/src/graphics/vulkan/command_processor.cpp
+@@ -1273,6 +1273,17 @@ bool VulkanCommandProcessor::SetupContext() {
+         "emulator, reducing to {}x{}",
+         draw_resolution_scale_x, draw_resolution_scale_y);
+   }
++  // DBZ3-Android (0076): o buffer dos resolves com escala cobre os 512 MB do guest x escala^2.
++  // Sem buffers esparsos (driver da Qualcomm, Turnip, Mali) tem de ser alocado inteiro: a 3x sao
++  // 4.6 GB e a criacao falhava ("Failed to create a scaled resolve buffer with 4608 MB"), o jogo
++  // fechava ao abrir (Honor Magic 7 Pro / 8 Elite, 18/10). Ai a escala fica em 2x (2 GB).
++  if (!device_properties.sparseResidencyBuffer &&
++      draw_resolution_scale_x * draw_resolution_scale_y > 4) {
++    REXGPU_WARN("dbz3: escala {}x{} precisa de buffers esparsos (o driver nao tem); a usar 2x2",
++                draw_resolution_scale_x, draw_resolution_scale_y);
++    draw_resolution_scale_x = std::min(draw_resolution_scale_x, UINT32_C(2));
++    draw_resolution_scale_y = std::min(draw_resolution_scale_y, UINT32_C(2));
++  }
+   if (draw_resolution_scale_x > 1 || draw_resolution_scale_y > 1) {
+     REXGPU_WARN(
+         "Vulkan draw resolution scaling is experimental and may not affect all "

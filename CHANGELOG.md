@@ -3,6 +3,15 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.17 — 2026-10-18
+
+### Fixes
+- **4K (3x) closed the game on start** (Honor Magic 7 Pro, Snapdragon 8 Elite): the buffer for
+  scaled resolves covers the whole 512 MB of game memory times the scale squared, 4.6 GB at 3x,
+  and without sparse buffers (Qualcomm driver, Turnip, Mali) it must be allocated in one piece,
+  which failed. On those drivers the internal scale is now limited to 2x (1440p) instead of
+  crashing (SDK patch 0076).
+
 ## 0.6.16 — 2026-10-18
 
 ### Fixes
