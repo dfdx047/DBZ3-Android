@@ -37,6 +37,7 @@ object LogExporter {
         appendLine("Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
         appendLine("SoC: ${DriverRepository.socName()}  Adreno: ${DriverRepository.isAdreno()}")
         appendLine("Hardware: ${Build.HARDWARE}  Board: ${Build.BOARD}")
+        SystemCheck.cpu().let { appendLine("CPU ARMv8.2 (atomics): ${if (it.supported) "sim" else "NAO (${it.coresWithoutAtomics}/${it.cores} nucleos)"}  Features: ${it.features}") }
         appendLine("Driver Vulkan ativo: ${DriverRepository.activeDir() ?: "sistema"}")
         appendLine("Drivers instalados: " + DriverRepository.installed().joinToString { it.name })
         appendLine()

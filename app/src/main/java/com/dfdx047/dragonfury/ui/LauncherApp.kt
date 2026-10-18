@@ -4,9 +4,10 @@ package com.dfdx047.dragonfury.ui
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -40,13 +41,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -58,11 +56,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -77,7 +72,8 @@ import com.dfdx047.dragonfury.ui.screens.ModsScreen
 import com.dfdx047.dragonfury.ui.screens.PerformanceScreen
 import com.dfdx047.dragonfury.ui.screens.SettingsScreen
 import com.dfdx047.dragonfury.ui.screens.TexturesScreen
-import com.dfdx047.dragonfury.ui.components.SlantStripe
+import com.dfdx047.dragonfury.DragonFuryApp
+import com.dfdx047.dragonfury.ui.components.openUrl
 import com.dfdx047.dragonfury.ui.components.dragonBackdrop
 import com.dfdx047.dragonfury.ui.theme.DfColors
 import com.dfdx047.dragonfury.ui.theme.LogoStyle
@@ -110,148 +106,154 @@ fun LauncherApp(vm: LauncherViewModel) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         contentWindowInsets = WindowInsets(0),
+        containerColor = MaterialTheme.colorScheme.background,
     ) { inner ->
-        BoxWithConstraints(
+        Column(
             Modifier
                 .fillMaxSize()
                 .padding(inner)
                 .dragonBackdrop(
                     base = MaterialTheme.colorScheme.background,
                     glow = MaterialTheme.colorScheme.primary,
-                    lines = MaterialTheme.colorScheme.primary.copy(alpha = 0.035f),
+                    lines = MaterialTheme.colorScheme.primary,
                 )
                 .windowInsetsPadding(WindowInsets.safeDrawing),
         ) {
-            val wide = maxWidth > maxHeight && maxWidth >= 600.dp
-            if (wide) {
-                Row(Modifier.fillMaxSize()) {
-                    SideRail(tab) { tab = it }
-                    Column(Modifier.weight(1f).fillMaxHeight()) {
-                        BusyBar(vm.busy)
-                        TabContent(tab, vm) { tab = it }
-                    }
-                }
-            } else {
-                Column(Modifier.fillMaxSize()) {
-                    Header()
-                    ScrollableTabRow(
-                        selectedTabIndex = tab.ordinal,
-                        edgePadding = 12.dp,
-                        containerColor = androidx.compose.ui.graphics.Color.Transparent,
-                    ) {
-                        LauncherTab.entries.forEach { t ->
-                            Tab(
-                                selected = t == tab,
-                                onClick = { tab = t },
-                                text = { Text(stringResource(t.title), maxLines = 1) },
-                                icon = { Icon(t.icon, null) },
-                            )
-                        }
-                    }
-                    BusyBar(vm.busy)
-                    TabContent(tab, vm) { tab = it }
-                }
+            Header()
+            BusyBar(vm.busy)
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                TabContent(tab, vm) { tab = it }
             }
+            BottomTabs(tab) { tab = it }
         }
     }
 
     if (vm.showGpuNotice) GpuNotice(vm, openTab = { tab = it })
     if (vm.showUpdateDialog) UpdateDialog(vm)
+    vm.error?.let { ErrorDialog(vm, it) }
 }
 
 private fun mutableStateOfTab() = androidx.compose.runtime.mutableStateOf(LauncherTab.HOME)
 
-/**
- * Cabecalho (ecras estreitos): faixa azul-noite -> laranja como o fundo dos menus do jogo,
- * com cortes diagonais, a esfera do Dragon Fury e o titulo italico dourado com sombra.
- */
+/** Cabecalho fino: so o nome, em dourado inclinado como o titulo do jogo. */
 @Composable
 private fun Header() {
     Row(
         Modifier
             .fillMaxWidth()
-            .background(
-                Brush.horizontalGradient(listOf(DfColors.Navy, DfColors.BlueDeep, DfColors.OrangeDeep)),
-            )
-            .drawBehind {
-                // Cortes diagonais claros (as "lascas" de energia dos menus do Budokai 3).
-                val h = size.height
-                for (k in 0 until 3) {
-                    val x = size.width * (0.58f + k * 0.11f)
-                    val path = androidx.compose.ui.graphics.Path().apply {
-                        moveTo(x, h)
-                        lineTo(x + h * 0.55f, 0f)
-                        lineTo(x + h * 0.55f + 10f + k * 6f, 0f)
-                        lineTo(x + 10f + k * 6f, h)
-                        close()
-                    }
-                    drawPath(path, DfColors.Gold.copy(alpha = 0.10f + k * 0.05f))
-                }
-            }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            painterResource(R.drawable.ic_launcher_foreground),
-            null,
-            tint = androidx.compose.ui.graphics.Color.Unspecified,
-            modifier = Modifier.size(48.dp),
+        Text("DRAGON FURY", style = LogoStyle, color = DfColors.Gold)
+        Spacer(Modifier.width(10.dp))
+        Text(
+            stringResource(R.string.header_subtitle),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.width(8.dp))
-        Column {
-            Text("DRAGON FURY", style = LogoStyle, color = DfColors.Gold)
-            SlantStripe(Modifier.width(96.dp).height(4.dp))
-            Text(
-                stringResource(R.string.header_subtitle),
-                style = MaterialTheme.typography.labelMedium,
-                color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f),
-                modifier = Modifier.padding(top = 2.dp),
-            )
+    }
+}
+
+/**
+ * Barra das abas em baixo (mais facil de alcancar com o polegar): so texto, a aba atual com um
+ * traco laranja por cima. Rola na horizontal quando nao cabem todas.
+ */
+@Composable
+private fun BottomTabs(selected: LauncherTab, onSelect: (LauncherTab) -> Unit) {
+    val accent = MaterialTheme.colorScheme.primary
+    Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .height(48.dp)
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            LauncherTab.entries.forEach { t ->
+                val on = t == selected
+                Box(
+                    Modifier
+                        .fillMaxHeight()
+                        .clickable { onSelect(t) }
+                        .drawBehind {
+                            if (on) {
+                                drawRect(
+                                    accent,
+                                    size = androidx.compose.ui.geometry.Size(size.width, 3.dp.toPx()),
+                                )
+                            }
+                        }
+                        .padding(horizontal = 14.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        stringResource(t.title),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (on) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+            }
         }
     }
 }
 
+/**
+ * Janela de erro: o titulo, o que aconteceu (texto traduzido), os detalhes tecnicos e o pedido
+ * para salvar o log e mandar no Discord.
+ */
 @Composable
-private fun SideRail(selected: LauncherTab, onSelect: (LauncherTab) -> Unit) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.92f),
-        modifier = Modifier
-            .fillMaxHeight()
-            .width(96.dp)
-            .drawWithContent {
-                drawContent()
-                // Faixa de energia laranja -> azul na borda direita da barra.
-                drawRect(
-                    Brush.verticalGradient(listOf(DfColors.Gold, DfColors.Orange, DfColors.KiBlue.copy(alpha = 0.5f))),
-                    topLeft = androidx.compose.ui.geometry.Offset(size.width - 3.dp.toPx(), 0f),
-                    size = androidx.compose.ui.geometry.Size(3.dp.toPx(), size.height),
-                )
-            },
-    ) {
-        Column(
-            Modifier
-                .fillMaxHeight()
-                .verticalScroll(rememberScrollState())
-                .padding(vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Icon(
-                painterResource(R.drawable.ic_launcher_foreground),
-                null,
-                tint = androidx.compose.ui.graphics.Color.Unspecified,
-                modifier = Modifier.size(56.dp),
-            )
-            LauncherTab.entries.forEach { t ->
-                NavigationRailItem(
-                    selected = t == selected,
-                    onClick = { onSelect(t) },
-                    icon = { Icon(t.icon, null) },
-                    label = { Text(stringResource(t.title), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+private fun ErrorDialog(vm: LauncherViewModel, report: ErrorReport) {
+    val context = LocalContext.current
+    var showDetail by rememberSaveable(report.id) { androidx.compose.runtime.mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = { vm.dismissError() },
+        title = { Text(stringResource(report.title)) },
+        text = {
+            Column(
+                Modifier
+                    .heightIn(max = 380.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(stringResource(report.message, *report.args.toTypedArray()), style = MaterialTheme.typography.bodyMedium)
+                if (report.detail.isNotBlank()) {
+                    TextButton(onClick = { showDetail = !showDetail }, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+                        Text(stringResource(R.string.error_details))
+                    }
+                    if (showDetail) {
+                        Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                            Text(
+                                report.detail,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                modifier = Modifier.padding(8.dp),
+                            )
+                        }
+                    }
+                }
+                Text(
+                    stringResource(R.string.error_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-        }
-    }
+        },
+        confirmButton = {
+            TextButton(onClick = { vm.exportLogs(context) }) { Text(stringResource(R.string.error_save_log)) }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = { openUrl(context, DragonFuryApp.DISCORD_URL) }) {
+                    Text(stringResource(R.string.error_open_discord))
+                }
+                TextButton(onClick = { vm.dismissError() }) { Text(stringResource(R.string.close)) }
+            }
+        },
+    )
 }
 
 @Composable
@@ -305,7 +307,6 @@ private fun TabContent(tab: LauncherTab, vm: LauncherViewModel, goTo: (LauncherT
 private fun GpuNotice(vm: LauncherViewModel, openTab: (LauncherTab) -> Unit) {
     AlertDialog(
         onDismissRequest = { vm.dismissGpuNotice() },
-        icon = { Icon(Icons.Filled.Memory, null) },
         title = { Text(stringResource(R.string.gpu_notice_title)) },
         text = {
             Text(

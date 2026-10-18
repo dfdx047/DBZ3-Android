@@ -93,22 +93,16 @@ fun TexturesScreen(vm: LauncherViewModel) {
                         onClick = { pickZip.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) },
                         enabled = vm.busy == null,
                     ) {
-                        Icon(Icons.Filled.FileOpen, null)
-                        Spacer(Modifier.width(6.dp))
                         Text(stringResource(R.string.textures_install_zip))
                     }
                     OutlinedButton(
                         onClick = { pickImages.launch(arrayOf("image/png", "image/x-dds", "image/vnd-ms.dds", "application/octet-stream")) },
                         enabled = vm.busy == null,
                     ) {
-                        Icon(Icons.Filled.Image, null)
-                        Spacer(Modifier.width(6.dp))
                         Text(stringResource(R.string.textures_add_images))
                     }
                 }
                 OutlinedButton(onClick = { vm.validateTextures() }, enabled = vm.busy == null && packs.isNotEmpty()) {
-                    Icon(Icons.Filled.Checklist, null)
-                    Spacer(Modifier.width(6.dp))
                     Text(stringResource(R.string.textures_validate))
                 }
             }

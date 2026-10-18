@@ -18,6 +18,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dfdx047.dragonfury.R
 import com.dfdx047.dragonfury.data.AppLanguage
+import com.dfdx047.dragonfury.data.AppLog
+import com.dfdx047.dragonfury.data.SystemCheck
 import com.dfdx047.dragonfury.data.ControlStyle
 import com.dfdx047.dragonfury.data.DarkMode
 import com.dfdx047.dragonfury.data.FileStatus
@@ -52,6 +54,18 @@ import kotlinx.coroutines.withContext
 
 /** Mensagem curta (snackbar), resolvida no ecra com o idioma da atividade. */
 data class UiMessage(@StringRes val res: Int, val args: List<Any> = emptyList(), val id: Long = System.nanoTime())
+
+/**
+ * Erro mostrado numa janela (titulo, o que aconteceu em linguagem simples e detalhes tecnicos),
+ * com "Salvar log em Downloads" e o Discord. Tambem fica no log do app.
+ */
+data class ErrorReport(
+    @StringRes val title: Int,
+    @StringRes val message: Int,
+    val args: List<Any> = emptyList(),
+    val detail: String = "",
+    val id: Long = System.nanoTime(),
+)
 
 /** Operacao longa em curso (importar, verificar, descarregar...). */
 data class Busy(@StringRes val label: Int, val detail: String = "", val progress: Float? = null)
@@ -174,6 +188,30 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         message = UiMessage(res, args.toList())
     }
 
+    /** Erro na tela (janela com explicacao, detalhes e o botao de salvar o log). */
+    var error by mutableStateOf<ErrorReport?>(null)
+
+    private fun fail(
+        @StringRes title: Int,
+        @StringRes text: Int,
+        vararg args: Any,
+        detail: String = "",
+        cause: Throwable? = null,
+    ) {
+        AppLog.e(R.string.log_error_shown, cause, AppLog.text(title), AppLog.text(text, *args) +
+            if (detail.isNotEmpty()) " | $detail" else "")
+        error = ErrorReport(title, text, args.toList(), detail.ifEmpty { cause?.let { "${it.javaClass.simpleName}: ${it.message}" } ?: "" })
+    }
+
+    fun dismissError() {
+        error = null
+    }
+
+    /** Erro inesperado numa operacao: aparece na tela em vez de fechar o app. */
+    private fun unexpected(e: Throwable) {
+        fail(R.string.err_title_unexpected, R.string.err_unexpected, e.message ?: e.javaClass.simpleName, cause = e)
+    }
+
     var install by mutableStateOf<GameInstall?>(null)
         private set
 
@@ -183,6 +221,40 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
             val c = GameConfig.load()
             withContext(Dispatchers.Main) { config = c }
             runtimeTextureLog = TexturePacks.runtimeLog()
+            checkGameExit()
+        }
+    }
+
+    /** Se o processo do jogo terminou com erro desde a ultima vez, diz porque. */
+    private fun checkGameExit() {
+        val ctx = getApplication<Application>()
+        val since = prefs.lastGameExitSeen.takeIf { it > 0 } ?: run {
+            prefs.lastGameExitSeen = System.currentTimeMillis()
+            return
+        }
+        val exit = SystemCheck.lastGameExit(ctx, since) ?: return
+        prefs.lastGameExitSeen = exit.timestamp
+        val runtime = SystemCheck.lastRuntimeErrors()
+        val detail = buildString {
+            append(exit.reasonName())
+            if (exit.description.isNotBlank()) append(" · ").append(exit.description)
+            runtime.forEach { append('\n').append(it) }
+        }
+        AppLog.e(R.string.log_game_exit, null, exit.reasonName(), exit.description)
+        val cpu = SystemCheck.cpu()
+        when {
+            exit.isIllegalInstruction || (exit.isNativeCrash && !cpu.supported) ->
+                fail(R.string.err_title_game, R.string.err_game_sigill, socName, detail = detail)
+            exit.isNativeCrash -> fail(R.string.err_title_game, R.string.err_game_native, exit.signal, detail = detail)
+            exit.isJavaCrash -> {
+                val crash = java.io.File(com.dfdx047.dragonfury.data.AppPaths.logsDir, "crash_last.txt")
+                    .takeIf { it.isFile }?.readLines()?.take(8)?.joinToString("\n").orEmpty()
+                fail(R.string.err_title_game, R.string.err_game_java, exit.description.ifBlank { "-" },
+                    detail = if (crash.isNotEmpty()) crash else detail)
+            }
+            exit.isLowMemory -> fail(R.string.err_title_game, R.string.err_game_low_memory, detail = detail)
+            exit.isFrozen -> fail(R.string.err_title_game, R.string.err_game_frozen, detail = detail)
+            else -> fail(R.string.err_title_game, R.string.err_game_other, exit.reasonName(), detail = detail)
         }
     }
 
@@ -199,6 +271,8 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
                 if (fullHash) busy = null
             }
             install = result
+            if (fullHash) AppLog.i(R.string.log_verify, "true")
+            AppLog.i(R.string.log_verify_result, result.checks.joinToString { "${it.name}=${it.status}" })
             if (fullHash) {
                 if (result.playable) say(R.string.msg_verify_ok)
                 else say(R.string.msg_verify_problems)
@@ -206,18 +280,29 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun importGame(uri: Uri) = runImport { ctx, progress -> GameFiles.import(ctx, uri, progress) }
+    fun importGame(uri: Uri) = runImport(uri) { ctx, progress -> GameFiles.import(ctx, uri, progress) }
 
     /** Importa direto do .iso do disco de Xbox 360. */
-    fun importIso(uri: Uri) = runImport { ctx, progress -> GameFiles.importIso(ctx, uri, progress) }
+    fun importIso(uri: Uri) = runImport(uri) { ctx, progress -> GameFiles.importIso(ctx, uri, progress) }
 
-    private fun runImport(work: (Context, (ImportProgress) -> Unit) -> Unit) {
+    private fun runImport(source: Uri, work: (Context, (ImportProgress) -> Unit) -> Unit) {
         val ctx = getApplication<Application>()
         viewModelScope.launch(Dispatchers.IO) {
             busy = Busy(R.string.busy_importing)
             val started = System.nanoTime()
+            AppLog.i(R.string.log_import_start, source.toString())
+            var lastFile = ""
             try {
                 work(ctx) { p ->
+                    val file = when (p) {
+                        is ImportProgress.Copying -> p.file
+                        is ImportProgress.Hashing -> p.file
+                        ImportProgress.ReadingIso -> "ISO"
+                    }
+                    if (file != lastFile) {
+                        lastFile = file
+                        AppLog.i(R.string.log_import_file, file)
+                    }
                     busy = when (p) {
                         is ImportProgress.Copying -> Busy(R.string.busy_importing, p.file, p.done.toFloat() / p.total.coerceAtLeast(1))
                         is ImportProgress.Hashing -> Busy(R.string.busy_checking_xex, p.file, p.done.toFloat() / p.total.coerceAtLeast(1))
@@ -225,9 +310,12 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
                 val seconds = ((System.nanoTime() - started) / 1_000_000_000L).toInt()
+                AppLog.i(R.string.log_import_ok, seconds)
                 say(R.string.msg_import_ok_time, seconds)
             } catch (e: ImportException) {
-                say(
+                AppLog.e(R.string.log_import_failed, e, e.reason.name, e.detail)
+                fail(
+                    R.string.err_title_import,
                     when (e.reason) {
                         ImportException.Reason.NO_XEX -> R.string.err_import_no_xex
                         ImportException.Reason.NO_US_FOLDER -> R.string.err_import_no_us
@@ -240,7 +328,11 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
                         ImportException.Reason.NO_SPACE -> R.string.err_import_no_space
                     },
                     e.detail.ifEmpty { "-" },
+                    detail = "${e.reason} · $lastFile",
                 )
+            } catch (e: Exception) {
+                AppLog.e(R.string.log_import_failed, e, e.javaClass.simpleName, e.message ?: "-")
+                fail(R.string.err_title_import, R.string.err_import_io, e.message ?: "-", detail = lastFile, cause = e)
             } finally {
                 busy = null
             }
@@ -252,9 +344,35 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     fun play(context: Context) {
         val inst = install
         if (inst == null || !inst.playable) {
-            say(if (inst?.xex?.status == FileStatus.EU_REGION) R.string.err_import_eu else R.string.msg_not_installed, "-")
+            val missing = inst?.checks?.filter { it.required && it.status != FileStatus.OK }
+                ?.joinToString { "${it.name}: ${it.status}" }.orEmpty()
+            fail(
+                R.string.err_title_files,
+                if (inst?.xex?.status == FileStatus.EU_REGION) R.string.err_import_eu else R.string.msg_not_installed,
+                "-",
+                detail = missing,
+            )
             return
         }
+        val cpu = SystemCheck.cpu()
+        if (!cpu.supported) {
+            AppLog.w(R.string.log_cpu_blocked, cpu.features)
+            fail(
+                R.string.err_title_cpu,
+                R.string.err_cpu_unsupported,
+                socName,
+                cpu.coresWithoutAtomics,
+                cpu.cores,
+                detail = "Features: ${cpu.features}",
+            )
+            return
+        }
+        AppLog.i(
+            R.string.log_play,
+            "${config.resolutionChoice} fps=${config.frameCap} fx=${config.fxBloom}/${config.fxDof}/${config.fxFxaa} " +
+                "driver=${activeDriver ?: "system"}",
+        )
+        if (prefs.lastGameExitSeen == 0L) prefs.lastGameExitSeen = System.currentTimeMillis()
         viewModelScope.launch {
             withContext(Dispatchers.IO) { GameConfig.save(config) }
             context.startActivity(Intent(context, GameActivity::class.java).setAction(PLAY_ACTION))
@@ -286,6 +404,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setModEnabled(mod: ModInfo, enabled: Boolean) {
         viewModelScope.launch(Dispatchers.IO) {
+            AppLog.i(R.string.log_mod_toggle, mod.displayName, if (enabled) "on" else "off")
             ModRepository.setEnabled(mod, enabled)
             mods = ModRepository.listAll()
         }
@@ -293,7 +412,10 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteMod(mod: ModInfo) {
         viewModelScope.launch(Dispatchers.IO) {
-            if (ModRepository.delete(mod)) say(R.string.msg_mod_deleted, mod.displayName)
+            if (ModRepository.delete(mod)) {
+                AppLog.i(R.string.log_mod_deleted, mod.displayName)
+                say(R.string.msg_mod_deleted, mod.displayName)
+            }
             mods = ModRepository.listAll()
             textureReports = null
         }
@@ -301,7 +423,9 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
 
     fun fixMod(mod: ModInfo) {
         viewModelScope.launch(Dispatchers.IO) {
-            say(if (ModRepository.fixNested(mod)) R.string.msg_mod_fixed else R.string.msg_mod_fix_failed, mod.displayName)
+            val fixed = ModRepository.fixNested(mod)
+            AppLog.i(R.string.log_mod_fix, mod.displayName, fixed.toString())
+            say(if (fixed) R.string.msg_mod_fixed else R.string.msg_mod_fix_failed, mod.displayName)
             mods = ModRepository.listAll()
         }
     }
@@ -321,13 +445,17 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         val ctx = getApplication<Application>()
         val name = displayName(uri)
         busy = Busy(R.string.busy_installing_mod, name)
+        AppLog.i(R.string.log_mod_install, name)
         try {
             val installed = ModRepository.installZip(ctx, uri, name) { bytes ->
                 busy = Busy(R.string.busy_installing_mod, "$name — ${bytes / (1024 * 1024)} MB")
             }
+            AppLog.i(R.string.log_mod_installed, installed.joinToString())
             say(R.string.msg_mod_installed, installed.joinToString())
         } catch (e: ModInstallException) {
-            say(
+            AppLog.e(R.string.log_mod_failed, e, e.reason.name, e.message ?: "-")
+            fail(
+                R.string.err_title_mod,
                 when (e.reason) {
                     ModInstallException.Reason.NOT_ZIP -> R.string.err_mod_not_zip
                     ModInstallException.Reason.EMPTY -> R.string.err_mod_empty
@@ -335,7 +463,11 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
                     ModInstallException.Reason.IO -> R.string.err_mod_io
                 },
                 e.message ?: "-",
+                detail = "${e.reason} · $name",
             )
+        } catch (e: Exception) {
+            AppLog.e(R.string.log_mod_failed, e, e.javaClass.simpleName, e.message ?: "-")
+            fail(R.string.err_title_mod, R.string.err_mod_io, e.message ?: "-", detail = name, cause = e)
         } finally {
             busy = null
         }
@@ -354,11 +486,16 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     fun validateTextures() {
         viewModelScope.launch(Dispatchers.IO) {
             busy = Busy(R.string.busy_validating_textures)
+            AppLog.i(R.string.log_tex_validate)
             try {
-                textureReports = TexturePacks.validateAll { done, total ->
+                val reports = TexturePacks.validateAll { done, total ->
                     busy = Busy(R.string.busy_validating_textures, "$done / $total", done.toFloat() / total.coerceAtLeast(1))
                 }
+                textureReports = reports
+                reports.forEach { r -> AppLog.i(R.string.log_tex_result, r.mod.displayName, r.okCount, r.errorCount) }
                 runtimeTextureLog = TexturePacks.runtimeLog()
+            } catch (e: Exception) {
+                unexpected(e)
             } finally {
                 busy = null
             }
@@ -382,14 +519,19 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         val ctx = getApplication<Application>()
         viewModelScope.launch(Dispatchers.IO) {
             busy = Busy(R.string.busy_importing_textures)
+            AppLog.i(R.string.log_tex_import, uris.size)
             try {
                 val (ok, refused) = TexturePacks.importImages(ctx, uris)
+                AppLog.i(R.string.log_tex_import_result, ok, refused.size,
+                    refused.take(20).joinToString { "${it.first}=${it.second}" })
                 if (refused.isEmpty()) {
                     say(R.string.msg_textures_imported, ok)
                 } else {
                     val first = refused.first()
                     say(R.string.msg_textures_refused, ok, refused.size, first.first, textureIssueName(first.second))
                 }
+            } catch (e: Exception) {
+                fail(R.string.err_title_textures, R.string.err_unexpected, e.message ?: "-", cause = e)
             } finally {
                 busy = null
             }
@@ -462,6 +604,10 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
             activeDriver = DriverRepository.activeDir()
             val lib = DriverRepository.activeLibraryName()
             activeDriverStatus = DriverRepository.lastStatus()?.takeIf { lib != null && it.driver == lib }
+            AppLog.i(R.string.log_driver_active, activeDriver ?: AppLog.text(R.string.log_system_driver))
+            activeDriverStatus?.let { st ->
+                AppLog.i(R.string.log_driver_status, "${if (st.ok) "ok" else "FAIL"} ${st.driver} ${st.detail}")
+            }
         }
     }
 
@@ -470,9 +616,13 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             driverReleasesLoading = true
             driverReleasesError = false
+            AppLog.i(R.string.log_driver_list, source.apiUrl)
             driverReleases = try {
-                DriverRepository.fetchReleases(source)
+                DriverRepository.fetchReleases(source).also {
+                    AppLog.i(R.string.log_driver_list_result, source.apiUrl, it.size)
+                }
             } catch (e: DriverException) {
+                AppLog.e(R.string.log_driver_list_failed, e, e.message ?: e.reason.name)
                 driverReleasesError = true
                 emptyList()
             } finally {
@@ -484,13 +634,19 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     fun downloadDriver(asset: DriverAsset) {
         viewModelScope.launch(Dispatchers.IO) {
             busy = Busy(R.string.busy_downloading_driver, asset.name)
+            AppLog.i(R.string.log_driver_download, "${asset.name} ${asset.url}")
             try {
                 val d = DriverRepository.download(asset) { done, total ->
                     busy = Busy(R.string.busy_downloading_driver, asset.name, if (total > 0) done.toFloat() / total else null)
                 }
+                AppLog.i(R.string.log_driver_installed, d.name)
                 say(R.string.msg_driver_installed, d.name)
             } catch (e: DriverException) {
-                say(driverError(e), e.message ?: "-")
+                AppLog.e(R.string.log_driver_failed, e, e.reason.name, e.message ?: "-")
+                fail(R.string.err_title_driver, driverError(e), e.message ?: "-", detail = "${e.reason} · ${asset.name}")
+            } catch (e: Exception) {
+                AppLog.e(R.string.log_driver_failed, e, e.javaClass.simpleName, e.message ?: "-")
+                fail(R.string.err_title_driver, R.string.err_driver_io, e.message ?: "-", detail = asset.name, cause = e)
             } finally {
                 busy = null
             }
@@ -503,11 +659,17 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             val name = displayName(uri)
             busy = Busy(R.string.busy_installing_driver, name)
+            AppLog.i(R.string.log_driver_import, name)
             try {
                 val d = DriverRepository.importUri(ctx, uri, name)
+                AppLog.i(R.string.log_driver_installed, d.name)
                 say(R.string.msg_driver_installed, d.name)
             } catch (e: DriverException) {
-                say(driverError(e), e.message ?: "-")
+                AppLog.e(R.string.log_driver_failed, e, e.reason.name, e.message ?: "-")
+                fail(R.string.err_title_driver, driverError(e), e.message ?: "-", detail = "${e.reason} · $name")
+            } catch (e: Exception) {
+                AppLog.e(R.string.log_driver_failed, e, e.javaClass.simpleName, e.message ?: "-")
+                fail(R.string.err_title_driver, R.string.err_driver_io, e.message ?: "-", detail = name, cause = e)
             } finally {
                 busy = null
             }
@@ -541,6 +703,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     fun deleteDriver(d: InstalledDriver) {
         viewModelScope.launch(Dispatchers.IO) {
             DriverRepository.delete(d)
+            AppLog.i(R.string.log_driver_deleted, d.name)
             refreshDrivers()
         }
     }
@@ -551,9 +714,11 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
             busy = Busy(R.string.busy_exporting_logs)
             try {
                 val name = com.dfdx047.dragonfury.data.LogExporter.export(context.applicationContext)
+                AppLog.i(R.string.log_logs_saved, name)
                 say(R.string.msg_logs_exported, name)
             } catch (e: Exception) {
-                say(R.string.err_logs_export, e.message ?: "-")
+                AppLog.e(R.string.log_logs_saved, e, e.message ?: "-")
+                fail(R.string.err_title_logs, R.string.err_logs_export, e.message ?: "-", cause = e)
             } finally {
                 busy = null
             }
@@ -577,15 +742,18 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     fun checkUpdates(manual: Boolean) {
         viewModelScope.launch(Dispatchers.IO) {
             updateState = UpdateState.CHECKING
+            AppLog.i(R.string.log_update_check)
             try {
                 val info = UpdateChecker.check()
+                AppLog.i(R.string.log_update_result, info?.version ?: "-")
                 updateInfo = info
                 updateState = if (info == null) UpdateState.UP_TO_DATE else UpdateState.AVAILABLE
                 if (info != null && (manual || prefs.skippedUpdate != info.version)) showUpdateDialog = true
                 if (info == null && manual) say(R.string.msg_up_to_date)
             } catch (e: Exception) {
                 updateState = UpdateState.FAILED
-                if (manual) say(R.string.err_update_check)
+                AppLog.e(R.string.log_update_failed, e, e.message ?: "-")
+                if (manual) fail(R.string.err_title_update, R.string.err_update_check, cause = e)
             }
         }
     }
@@ -604,13 +772,15 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         showUpdateDialog = false
         viewModelScope.launch(Dispatchers.IO) {
             busy = Busy(R.string.busy_downloading_update, info.version)
+            AppLog.i(R.string.log_update_download, "${info.version} ${info.apkUrl}")
             try {
                 val apk = UpdateChecker.downloadApk(info) { done, total ->
                     busy = Busy(R.string.busy_downloading_update, info.version, if (total > 0) done.toFloat() / total else null)
                 }
                 withContext(Dispatchers.Main) { UpdateChecker.install(context, apk) }
             } catch (e: Exception) {
-                say(R.string.err_network, e.message ?: "-")
+                AppLog.e(R.string.log_update_failed, e, e.message ?: "-")
+                fail(R.string.err_title_update, R.string.err_network, e.message ?: "-", cause = e)
             } finally {
                 busy = null
             }
@@ -620,6 +790,14 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     // Fica no fim da classe: as propriedades acima ja tem de estar inicializadas.
     init {
         viewModelScope.launch(Dispatchers.IO) {
+            val cpu = SystemCheck.cpu()
+            AppLog.i(
+                R.string.log_device,
+                "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
+                android.os.Build.VERSION.RELEASE,
+                socName,
+                if (cpu.supported) "ok" else "NO (${cpu.coresWithoutAtomics}/${cpu.cores})",
+            )
             var c = GameConfig.load()
             // Render targets diretos: caminho principal de desempenho (e os interruptores
             // dos efeitos so funcionam com ele). Religa-se uma vez para quem o desligou.
@@ -634,6 +812,8 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
                 prefs.maliPresetApplied = true
             }
             val loaded = c
+            AppLog.i(R.string.log_settings, "${loaded.resolutionChoice} fps=${loaded.frameCap} " +
+                "fx=${loaded.fxBloom}/${loaded.fxDof}/${loaded.fxFxaa} rt_direct=${loaded.rtDirect}")
             withContext(Dispatchers.Main) { config = loaded }
             // Garante que o toml existe com as opcoes do launcher desde o primeiro arranque.
             GameConfig.save(loaded)

@@ -47,6 +47,8 @@ public class GameActivity extends SDLActivity {
     /** Taxa de saida pedida a tela (60, ou 120 com o 120 FPS interpolado). */
     private int mOutputHz = 60;
     private android.hardware.display.DisplayManager.DisplayListener mDisplayListener;
+    /** Driver Vulkan desta sessao (para o log do app). */
+    private String mDriverName = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,6 +64,8 @@ public class GameActivity extends SDLActivity {
         setEnv("REX_APP_DIR", appDir.getAbsolutePath());
         setEnv("REX_NATIVE_LIB_DIR", getApplicationInfo().nativeLibraryDir);
         setEnv("REX_DBZ3_SKIP_LAUNCHER", "true");
+        // Sem o menu rapido do PC no controle (Back + Start): o menu do app substitui-o.
+        setEnv("REX_QUICK_MENU_BUTTONS", "none");
         // Compilacao de pipelines sincrona: no Android a async escondia 1 frame
         // de cada vez que um pipeline faltava (travadinhas), e a sincrona custa
         // menos de 1 ms por frame com a cache do driver. O cvars.txt pode mudar.
@@ -72,6 +76,8 @@ public class GameActivity extends SDLActivity {
         prepareLogFile(appDir);
 
         Log.i(TAG, "Pasta do jogo: " + appDir.getAbsolutePath() + "/DBZ3");
+        com.dfdx047.dragonfury.data.AppLog.info(com.dfdx047.dragonfury.R.string.log_game_open,
+                mDriverName != null ? mDriverName : "system");
         super.onCreate(savedInstanceState);
 
         enterImmersive();
@@ -152,6 +158,8 @@ public class GameActivity extends SDLActivity {
 
     @Override
     protected void onDestroy() {
+        com.dfdx047.dragonfury.data.AppLog.info(com.dfdx047.dragonfury.R.string.log_game_closed,
+                isFinishing() ? "finish" : "destroy");
         if (sInstance == this) {
             sInstance = null;
         }
@@ -170,11 +178,27 @@ public class GameActivity extends SDLActivity {
         super.onDestroy();
     }
 
+    /** Select carregado (para o atalho Select + Start do menu do jogo). */
+    private boolean mSelectHeld = false;
+
     /** Com o menu dos controles aberto, o Back do Android fecha o menu (nao vai para o jogo). */
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (mOverlay != null) {
             mOverlay.onPhysicalInput(event);
+        }
+        // Select + Start no controle: abre (ou fecha) o menu do jogo. O Start nao chega ao jogo.
+        if (event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_SELECT) {
+            mSelectHeld = event.getAction() == KeyEvent.ACTION_DOWN;
+        } else if (mOverlay != null && mSelectHeld && event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_START) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+                if (mOverlay.isMenuOpen()) {
+                    mOverlay.onBackPressed();
+                } else {
+                    mOverlay.openMenu();
+                }
+            }
+            return true;
         }
         // Back (o botao Back do Odin e de outros portateis, ou o gesto de voltar):
         // com um menu aberto volta um nivel; com o jogo a correr abre o menu.
@@ -559,10 +583,13 @@ public class GameActivity extends SDLActivity {
             }
             setEnv("REX_VULKAN_DRIVER_DIR", internalDir.getAbsolutePath() + "/");
             setEnv("REX_VULKAN_DRIVER_NAME", source.getName());
+            mDriverName = source.getName();
             Log.i(TAG, "Driver Vulkan alternativo: " + source.getName() + " ("
                     + candidates.length + " bibliotecas)");
         } catch (IOException e) {
             Log.e(TAG, "Falha a instalar o driver " + source, e);
+            com.dfdx047.dragonfury.data.AppLog.error(com.dfdx047.dragonfury.R.string.log_game_driver_failed, e,
+                    source.getName());
         }
     }
 

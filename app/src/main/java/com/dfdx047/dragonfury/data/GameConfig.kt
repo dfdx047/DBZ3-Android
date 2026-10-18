@@ -65,6 +65,9 @@ data class GameConfig(
         // "manual": o preset "auto" do PC reescreveria estas opcoes no arranque.
         "dbz3_quality_preset" to "manual",
         "dbz3_input_backend" to "sdl",
+        // O menu rapido do PC (ImGui) fica desligado no controle: Select + Start e o Voltar abrem o
+        // menu do jogo do app (InGameMenu), com as opcoes que servem no Android.
+        "quick_menu_buttons" to "none",
         // So escalas inteiras: o renderizador nao suporta 1.5x. 4x ficou de fora (memoria
         // demais para um telemovel: o buffer de resolves escalados e 512 MB x escala^2).
         "dbz3_resolution_scale" to resolutionScale.coerceIn(1, MAX_RESOLUTION_SCALE),

@@ -120,13 +120,9 @@ fun ControlsScreen(vm: LauncherViewModel) {
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilledTonalButton(onClick = { context.startActivity(Intent(context, ControlsEditorActivity::class.java)) }) {
-                    Icon(Icons.Filled.Edit, null)
-                    Spacer(Modifier.width(6.dp))
                     Text(stringResource(R.string.settings_touch_edit))
                 }
                 OutlinedButton(onClick = { confirmReset = true }) {
-                    Icon(Icons.Filled.RestartAlt, null)
-                    Spacer(Modifier.width(6.dp))
                     Text(stringResource(R.string.reset))
                 }
             }

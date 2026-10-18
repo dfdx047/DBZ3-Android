@@ -11,8 +11,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.dfdx047.dragonfury.R
@@ -38,6 +42,7 @@ import kotlin.math.roundToInt
 @Composable
 fun SettingsScreen(vm: LauncherViewModel) {
     val c = vm.config
+    val context = LocalContext.current
 
     Column(
         Modifier
@@ -134,6 +139,22 @@ fun SettingsScreen(vm: LauncherViewModel) {
                 checked = vm.checkUpdatesOnStart,
                 onChange = vm::setCheckUpdatesOnStart,
             )
+        }
+
+        // ----------------------------------------------------------------- ajuda
+        SectionCard(stringResource(R.string.debug_logs_title)) {
+            Text(
+                stringResource(R.string.error_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            androidx.compose.material3.OutlinedButton(
+                onClick = { vm.exportLogs(context) },
+                enabled = vm.busy == null,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.error_save_log))
+            }
         }
     }
 }

@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -17,16 +16,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -107,7 +101,11 @@ interface InGameActions {
     fun startSelfTest(): Boolean = false
 }
 
-/** Painel de vidro fosco por cima do jogo pausado. */
+/**
+ * Menu do jogo (Voltar, Select + Start ou o botao na tela), com o tema do launcher. Substitui o
+ * menu rapido do PC (ImGui): ficaram so as opcoes que existem no Android e mudam ao vivo; o resto
+ * (resolucao, FPS, MSAA, filtro, idioma) fica no launcher.
+ */
 @Composable
 fun InGameOverlay(screen: InGameScreen, prefs: LauncherPrefs, actions: InGameActions) {
     when (screen) {
@@ -117,21 +115,13 @@ fun InGameOverlay(screen: InGameScreen, prefs: LauncherPrefs, actions: InGameAct
             overGame = true,
             initialKind = actions.currentLayoutKind(),
         ) { actions.closeEditor() }
-        InGameScreen.MENU -> Box(
+        InGameScreen.MENU, InGameScreen.PORT -> Box(
             Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.45f)),
+                .background(Color.Black.copy(alpha = 0.55f)),
             contentAlignment = Alignment.Center,
         ) {
-            InGameMenuCard(prefs, actions)
-        }
-        InGameScreen.PORT -> Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.45f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            PortOptionsCard(actions)
+            GameMenuPanel(prefs, actions)
         }
     }
 }
@@ -149,215 +139,95 @@ private fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect:
     }
 }
 
+/** Titulo de grupo: maiusculas na cor de destaque, como os cartoes do launcher. */
 @Composable
-private fun InGameMenuCard(prefs: LauncherPrefs, actions: InGameActions) {
-    var touchMode by remember { mutableStateOf(prefs.touchMode) }
-    var directional by remember { mutableStateOf(prefs.directional) }
-    var style by remember { mutableStateOf(prefs.controlStyle) }
-    var badge by remember { mutableStateOf(prefs.buttonBadge) }
-    var opacity by remember { mutableFloatStateOf(prefs.touchOpacity) }
-    var haptics by remember { mutableStateOf(prefs.touchHaptics) }
-
-    Column(
-        Modifier
-            .padding(12.dp)
-            .widthIn(max = 560.dp)
-            .background(Color(0xE6120C1E), RoundedCornerShape(24.dp))
-            .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(24.dp))
-            .verticalScroll(rememberScrollState())
-            .padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.Tune, null, tint = DfColors.Yellow)
-            Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.ingame_title), style = MaterialTheme.typography.titleLarge, color = Color.White)
-                Text(stringResource(R.string.ingame_paused), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f))
-            }
-        }
-
-        Text(stringResource(R.string.settings_touch), color = Color.White, style = MaterialTheme.typography.labelLarge)
-        Segmented(
-            listOf(
-                TouchMode.AUTO to stringResource(R.string.touch_mode_auto),
-                TouchMode.ON to stringResource(R.string.touch_mode_on),
-                TouchMode.OFF to stringResource(R.string.touch_mode_off),
-            ),
-            touchMode,
-        ) {
-            touchMode = it
-            prefs.touchMode = it
-            actions.applyAppearance()
-        }
-
-        Text(stringResource(R.string.ingame_directional), color = Color.White, style = MaterialTheme.typography.labelLarge)
-        Segmented(
-            listOf(Directional.DPAD to stringResource(R.string.directional_dpad), Directional.STICK to stringResource(R.string.directional_stick)),
-            directional,
-        ) {
-            directional = it
-            prefs.directional = it
-            actions.applyAppearance()
-        }
-
-        Text(stringResource(R.string.settings_touch_style), color = Color.White, style = MaterialTheme.typography.labelLarge)
-        Segmented(
-            listOf(ControlStyle.DRAGON to "Dragon Fury", ControlStyle.XBOX to "Xbox", ControlStyle.PLAYSTATION to "PlayStation"),
-            style,
-        ) {
-            style = it
-            prefs.controlStyle = it
-            actions.applyAppearance()
-        }
-
-        if (style == ControlStyle.DRAGON) {
-            Text(stringResource(R.string.ingame_badge), color = Color.White, style = MaterialTheme.typography.labelLarge)
-            Segmented(
-                listOf(ButtonBadge.XBOX to "Xbox", ButtonBadge.PLAYSTATION to "PlayStation", ButtonBadge.NONE to stringResource(R.string.badge_none)),
-                badge,
-            ) {
-                badge = it
-                prefs.buttonBadge = it
-                actions.applyAppearance()
-            }
-        }
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.settings_touch_opacity), color = Color.White, modifier = Modifier.width(110.dp))
-            Slider(
-                value = opacity,
-                onValueChange = { opacity = it },
-                onValueChangeFinished = {
-                    prefs.touchOpacity = opacity
-                    actions.applyAppearance()
-                },
-                valueRange = 0.1f..1f,
-                modifier = Modifier.weight(1f),
-            )
-            Text("${(opacity * 100).roundToInt()}%", color = Color.White, modifier = Modifier.width(48.dp).padding(start = 6.dp))
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.settings_touch_haptics), color = Color.White, modifier = Modifier.weight(1f))
-            Switch(checked = haptics, onCheckedChange = {
-                haptics = it
-                prefs.touchHaptics = it
-                actions.applyAppearance()
-            })
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            FilledTonalButton(onClick = { actions.openEditor() }, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Filled.Edit, null)
-                Spacer(Modifier.width(6.dp))
-                Text(stringResource(R.string.settings_touch_edit), maxLines = 1)
-            }
-            FilledTonalButton(onClick = { actions.openPortOptions() }, modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.port_menu_title), maxLines = 1)
-            }
-        }
-        Button(
-            onClick = { actions.resume() },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = DfColors.Orange, contentColor = Color(0xFF2B1000)),
-        ) {
-            Icon(Icons.Filled.PlayArrow, null)
-            Spacer(Modifier.width(6.dp))
-            Text(stringResource(R.string.ingame_resume))
-        }
-        // Captura de frames para o renderizador nativo: o jogo continua ao fechar o menu
-        // e os 2 frames seguintes ficam em logs/capture (entram no "Exportar logs").
-        OutlinedButton(
-            onClick = { actions.captureFrames(); actions.resume() },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(stringResource(R.string.ingame_capture), maxLines = 1)
-        }
-        // Autoteste do render: congela a luta, troca cada otimizacao e compara a imagem; no fim
-        // exporta os logs para Download/. So numa luta.
-        var selfTestRefused by remember { mutableStateOf(false) }
-        OutlinedButton(
-            onClick = { selfTestRefused = !actions.startSelfTest() },
-            enabled = actions.isInBattle(),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(stringResource(R.string.ingame_selftest), maxLines = 1)
-        }
-        if (selfTestRefused || !actions.isInBattle()) {
-            Text(
-                stringResource(R.string.ingame_selftest_only_fight),
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.7f),
-            )
-        }
-        // Sair para o launcher: pede confirmacao com um segundo toque.
-        var confirmExit by remember { mutableStateOf(false) }
-        OutlinedButton(
-            onClick = { if (confirmExit) actions.exitToLauncher() else confirmExit = true },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                stringResource(if (confirmExit) R.string.ingame_exit_confirm else R.string.ingame_exit),
-                maxLines = 1,
-            )
-        }
-    }
+private fun GroupTitle(text: String) {
+    Text(
+        text.uppercase(),
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 6.dp),
+    )
 }
 
+@Composable
+private fun Label(text: String) {
+    Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+}
 
 /** Linha com titulo e um slider que so aplica ao soltar. */
 @Composable
 private fun SliderRow(title: String, value: Float, range: ClosedFloatingPointRange<Float>, label: (Float) -> String, onDone: (Float) -> Unit) {
     var v by remember(value) { mutableFloatStateOf(value) }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(title, color = Color.White, modifier = Modifier.width(120.dp))
+        Text(title, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(120.dp))
         Slider(value = v, onValueChange = { v = it }, onValueChangeFinished = { onDone(v) }, valueRange = range, modifier = Modifier.weight(1f))
-        Text(label(v), color = Color.White, modifier = Modifier.width(52.dp).padding(start = 6.dp))
+        Text(label(v), style = MaterialTheme.typography.labelMedium, modifier = Modifier.width(52.dp).padding(start = 6.dp))
     }
 }
 
 @Composable
-private fun SwitchRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun SwitchRow(title: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(title, color = Color.White, modifier = Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = onChange)
+        Text(title, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
     }
 }
 
-/**
- * Opcoes do jogo por toque (o que o menu rapido do PC, Back+Start, mostra e que
- * muda ao vivo). Cada mudanca vai logo para o runtime (NativeGameState.setCvars).
- * As opcoes que so valem ao reiniciar ficam no launcher.
- */
 @Composable
-private fun PortOptionsCard(actions: InGameActions) {
+private fun GameMenuPanel(prefs: LauncherPrefs, actions: InGameActions) {
     var c by remember { mutableStateOf(GameConfig.load()) }
     fun set(next: GameConfig, cvars: Map<String, String>) {
         c = next
         NativeGameState.setCvars(cvars)
+        com.dfdx047.dragonfury.data.AppLog.i(R.string.log_menu, cvars.entries.joinToString { "${it.key}=${it.value}" })
     }
     fun pct(x: Float) = "${(x * 100).roundToInt()}%"
+
+    var touchMode by remember { mutableStateOf(prefs.touchMode) }
+    var directional by remember { mutableStateOf(prefs.directional) }
+    var style by remember { mutableStateOf(prefs.controlStyle) }
+    var badge by remember { mutableStateOf(prefs.buttonBadge) }
+    var opacity by remember { mutableFloatStateOf(prefs.touchOpacity) }
+    var haptics by remember { mutableStateOf(prefs.touchHaptics) }
+    var confirmExit by remember { mutableStateOf(false) }
+    var selfTestRefused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(12.dp)
 
     Column(
         Modifier
             .padding(12.dp)
             .widthIn(max = 600.dp)
-            .background(Color(0xE6120C1E), RoundedCornerShape(24.dp))
-            .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f), shape)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), shape)
             .verticalScroll(rememberScrollState())
-            .padding(18.dp),
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.Tune, null, tint = DfColors.Yellow)
-            Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.port_menu_title), style = MaterialTheme.typography.titleLarge, color = Color.White)
-                Text(stringResource(R.string.ingame_paused), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f))
+        Text(stringResource(R.string.ingame_title), style = MaterialTheme.typography.titleLarge)
+        Text(
+            stringResource(R.string.ingame_open_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = { actions.resume() },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = DfColors.Orange, contentColor = Color(0xFF2B1000)),
+            ) { Text(stringResource(R.string.ingame_resume), maxLines = 1) }
+            OutlinedButton(
+                onClick = { if (confirmExit) actions.exitToLauncher() else confirmExit = true },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(10.dp),
+            ) {
+                Text(stringResource(if (confirmExit) R.string.ingame_exit_confirm else R.string.ingame_exit), maxLines = 1)
             }
         }
 
-        Text(stringResource(R.string.settings_image), color = DfColors.Yellow, style = MaterialTheme.typography.titleSmall)
+        // ---------------------------------------------------------------- imagem
+        GroupTitle(stringResource(R.string.settings_image))
         Segmented(
             listOf("bilinear" to "Bilinear", "cas" to "AMD CAS", "fsr" to "AMD FSR 1"),
             c.presentEffect,
@@ -373,6 +243,7 @@ private fun PortOptionsCard(actions: InGameActions) {
                 set(c.copy(casSharpness = it.toDouble()), mapOf("dbz3_cas_sharpness" to TomlNum.d(it.toDouble())))
             }
         }
+        Label(stringResource(R.string.settings_aa))
         Segmented(
             listOf("none" to stringResource(R.string.off), "fxaa" to "FXAA", "fxaa_extreme" to "FXAA+"),
             c.fxaa,
@@ -387,7 +258,25 @@ private fun PortOptionsCard(actions: InGameActions) {
             set(c.copy(showFps = it), mapOf("dbz3_show_fps" to it.toString()))
         }
 
-        Text(stringResource(R.string.settings_audio), color = DfColors.Yellow, style = MaterialTheme.typography.titleSmall)
+        // ------------------------------------------------------- efeitos do jogo
+        GroupTitle(stringResource(R.string.perf_effects_title))
+        SwitchRow(stringResource(R.string.fx_bloom), c.fxBloom, enabled = c.rtDirect) {
+            set(c.copy(fxBloom = it), mapOf("dbz3_fx_bloom" to it.toString()))
+        }
+        SwitchRow(stringResource(R.string.fx_dof), c.fxDof, enabled = c.rtDirect) {
+            set(c.copy(fxDof = it), mapOf("dbz3_fx_dof" to it.toString()))
+        }
+        SwitchRow(stringResource(R.string.fx_fxaa), c.fxFxaa, enabled = c.rtDirect) {
+            set(c.copy(fxFxaa = it), mapOf("dbz3_fx_fxaa" to it.toString()))
+        }
+        Text(
+            stringResource(if (c.rtDirect) R.string.ingame_effects_note else R.string.fx_needs_rt_direct),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        // ------------------------------------------------------- som e controle
+        GroupTitle(stringResource(R.string.ingame_section_sound))
         SliderRow(stringResource(R.string.settings_volume), c.masterVolume.toFloat(), 0f..1f, ::pct) {
             set(c.copy(masterVolume = it.toDouble()), mapOf("dbz3_master_volume" to TomlNum.d(it.toDouble())))
         }
@@ -397,26 +286,97 @@ private fun PortOptionsCard(actions: InGameActions) {
         SwitchRow(stringResource(R.string.settings_rumble), c.rumble) {
             set(c.copy(rumble = it), mapOf("dbz3_rumble" to it.toString()))
         }
-        Text(
-            stringResource(R.string.port_menu_restart_note),
-            style = MaterialTheme.typography.bodySmall,
-            color = Color.White.copy(alpha = 0.7f),
-        )
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            FilledTonalButton(onClick = { actions.openPortMenu() }, modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.port_menu_classic), maxLines = 1)
-            }
-            Button(
-                onClick = { actions.resume() },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = DfColors.Orange, contentColor = Color(0xFF2B1000)),
+        // ---------------------------------------------------- controles por toque
+        GroupTitle(stringResource(R.string.settings_touch))
+        Segmented(
+            listOf(
+                TouchMode.AUTO to stringResource(R.string.touch_mode_auto),
+                TouchMode.ON to stringResource(R.string.touch_mode_on),
+                TouchMode.OFF to stringResource(R.string.touch_mode_off),
+            ),
+            touchMode,
+        ) {
+            touchMode = it
+            prefs.touchMode = it
+            actions.applyAppearance()
+        }
+        Label(stringResource(R.string.ingame_directional))
+        Segmented(
+            listOf(Directional.DPAD to stringResource(R.string.directional_dpad), Directional.STICK to stringResource(R.string.directional_stick)),
+            directional,
+        ) {
+            directional = it
+            prefs.directional = it
+            actions.applyAppearance()
+        }
+        Label(stringResource(R.string.settings_touch_style))
+        Segmented(
+            listOf(ControlStyle.DRAGON to "Dragon Fury", ControlStyle.XBOX to "Xbox", ControlStyle.PLAYSTATION to "PlayStation"),
+            style,
+        ) {
+            style = it
+            prefs.controlStyle = it
+            actions.applyAppearance()
+        }
+        if (style == ControlStyle.DRAGON) {
+            Label(stringResource(R.string.ingame_badge))
+            Segmented(
+                listOf(ButtonBadge.XBOX to "Xbox", ButtonBadge.PLAYSTATION to "PlayStation", ButtonBadge.NONE to stringResource(R.string.badge_none)),
+                badge,
             ) {
-                Icon(Icons.Filled.PlayArrow, null)
-                Spacer(Modifier.width(6.dp))
-                Text(stringResource(R.string.ingame_resume))
+                badge = it
+                prefs.buttonBadge = it
+                actions.applyAppearance()
             }
         }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.settings_touch_opacity), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(120.dp))
+            Slider(
+                value = opacity,
+                onValueChange = { opacity = it },
+                onValueChangeFinished = {
+                    prefs.touchOpacity = opacity
+                    actions.applyAppearance()
+                },
+                valueRange = 0.1f..1f,
+                modifier = Modifier.weight(1f),
+            )
+            Text("${(opacity * 100).roundToInt()}%", style = MaterialTheme.typography.labelMedium, modifier = Modifier.width(52.dp).padding(start = 6.dp))
+        }
+        SwitchRow(stringResource(R.string.settings_touch_haptics), haptics) {
+            haptics = it
+            prefs.touchHaptics = it
+            actions.applyAppearance()
+        }
+        OutlinedButton(onClick = { actions.openEditor() }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) {
+            Text(stringResource(R.string.settings_touch_edit), maxLines = 1)
+        }
+
+        // ------------------------------------------------------------ diagnostico
+        GroupTitle(stringResource(R.string.ingame_section_tools))
+        // Captura de frames para o renderizador nativo: o jogo continua ao fechar o menu
+        // e os 2 frames seguintes ficam em logs/capture (entram no "Salvar log").
+        TextButton(onClick = { actions.captureFrames(); actions.resume() }) {
+            Text(stringResource(R.string.ingame_capture), maxLines = 1)
+        }
+        // Autoteste do render: congela a luta, troca cada otimizacao e compara a imagem; no fim
+        // exporta os logs para Download/. So numa luta.
+        TextButton(onClick = { selfTestRefused = !actions.startSelfTest() }, enabled = actions.isInBattle()) {
+            Text(stringResource(R.string.ingame_selftest), maxLines = 1)
+        }
+        if (selfTestRefused || !actions.isInBattle()) {
+            Text(
+                stringResource(R.string.ingame_selftest_only_fight),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text(
+            stringResource(R.string.ingame_restart_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

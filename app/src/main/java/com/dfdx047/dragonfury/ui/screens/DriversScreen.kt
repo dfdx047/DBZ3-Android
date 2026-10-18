@@ -100,8 +100,6 @@ fun DriversScreen(vm: LauncherViewModel) {
                         Text(stringResource(R.string.drivers_use_system))
                     }
                     FilledTonalButton(onClick = { pickFile.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) }, enabled = vm.busy == null) {
-                        Icon(Icons.Filled.FileOpen, null)
-                        Spacer(Modifier.width(6.dp))
                         Text(stringResource(R.string.drivers_import))
                     }
                 }
@@ -178,8 +176,6 @@ private fun InstalledDriverCard(d: InstalledDriver, active: Boolean, onActivate:
             }
             if (!active) {
                 TextButton(onClick = onActivate) {
-                    Icon(Icons.Filled.CheckCircle, null)
-                    Spacer(Modifier.width(4.dp))
                     Text(stringResource(R.string.drivers_use))
                 }
             }

@@ -74,13 +74,9 @@ fun ModsScreen(vm: LauncherViewModel) {
                         onClick = { pickZip.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) },
                         enabled = vm.busy == null,
                     ) {
-                        Icon(Icons.Filled.FileOpen, null)
-                        Spacer(Modifier.width(6.dp))
                         Text(stringResource(R.string.mods_install_zip))
                     }
                     OutlinedButton(onClick = { vm.refreshMods() }) {
-                        Icon(Icons.Filled.Refresh, null)
-                        Spacer(Modifier.width(6.dp))
                         Text(stringResource(R.string.refresh))
                     }
                 }
@@ -191,8 +187,6 @@ private fun ModCard(mod: ModInfo, onToggle: (Boolean) -> Unit, onFix: () -> Unit
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (mod.problems.any { it is ModProblem.Nested }) {
                     TextButton(onClick = onFix) {
-                        Icon(Icons.Filled.Build, null)
-                        Spacer(Modifier.width(4.dp))
                         Text(stringResource(R.string.fix))
                     }
                 }

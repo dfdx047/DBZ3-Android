@@ -58,8 +58,6 @@ fun PerformanceScreen(vm: LauncherViewModel) {
     ) {
         StatusLine(stringResource(R.string.settings_saved_note), Level.INFO)
         OutlinedButton(onClick = { vm.openGpuNotice() }, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Filled.Lightbulb, null)
-            Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.about_gpu_notice))
         }
 

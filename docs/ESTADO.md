@@ -1096,3 +1096,16 @@ diferente?); `dbz3: dedupe:` e `dbz3: passo 4:` no log; perf a 720p vs 540p no C
   1 "voltou a ser lido" na sessão toda (antes 365 só no 1EFC7000).
 - Luta a 720p sem efeitos: game_fps 55–58 mas presented_fps 42–48 (GPU 16–18 ms, no limite do vsync a
   60 Hz em FIFO: o que se vê fica ~45). 540p continua a ser a predefinição certa para o Cube.
+
+### 2026-10-18 — v0.6.0: logs, erros na tela, tema simples, novo menu do jogo
+
+- Snapdragon 665 (Mi A3): SIGILL em `rex::thread::TimerQueue` ao carregar o librexruntime — o app é
+  compilado com `-march=armv8.2-a` (atómicos LSE) e o Cortex-A73/A53 é ARMv8.0. Fica fora (README com
+  o requisito de CPU); `SystemCheck.cpu()` lê "atomics" no /proc/cpuinfo e o launcher não abre o jogo.
+- `AppLog` (logs/app_launcher.log e app_game.log, 1 MB + .old), mensagens em recursos de texto
+  (en/pt/es), crash Java em logs/crash_last.txt. `ErrorReport` + janela de erro (salvar log, Discord).
+  Saída anormal do processo :game via `ActivityManager.getHistoricalProcessExitReasons` (API 30+).
+- Launcher: abas em baixo, SectionCard sem ícones nem degradês, redes em 4 botões pequenos,
+  animação `GroundBurstAnimation` (chão a rachar, pedras, poeira, raios) no lugar do choque de ki.
+- Menu do jogo único com o tema do launcher (InGameMenu); `quick_menu_buttons = none` (toml e env);
+  Select + Start abre/fecha o menu (GameActivity.dispatchKeyEvent).

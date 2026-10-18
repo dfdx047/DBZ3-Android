@@ -53,10 +53,13 @@ fun DebugScreen(vm: LauncherViewModel) {
         // ------------------------------------------------------------------- logs
         SectionCard(stringResource(R.string.debug_logs_title), Icons.Filled.Description, subtitle = stringResource(R.string.debug_logs_sub)) {
             Button(onClick = { vm.exportLogs(context) }, enabled = vm.busy == null, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Filled.IosShare, null)
-                Spacer(Modifier.width(6.dp))
-                Text(stringResource(R.string.export_logs))
+                Text(stringResource(R.string.error_save_log))
             }
+            Text(
+                stringResource(R.string.error_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             SettingSwitch(
                 stringResource(R.string.settings_verbose_log),
                 stringResource(R.string.settings_verbose_log_sub),

@@ -3,6 +3,27 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.0 — 2026-10-18
+
+### New
+- Logs for everything the app does (game import from ISO or folder, file checks, mods, texture
+  packs, drivers, updates, settings, game start and exit), in the app's language, in
+  `logs/app_launcher.log` and `logs/app_game.log` (included in the saved log).
+- Errors are shown in a window that explains what happened, with technical details, a
+  **Save log to Downloads** button and a link to the Discord. When the game closes with an error
+  (crash, out of memory, frozen) the launcher says why when you come back.
+- Processor check: Dragon Fury needs an ARMv8.2 CPU. On ARMv8.0 chips (Snapdragon 665/660/835…)
+  the game used to close instantly; now the launcher explains it instead of starting.
+- In-game menu rebuilt with the launcher's look, replacing the PC quick menu: picture, game
+  effects (bloom, depth of field, FXAA) live, sound and vibration, touch controls and diagnostics.
+  Opens with Back or **Select + Start** on a controller; the PC menu's Back + Start combo is off.
+
+### Changed
+- Simpler launcher: tab bar at the bottom, plain cards and buttons without icons, smaller header
+  and community links.
+- New Play screen animation: rocky ground cracking with a warm glow, rocks rising, dust and
+  lightning.
+
 ## 0.5.8 — 2026-10-17
 
 ### Fixes

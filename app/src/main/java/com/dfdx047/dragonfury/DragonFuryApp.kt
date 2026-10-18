@@ -7,6 +7,12 @@ class DragonFuryApp : Application() {
     override fun onCreate() {
         super.onCreate()
         AppPaths.init(this)
+        com.dfdx047.dragonfury.data.AppLog.init(this)
+        com.dfdx047.dragonfury.data.AppLog.i(
+            R.string.log_app_start,
+            BuildConfig.VERSION_NAME,
+            getProcessName() ?: "?",
+        )
     }
 
     companion object {

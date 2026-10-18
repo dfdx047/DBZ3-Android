@@ -102,8 +102,6 @@ fun AboutScreen(vm: LauncherViewModel) {
         ) {
             Text(stringResource(R.string.about_original_text), style = MaterialTheme.typography.bodySmall)
             FilledTonalButton(onClick = { open(DragonFuryApp.ORIGINAL_PROJECT_URL) }, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Filled.Code, null)
-                Spacer(Modifier.width(6.dp))
                 Text("novapowers0/DBZ-Budokai-3-HD-Collection", maxLines = 1)
             }
         }
@@ -118,8 +116,6 @@ fun AboutScreen(vm: LauncherViewModel) {
             Text(stringResource(R.string.about_port_text), style = MaterialTheme.typography.bodySmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(onClick = { open(DragonFuryApp.GITHUB_URL) }, modifier = Modifier.weight(1f)) {
-                    Icon(Icons.Filled.Code, null)
-                    Spacer(Modifier.width(6.dp))
                     Text("GitHub", maxLines = 1)
                 }
                 OutlinedButton(

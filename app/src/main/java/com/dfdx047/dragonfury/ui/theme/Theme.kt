@@ -78,37 +78,37 @@ private val DragonDark = darkColorScheme(
     onTertiary = Color(0xFF3F2E00),
     tertiaryContainer = Color(0xFF5B4300),
     onTertiaryContainer = Color(0xFFFFE08F),
-    background = Color(0xFF120C1E),
+    background = Color(0xFF0E1222),
     onBackground = Color(0xFFF1E6DD),
-    surface = Color(0xFF120C1E),
+    surface = Color(0xFF0E1222),
     onSurface = Color(0xFFF1E6DD),
-    surfaceVariant = Color(0xFF2A2236),
-    onSurfaceVariant = Color(0xFFD8C8BC),
-    surfaceContainer = Color(0xFF1C1529),
-    surfaceContainerHigh = Color(0xFF241C33),
+    surfaceVariant = Color(0xFF232A40),
+    onSurfaceVariant = Color(0xFFC9C4C0),
+    surfaceContainer = Color(0xFF161B2E),
+    surfaceContainerHigh = Color(0xFF1D2338),
     outline = Color(0xFF9E8E84),
     error = Color(0xFFFF6B5E),
 )
 
-// Titulos em italico pesado, como os menus do Budokai 3 (letras inclinadas e grossas); o
-// texto corrido fica normal para ler bem.
+// Titulos grossos e inclinados so nos cabecalhos maiores (como o jogo); o resto normal, para
+// um visual mais calmo.
 private val DfTypography = Typography().let { t ->
     t.copy(
         headlineMedium = t.headlineMedium.copy(fontWeight = FontWeight.Black, fontStyle = FontStyle.Italic),
         headlineSmall = t.headlineSmall.copy(fontWeight = FontWeight.ExtraBold, fontStyle = FontStyle.Italic),
-        titleLarge = t.titleLarge.copy(fontWeight = FontWeight.ExtraBold, fontStyle = FontStyle.Italic),
-        titleMedium = t.titleMedium.copy(fontWeight = FontWeight.ExtraBold, fontStyle = FontStyle.Italic, letterSpacing = 0.3.sp),
-        labelLarge = t.labelLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp),
+        titleLarge = t.titleLarge.copy(fontWeight = FontWeight.Bold),
+        titleMedium = t.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+        labelLarge = t.labelLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp),
     )
 }
 
-/** Logotipo: italico, grosso, com sombra escura (como o titulo do jogo). */
+/** Logotipo: italico e grosso (como o titulo do jogo), com uma sombra discreta. */
 val LogoStyle = TextStyle(
     fontWeight = FontWeight.Black,
     fontStyle = FontStyle.Italic,
-    fontSize = 30.sp,
+    fontSize = 22.sp,
     letterSpacing = 1.sp,
-    shadow = Shadow(color = Color(0xCC3A1200), offset = Offset(3f, 3f), blurRadius = 4f),
+    shadow = Shadow(color = Color(0x99000000), offset = Offset(2f, 2f), blurRadius = 2f),
 )
 
 @Composable

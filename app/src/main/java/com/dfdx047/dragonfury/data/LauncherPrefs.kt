@@ -123,6 +123,11 @@ class LauncherPrefs(context: Context) {
         get() = prefs.getBoolean(KEY_MALI_PRESET, false)
         set(v) = prefs.edit().putBoolean(KEY_MALI_PRESET, v).apply()
 
+    /** Momento da ultima saida do jogo ja mostrada (erros do processo :game, SystemCheck). */
+    var lastGameExitSeen: Long
+        get() = prefs.getLong(KEY_LAST_GAME_EXIT, 0L)
+        set(v) = prefs.edit().putLong(KEY_LAST_GAME_EXIT, v).apply()
+
     var checkUpdatesOnStart: Boolean
         get() = prefs.getBoolean(KEY_CHECK_UPDATES, true)
         set(v) = prefs.edit().putBoolean(KEY_CHECK_UPDATES, v).apply()
@@ -151,6 +156,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_GPU_NOTICE = "gpu_notice_shown"
         const val KEY_RT_DIRECT_MIGRATED = "rt_direct_migrated"
         const val KEY_MALI_PRESET = "mali_preset_applied"
+        const val KEY_LAST_GAME_EXIT = "last_game_exit_seen"
         const val KEY_CHECK_UPDATES = "check_updates"
         const val KEY_SKIPPED_UPDATE = "skipped_update"
     }
