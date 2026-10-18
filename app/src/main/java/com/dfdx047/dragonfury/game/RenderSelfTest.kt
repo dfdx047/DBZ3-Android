@@ -21,7 +21,7 @@ import kotlin.math.abs
 import kotlin.math.log10
 
 /**
- * Autoteste do renderizador (menu do jogo, so numa luta), portado do Dragon Burst.
+ * Autoteste do renderizador (menu do jogo, em qualquer cena desde 0.6.14), portado do Dragon Burst.
  *
  * O Budokai 3 nao tem um "congelar a luta" como o freeze_game do Burst Limit: aqui quem congela
  * e a GPU (dbz3_freeze_frame, patch 0056) - para depois de uma troca e repete esse frame com as
@@ -131,7 +131,7 @@ class RenderSelfTest(
             .append(" dbz3_frameskip=").append(NativeGameState.getCvar("dbz3_frameskip"))
             .append('\n')
         report.append("Config: " + base.entries.joinToString(" ") { "${it.key}=${it.value}" } + "\n\n")
-        showStatus("Autoteste do render: a congelar a luta...")
+        showStatus("Autoteste do render: a congelar a imagem...")
         log("autoteste: inicio (${active.size} otimizacoes)")
         // O painel de FPS (debug_overlay) e desenhado na imagem do jogo e muda a cada frame: fora
         // durante o teste (no 1.o autoteste do RG Cube, 17/10, era parte do "ruido").
