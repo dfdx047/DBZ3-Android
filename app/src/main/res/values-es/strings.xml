@@ -521,4 +521,7 @@
     <string name="turnip_auto_title">Compatibilidad automática de Turnip</string>
     <string name="turnip_auto_text">Si la GPU falla con este Turnip, el próximo arranque añade solo ajustes más seguros (modo 1: sin GMEM/LRZ/UBWC y texturas BC descomprimidas; 2: pasadas simples, profundidad en float y sincronización total; 3: memoria del juego dividida como dice el driver). Modo actual para %1$s: %2$d/3.</string>
     <string name="turnip_auto_reset">Volver al modo 0</string>
+    <string name="log_turnip_a6xx_system">Turnip en Adreno 6xx está desactivado en este port: usando el driver del sistema (%1$s sigue instalado)</string>
+    <string name="turnip_a6xx_notice">Adreno 6xx (Snapdragon 865, 855, 480+…): Turnip dibuja este juego con texturas incorrectas y cuelga la GPU, en todas las versiones probadas. El juego usa el driver del sistema, que en estos chips dibuja bien a 60 fps.</string>
+    <string name="turnip_a6xx_allow">Usar Turnip de todos modos (Adreno 6xx)</string>
 </resources>

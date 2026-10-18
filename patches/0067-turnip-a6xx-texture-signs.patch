@@ -1,0 +1,54 @@
+diff --git a/src/graphics/vulkan/command_processor.cpp b/src/graphics/vulkan/command_processor.cpp
+index 6808b11..7cd7a22 100644
+--- a/src/graphics/vulkan/command_processor.cpp
++++ b/src/graphics/vulkan/command_processor.cpp
+@@ -6104,7 +6104,10 @@ bool VulkanCommandProcessor::IssueCopy() {
+                       fmt::format("resolve dest={:08X} pitch={:08X} copy_control={:08X}", dest,
+                                   pitch, register_file_->values[XE_GPU_REG_RB_COPY_CONTROL]));
+   }
+-  if (readback_mode == ReadbackResolveMode::kDisabled && !dbz3_capture::WantsResolveReadback()) {
++  // 0067: no Turnip dos Adreno 6xx a captura nao le os resolves de volta (a GPU caiu durante uma
++  // captura no RP5, 18/10 17:18; cada leitura espera pela GPU a meio do frame).
++  if (readback_mode == ReadbackResolveMode::kDisabled &&
++      (!dbz3_capture::WantsResolveReadback() || ui::vulkan::Dbz3TurnipA6xxSafe())) {
+     uint32_t written_address, written_length;
+     return render_target_cache_->Resolve(*memory_, *shared_memory_, *texture_cache_,
+                                          written_address, written_length);
+diff --git a/src/graphics/vulkan/pipeline_cache.cpp b/src/graphics/vulkan/pipeline_cache.cpp
+index 5328432..7cab172 100644
+--- a/src/graphics/vulkan/pipeline_cache.cpp
++++ b/src/graphics/vulkan/pipeline_cache.cpp
+@@ -52,6 +52,7 @@
+ #include <rex/logging.h>
+ #include <rex/math.h>
+ #include <rex/types.h>
++#include <rex/ui/vulkan/device.h>
+ #include <rex/ui/vulkan/util.h>
+ 
+ REXCVAR_DEFINE_INT32(
+@@ -414,13 +415,21 @@ bool VulkanPipelineCache::Initialize() {
+       render_target_cache_.msaa_2x_no_attachments_supported(), edram_fragment_shader_interlock,
+       render_target_cache_.draw_resolution_scale_x(),
+       render_target_cache_.draw_resolution_scale_y());
+-  shader_translator_->Dbz3SetSpecTextureSigns(REXCVAR_GET(dbz3_spec_texture_signs));
+-  shader_translator_->Dbz3SetImplicitLod(REXCVAR_GET(dbz3_tex_implicit_lod));
++  // 0067: no Turnip dos Adreno 6xx os sinais das texturas como specialization constants saiam
++  // errados (captura do RP5 de 18/10 17:18: superficies escuras e so os brancos a ficar, como
++  // texturas unsigned convertidas como signed, 2x-1). Nesses aparelhos fica o caminho original
++  // do Xenia: sinais lidos das fetch constants e gradientes explicitos.
++  const bool dbz3_turnip_a6xx = ui::vulkan::Dbz3TurnipA6xxSafe();
++  shader_translator_->Dbz3SetSpecTextureSigns(REXCVAR_GET(dbz3_spec_texture_signs) &&
++                                              !dbz3_turnip_a6xx);
++  shader_translator_->Dbz3SetImplicitLod(REXCVAR_GET(dbz3_tex_implicit_lod) && !dbz3_turnip_a6xx);
+   // Below 1x (draw_resolution_percent): set by the command processor on the render target
+   // cache before the pipeline cache is made.
+   shader_translator_->SetDrawResolutionPercent(render_target_cache_.draw_resolution_percent());
+-  REXGPU_INFO("dbz3: sinais de textura como spec constants: {}, LOD implicito: {}",
+-              REXCVAR_GET(dbz3_spec_texture_signs), REXCVAR_GET(dbz3_tex_implicit_lod));
++  REXGPU_INFO("dbz3: sinais de textura como spec constants: {}, LOD implicito: {}{}",
++              shader_translator_->dbz3_spec_texture_signs(),
++              REXCVAR_GET(dbz3_tex_implicit_lod) && !dbz3_turnip_a6xx,
++              dbz3_turnip_a6xx ? " (Turnip num Adreno 6xx: caminho original)" : "");
+ 
+   if (edram_fragment_shader_interlock) {
+     std::vector<uint8_t> depth_only_fragment_shader_code =

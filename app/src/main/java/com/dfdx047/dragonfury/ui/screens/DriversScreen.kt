@@ -39,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -55,6 +56,7 @@ import com.dfdx047.dragonfury.ui.LauncherViewModel
 import com.dfdx047.dragonfury.ui.components.Level
 import com.dfdx047.dragonfury.ui.components.Pill
 import com.dfdx047.dragonfury.ui.components.SectionCard
+import com.dfdx047.dragonfury.ui.components.SettingSwitch
 import com.dfdx047.dragonfury.ui.components.SettingSegmented
 import com.dfdx047.dragonfury.ui.components.StatusLine
 import com.dfdx047.dragonfury.ui.components.formatBytes
@@ -109,6 +111,16 @@ fun DriversScreen(vm: LauncherViewModel) {
                     }
                 }
                 Text(stringResource(R.string.drivers_restart_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // Turnip num Adreno 6xx: o jogo usa o driver do sistema, salvo autorizacao.
+                if (active != null && TurnipCompat.isTurnip(active) && TurnipCompat.isAdreno6xx()) {
+                    val ctx6 = LocalContext.current
+                    var allowed by remember { mutableStateOf(TurnipCompat.a6xxAllowed(ctx6)) }
+                    StatusLine(stringResource(R.string.turnip_a6xx_notice), Level.WARN)
+                    SettingSwitch(stringResource(R.string.turnip_a6xx_allow), checked = allowed) {
+                        allowed = it
+                        TurnipCompat.setA6xxAllowed(ctx6, it)
+                    }
+                }
                 // Modo de compatibilidade automatico do Turnip (sobe sozinho quando a GPU cai).
                 if (active != null && TurnipCompat.isTurnip(active)) {
                     val ctx = LocalContext.current

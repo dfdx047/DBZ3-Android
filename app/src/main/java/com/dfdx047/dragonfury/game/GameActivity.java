@@ -554,6 +554,11 @@ public class GameActivity extends SDLActivity {
         SharedPreferences prefs = getSharedPreferences("dragonfury", MODE_MULTI_PROCESS);
         int flags = prefs.getInt("turnip_compat_flags", 0);
         String driver = activeDriverSource();
+        // Turnip num Adreno 6xx sem autorizacao: o jogo usa o driver do sistema (ver
+        // installCustomVulkanDriver), as correcoes do Turnip nao se aplicam.
+        if (driver != null && isAdreno6xx() && !prefs.getBoolean("turnip_a6xx_allow", false)) {
+            driver = null;
+        }
         int autoLevel = driver == null ? 0 : prefs.getInt("turnip_auto_level:" + driver, 0);
         // 0.6.3: Turnip num Adreno 6xx comeca sempre no nivel 1. Nos logs do RP5 (18/10, Turnip
         // R6, R8 e Rutabaga) o nivel 0 travava a GPU no ecra titulo em todos; com o nivel 1
@@ -652,6 +657,25 @@ public class GameActivity extends SDLActivity {
         File activeDir = new File(appDir, "driver");
         File[] candidates = activeDir.listFiles((dir, name) -> name.endsWith(".so"));
         if (candidates == null || candidates.length == 0) {
+            deleteRecursively(internalDir);
+            return;
+        }
+        // 0.6.4: Turnip num Adreno 6xx fica desligado (usa-se o driver do sistema), salvo se o
+        // usuario o pedir na aba Drivers. Nos logs do RP5 (18/10, Turnip R6, R8 e Rutabaga, com
+        // todos os modos de compatibilidade) a imagem saiu com texturas erradas e a GPU caiu;
+        // o driver da Qualcomm do mesmo aparelho desenha certo a 60 fps.
+        String source0 = activeDriverSource();
+        boolean turnip = source0 != null && source0.toLowerCase(Locale.ROOT)
+                .matches(".*(turnip|rutabaga|mesa|freedreno).*");
+        for (File lib : candidates) {
+            if (lib.getName().contains("freedreno")) turnip = true;
+        }
+        @SuppressWarnings("deprecation")
+        SharedPreferences prefs = getSharedPreferences("dragonfury", MODE_MULTI_PROCESS);
+        if (turnip && isAdreno6xx() && !prefs.getBoolean("turnip_a6xx_allow", false)) {
+            Log.i(TAG, "Turnip num Adreno 6xx: driver do sistema (" + source0 + ")");
+            com.dfdx047.dragonfury.data.AppLog.info(
+                    com.dfdx047.dragonfury.R.string.log_turnip_a6xx_system, String.valueOf(source0));
             deleteRecursively(internalDir);
             return;
         }

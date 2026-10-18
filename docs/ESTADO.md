@@ -1187,3 +1187,19 @@ traz as operações por concluir e o modo seguinte entra sozinho.
   último arranque, `/sys/class/kgsl/kgsl-3d0/gpu_model`, SOC_MODEL ou placa); no SDK (0066), no
   modo seguro dos 6xx, BC sempre descomprimido e sem `VK_EXT_shader_stencil_export` (deteção pelo
   nome "… Adreno (TM) 6xx" antes de escolher as extensões).
+
+### 2026-10-18 17:21 — 0.6.3 no RP5: imagem errada; v0.6.4 usa o driver do sistema nos Adreno 6xx
+- Logs 170054_2 e 171902 (Turnip R8 nível 1; Rutabaga 0.6.3 nível 1): lutas correm, mas as
+  texturas saem erradas (autoteste: fundo escuro com riscas horizontais; captura 171854: a
+  leitura de volta do resolve 1F35F000 (496 MB) está certa — a memória alta funciona —, cenário
+  escuro e lutador com riscas, pós-processamento com riscas). Todas as fetch constants da captura
+  têm sinais unsigned (0), por isso os sinais como spec constants não explicam. Mesmos defeitos
+  já vistos a 13/10 (4 blocos: geometria e texturas; 1 bloco: texturas) → incompatibilidade do
+  Turnip dos 6xx com o caminho de texturas/resolves do Xenia, não de uma otimização nossa (o
+  autoteste não muda a imagem com nenhuma delas).
+- A GPU caiu ainda numa captura de frames (leitura de volta dos resolves) e no autoteste.
+- 0.6.4: Turnip num Adreno 6xx desligado por omissão (GameActivity não instala o driver; pref
+  `turnip_a6xx_allow` na aba Drivers para forçar). Patch 0067: com Turnip 6xx forçado, sinais pelo
+  caminho original, gradientes explícitos e captura sem leitura de volta.
+- Por fazer para o Turnip 6xx voltar: captura com o driver do sistema e com o Turnip no mesmo
+  sítio e comparar as texturas carregadas (falta registar o conteúdo das texturas na captura).

@@ -46,6 +46,45 @@ object TurnipCompat {
         return next
     }
 
+    /** Turnip num Adreno 6xx so com autorizacao (pref lida pelo GameActivity). */
+    fun a6xxAllowed(context: Context): Boolean = prefs(context).getBoolean(KEY_A6XX_ALLOW, false)
+
+    fun setA6xxAllowed(context: Context, allowed: Boolean) {
+        prefs(context).edit().putBoolean(KEY_A6XX_ALLOW, allowed).apply()
+    }
+
+    private const val KEY_A6XX_ALLOW = "turnip_a6xx_allow"
+
+    /** Adreno 6xx? Mesmas pistas que o GameActivity.isAdreno6xx. */
+    fun isAdreno6xx(): Boolean {
+        try {
+            val status = java.io.File(AppPaths.logsDir, "vulkan_driver_status.txt")
+            if (status.isFile) {
+                Regex("Adreno \\(TM\\) (\\d)\\d\\d").find(status.readText())?.let { return it.groupValues[1] == "6" }
+            }
+        } catch (_: Exception) {
+        }
+        try {
+            val model = java.io.File("/sys/class/kgsl/kgsl-3d0/gpu_model").readText().trim().lowercase()
+            if (model.startsWith("adreno")) {
+                val digits = model.substring(6).takeWhile { it.isDigit() }
+                if (digits.isNotEmpty()) return digits.length == 3 && digits[0] == '6'
+            }
+        } catch (_: Exception) {
+        }
+        val soc = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) android.os.Build.SOC_MODEL else ""
+        if (soc.uppercase() in A6XX_SOCS) return true
+        return android.os.Build.BOARD.lowercase() in setOf(
+            "kona", "msmnile", "lito", "trinket", "bengal", "holi", "atoll", "lahaina", "sdm845",
+        )
+    }
+
+    private val A6XX_SOCS = setOf(
+        "SM8250", "SM8150", "SM7250", "SM7225", "SM7150", "SM7125", "SM6150", "SM6125",
+        "SM6115", "SM6225", "SM6350", "SM6375", "SM4350", "SM4375", "SM7325", "SM7350",
+        "SM8350", "SDM845", "SDM855", "SDM730", "SDM710", "SDM670", "SM7315", "SM6450",
+    )
+
     fun reset(context: Context, driver: String?) {
         if (driver == null) return
         prefs(context).edit().remove(PREFIX + driver).apply()

@@ -3,6 +3,17 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.4 — 2026-10-18
+
+### Changed
+- **Adreno 6xx (Snapdragon 865, 855, 480+…) uses the system driver even when a Turnip driver is
+  selected.** With every Turnip build tested on the Retroid Pocket 5 (R6, R8, Rutabaga) and every
+  compatibility mode, the game drew wrong textures and the GPU crashed; the system driver draws
+  correctly at 60 fps there. The Drivers tab explains it and has a switch to use Turnip anyway.
+  Turnip on Adreno 7xx/8xx is unchanged.
+- On Turnip + Adreno 6xx (when forced): original texture-sign path and explicit gradients, and no
+  resolve readback during frame captures (SDK patch 0067).
+
 ## 0.6.3 — 2026-10-18
 
 ### Fixes
