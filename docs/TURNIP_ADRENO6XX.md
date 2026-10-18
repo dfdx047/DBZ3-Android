@@ -43,6 +43,10 @@ GPU caía (VK_ERROR_DEVICE_LOST). Turnip em Adreno 7xx/8xx não tinha estes prob
 
 ## Desempenho
 
+- **renderArea justa é obrigatória.** Com a área inteira do EDRAM (1280x2048) cada passe limpava e
+  carregava quase 3x mais pixels: luta a 27–34 fps. Com a área justa em sysmem (0074): 60 fps
+  estáveis no RP5 com efeitos ligados, GPU ~10 ms/frame.
+
 - **Não usar `TU_DEBUG=sysmem` por omissão.** Desliga o GMEM (render por tiles do Adreno) e foi o
   maior custo no RP5. Os crashes que levaram a usá-lo tinham outras causas (ver acima).
 - No RP5 o GMEM com dynamic rendering travou a GPU (passes 1280x2048 + resolve), com e sem

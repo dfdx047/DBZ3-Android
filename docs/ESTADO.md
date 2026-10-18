@@ -1292,3 +1292,10 @@ traz as operações por concluir e o modo seguinte entra sozinho.
 - Opções da aba Depuração no Turnip A6xx: "sinais/LOD especializados" são ignorados (0067 força o
   caminho original); "memória num só bloco" já é o padrão no Turnip (sem efeito); "resolve sem
   memória"/render into texture ficam desligados (0072). As de render targets diretos valem.
+
+### 2026-10-18 20:55 — Resultado 0.6.11 no RP5 (zip 204301): Turnip A6xx a 60 fps
+- Modo 1 (TU_DEBUG=sysmem, LRZ/UBWC ligados), efeitos ligados: ~7 min a 59.9 fps, GPU ~9–12 ms
+  por frame (desenho ~4–6 ms, resolve ~3 ms, transferências 0.1–2.5 ms, outros até 3.5 ms).
+  Antes do 0074 a luta ficava em 27–34 fps → o custo era a renderArea 1280x2048 inteira.
+- Por testar (opcional): o GMEM com a área justa (o modo seguro em GMEM ainda força a área
+  inteira, e pode ser essa a causa dos travamentos com GMEM).
