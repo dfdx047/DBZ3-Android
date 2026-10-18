@@ -3,6 +3,16 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.9 — 2026-10-18
+
+### Performance
+- **Turnip on Adreno 6xx: GMEM back on.** Since 0.6.3 every Adreno 6xx started Turnip in mode 1
+  (`TU_DEBUG=sysmem,nolrz,noubwc`), a workaround for crashes whose real causes are now fixed in the
+  runtime. Sysmem rendering is the most expensive of them on Adreno. Turnip now starts in mode 0
+  (no TU_DEBUG flags); saved modes are reset once. The automatic ladder is still there if the GPU
+  crashes: 1 = no LRZ/UBWC, 2 = + sysmem, 3 = + simple passes/full sync, 4 = split guest memory.
+- SDK patch 0073 reverts 0070 (read-only buffers back to `isam`; it was not the cause).
+
 ## 0.6.8 — 2026-10-18
 
 ### Fixes

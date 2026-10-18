@@ -1,0 +1,46 @@
+diff --git a/src/ui/vulkan/vulkan_util.cpp b/src/ui/vulkan/vulkan_util.cpp
+index fbfdc7a..2106800 100644
+--- a/src/ui/vulkan/vulkan_util.cpp
++++ b/src/ui/vulkan/vulkan_util.cpp
+@@ -10,7 +10,6 @@
+  */
+ 
+ #include <cstdint>
+-#include <vector>
+ 
+ #include <rex/assert.h>
+ #include <rex/math.h>
+@@ -204,33 +203,6 @@ VkPipeline CreateComputePipeline(const VulkanDevice* const vulkan_device, VkPipe
+                                  const uint32_t* shader_code, size_t shader_code_size_bytes,
+                                  const VkSpecializationInfo* specialization_info,
+                                  const char* entry_point) {
+-  // DBZ3-Android (0070): no Turnip dos Adreno 6xx os buffers so de leitura (NonWritable) sao
+-  // lidos com isam (pelo descritor de textura do buffer), e as leituras de vetores (uvec4/uvec2
+-  // dos shaders de carga de texturas, resolves...) saiam erradas: texturas vindas de resolves
+-  // as riscas ou vazias (HUD/menus, RP5 2026-10-18). Coherent no lugar de NonWritable obriga o
+-  // ir3 a usar ldib, como nos buffers que tambem sao escritos.
+-  std::vector<uint32_t> dbz3_patched;
+-  if (Dbz3TurnipA6xxSafe() && shader_code_size_bytes >= 20 &&
+-      !(shader_code_size_bytes & 3) && shader_code[0] == 0x07230203u) {
+-    dbz3_patched.assign(shader_code, shader_code + shader_code_size_bytes / 4);
+-    size_t i = 5;
+-    while (i < dbz3_patched.size()) {
+-      const uint32_t word_count = dbz3_patched[i] >> 16;
+-      const uint32_t opcode = dbz3_patched[i] & 0xFFFF;
+-      if (!word_count || i + word_count > dbz3_patched.size()) {
+-        break;
+-      }
+-      // OpDecorate (71): id, decoration. OpMemberDecorate (72): id, member, decoration.
+-      // NonWritable = 24, Coherent = 23.
+-      if (opcode == 71 && word_count >= 3 && dbz3_patched[i + 2] == 24) {
+-        dbz3_patched[i + 2] = 23;
+-      } else if (opcode == 72 && word_count >= 4 && dbz3_patched[i + 3] == 24) {
+-        dbz3_patched[i + 3] = 23;
+-      }
+-      i += word_count;
+-    }
+-    shader_code = dbz3_patched.data();
+-  }
+   const VkShaderModule shader =
+       CreateShaderModule(vulkan_device, shader_code, shader_code_size_bytes);
+   if (shader == VK_NULL_HANDLE) {

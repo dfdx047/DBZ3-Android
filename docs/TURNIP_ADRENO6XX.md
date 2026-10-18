@@ -30,7 +30,7 @@ GPU caía (VK_ERROR_DEVICE_LOST). Turnip em Adreno 7xx/8xx não tinha estes prob
    na GPU.
 7. **Resolves escrevem sempre a memória** (0072): sem `dbz3_direct_resolve_skip_memory` nem
    render-into-texture no Turnip A6xx.
-8. **Sem isam** (0070, não confirmado como necessário): em `CreateComputePipeline` (versão com SPIR-V), trocar `NonWritable`
+8. ~~Sem isam~~ (0070, revertido em 0073: não era a causa e o isam é mais rápido): em `CreateComputePipeline` (versão com SPIR-V), trocar `NonWritable`
    (24) por `Coherent` (23) em OpDecorate/OpMemberDecorate quando `Dbz3TurnipA6xxSafe()`.
 9. **Diagnóstico**: registo das operações de GPU antes de um DEVICE_LOST (`dbz3_gpulog.h`), e a
    linha "no caminho da GPU: <motivo>" (0071).
@@ -40,3 +40,19 @@ GPU caía (VK_ERROR_DEVICE_LOST). Turnip em Adreno 7xx/8xx não tinha estes prob
 - Nível de compatibilidade automático por driver (`TurnipCompat`), que sobe quando a GPU cai.
 - Em Adreno 6xx o launcher usa o driver do sistema, a não ser que se ligue "Usar o Turnip mesmo
   assim" (aba Drivers). Quando o Turnip estiver confirmado, este interruptor pode passar a ligado.
+
+## Desempenho
+
+- **Não usar `TU_DEBUG=sysmem` por omissão.** Desliga o GMEM (render por tiles do Adreno) e foi o
+  maior custo no RP5. Os crashes que levaram a usá-lo tinham outras causas (ver acima).
+- Ladder automático (sobe quando a GPU cai): 0 nada, 1 nolrz/noubwc + BC, 2 + sysmem,
+  3 + passes simples/sync total, 4 + memória do guest em 4 buffers.
+- Efeitos pós (bloom/DOF/FXAA) pesam bastante num Adreno 650; testar desempenho com eles
+  desligados e ligados em separado.
+
+## Turnip vs driver do sistema (para os próximos ports)
+
+- O driver da Qualcomm muda de aparelho para aparelho (versão, extensões, bugs); o Turnip é o
+  mesmo código em todos os Adreno 6xx/7xx/8xx e o utilizador escolhe a versão.
+- Recomendação: nos Snapdragon, desenvolver e testar primeiro com o Turnip; o driver do sistema
+  fica como alternativa. Nos Mali só há o driver do fabricante.

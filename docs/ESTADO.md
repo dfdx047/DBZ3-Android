@@ -1255,3 +1255,16 @@ traz as operações por concluir e o modo seguinte entra sozinho.
 - 0072: em `Resolve()` e em `Dbz3RitBegin` o modo sem memória fica desligado com
   `Dbz3TurnipA6xxSafe()` (o passo 4 / render into texture depende dele e também fica desligado).
 - 0070 fica (inofensivo); a confirmar se é preciso.
+
+### 2026-10-18 20:30 — v0.6.9: Turnip A6xx sem sysmem por omissão
+- 0.6.8 no RP5 (zip 200422, Turnip 26.3 R6): imagem completa (menus, HUD, luta). Desempenho: menus
+  a 60, luta ~30 fps (com bloom/DOF/FXAA ligados nessa sessão: fx=true/true/true). GPU a 587–670
+  MHz e 80–90 % ocupada → limitado pela GPU.
+- Estava a correr com `TU_DEBUG=sysmem,nolrz,noubwc` (nível 1 forçado desde 0.6.3). Sysmem tira o
+  GMEM (render por tiles) — o maior custo no Adreno. Ladder novo: 0 nada (padrão), 1 nolrz/noubwc
+  + BC, 2 + sysmem, 3 + passes simples/sync total, 4 + memória em 4 blocos. Níveis gravados
+  repostos a 0 uma vez (`turnip_levels_reset_069`).
+- 0073 reverte 0070 (Coherent em vez de NonWritable): não mudou nada e o isam é o caminho rápido.
+- Próximo, se ainda faltar: medir por categoria (`dbz3_perf_logging`) e ver o custo das texturas
+  de resolves recarregadas por frame (0072) — reativar o resolve só para a textura só nos
+  destinos que funcionam.

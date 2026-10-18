@@ -12,7 +12,7 @@ import com.dfdx047.dragonfury.drivers.DriverRepository
  * mais correcoes (GameActivity.turnipAutoFlags). Nivel guardado por driver (nome da pasta).
  */
 object TurnipCompat {
-    const val MAX_LEVEL = 3
+    const val MAX_LEVEL = 4
     private const val PREFIX = "turnip_auto_level:"
 
     @Suppress("DEPRECATION")
