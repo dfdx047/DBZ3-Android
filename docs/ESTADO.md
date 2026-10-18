@@ -1280,3 +1280,15 @@ traz as operações por concluir e o modo seguinte entra sozinho.
   Fora dos 6xx fica a escada antiga (`turnipAutoFlagsOther`). Níveis repostos (`turnip_levels_reset_070`).
 - Se o GMEM continuar a cair: suspeita na renderArea 1280x2048 inteira do modo seguro (0065) —
   com GMEM isso são ~3x mais tiles para carregar/guardar; testar `dbz3_tight_render_area` no A6xx.
+
+### 2026-10-18 20:50 — v0.6.11: Turnip A6xx em sysmem com área justa (patch 0074)
+- 0.6.10 no RP5 (zip 202447): nível 0 (GMEM + render passes clássicos) → DEVICE_LOST no menu com a
+  mesma submissão (passe 1280x2048, resolve, transferência 1280x2048, passe, resolve). Nível 1
+  (sysmem com LRZ/UBWC) funciona: luta ~33–34 fps (nível 2 dava ~27). Efeitos ligados.
+- Conclusão: no A6xx o GMEM do Turnip trava com este jogo; fica sysmem. Causa do GMEM por achar
+  (suspeitas: renderArea 1280x2048 inteira, resolves/compute entre passes).
+- 0074: `Dbz3TurnipA6xxSysmem()` (modo seguro + TU_DEBUG com "sysmem"): volta a renderArea justa,
+  o descarte da cor em sobrescritas completas e os timestamps da GPU (perf por categoria).
+- Opções da aba Depuração no Turnip A6xx: "sinais/LOD especializados" são ignorados (0067 força o
+  caminho original); "memória num só bloco" já é o padrão no Turnip (sem efeito); "resolve sem
+  memória"/render into texture ficam desligados (0072). As de render targets diretos valem.

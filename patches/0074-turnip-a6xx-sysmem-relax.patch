@@ -1,0 +1,79 @@
+diff --git a/include/rex/ui/vulkan/device.h b/include/rex/ui/vulkan/device.h
+index d6ee1f3..c76c786 100644
+--- a/include/rex/ui/vulkan/device.h
++++ b/include/rex/ui/vulkan/device.h
+@@ -24,6 +24,9 @@ namespace vulkan {
+ // aparelhos (cvar dbz3_turnip_a6xx_safe) esta ligado.
+ bool Dbz3IsTurnipA6xx();
+ bool Dbz3TurnipA6xxSafe();
++// 0074: modo seguro do Turnip A6xx com o driver em sysmem (TU_DEBUG com "sysmem", posto pelo
++// launcher): sem GMEM, a renderArea justa, o descarte da cor e os timestamps voltam a valer.
++bool Dbz3TurnipA6xxSysmem();
+ // Chamado pelo callback de debug do Vulkan quando o driver diz VK_ERROR_DEVICE_LOST (na thread
+ // que fez a chamada ao driver), antes de qualquer outra coisa: o command processor escreve o
+ // registo das operacoes por concluir (dbz3_gpulog) ali, porque a seguir o processo pode acabar.
+diff --git a/src/graphics/vulkan/command_processor.cpp b/src/graphics/vulkan/command_processor.cpp
+index 1ca0d80..2f7fa2a 100644
+--- a/src/graphics/vulkan/command_processor.cpp
++++ b/src/graphics/vulkan/command_processor.cpp
+@@ -374,8 +374,9 @@ void VulkanCommandProcessor::Dbz3AreaAdd(int32_t x0, int32_t y0, int32_t x1, int
+ void VulkanCommandProcessor::Dbz3AreaApplyBeforePassEnd() {
+   const bool active = dbz3_area_active_;
+   dbz3_area_active_ = false;
+-  // 0065: modo seguro do Turnip 6xx: renderArea inteira (como antes do 0049).
+-  if (ui::vulkan::Dbz3TurnipA6xxSafe()) {
++  // 0065: modo seguro do Turnip 6xx: renderArea inteira (como antes do 0049). 0074: em sysmem
++  // (sem GMEM) a area justa volta: os clears/loads de 1280x2048 custavam banda a cada passe.
++  if (ui::vulkan::Dbz3TurnipA6xxSafe() && !ui::vulkan::Dbz3TurnipA6xxSysmem()) {
+     return;
+   }
+   if (!active || !dbz3_area_has_ || !in_render_pass_ || !current_framebuffer_ ||
+@@ -2722,7 +2723,7 @@ void Init(const ui::vulkan::VulkanDevice* vulkan_device) {
+   const uint32_t family = vulkan_device->queue_family_graphics_compute();
+   // 0065: no Turnip dos Adreno 6xx o perfil (timestamps dentro dos command buffers do jogo) fica
+   // desligado no modo seguro.
+-  if (ui::vulkan::Dbz3TurnipA6xxSafe()) {
++  if (ui::vulkan::Dbz3TurnipA6xxSafe() && !ui::vulkan::Dbz3TurnipA6xxSysmem()) {
+     REXGPU_INFO("dbz3: gpu_ms indisponivel (Turnip num Adreno 6xx, modo seguro)");
+     return;
+   }
+@@ -5690,7 +5691,8 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
+     const uint64_t discard_vs = vertex_shader->ucode_data_hash();
+     const bool is_clear_vs = discard_vs == UINT64_C(0x1E6883FCCDE1F688);
+     const bool discard_candidate =
+-        REXCVAR_GET(dbz3_discard_full_overwrite) && !ui::vulkan::Dbz3TurnipA6xxSafe() &&
++        REXCVAR_GET(dbz3_discard_full_overwrite) &&
++        (!ui::vulkan::Dbz3TurnipA6xxSafe() || ui::vulkan::Dbz3TurnipA6xxSysmem()) &&
+         pixel_shader && !pixel_shader->kills_pixels() &&
+         !pixel_shader->writes_depth() && !memexport_used_vertex && !memexport_used_pixel &&
+         ((prim_type == xenos::PrimitiveType::kQuadList && index_count == 4) ||
+diff --git a/src/ui/vulkan/vulkan_device.cpp b/src/ui/vulkan/vulkan_device.cpp
+index c943d36..c5a7490 100644
+--- a/src/ui/vulkan/vulkan_device.cpp
++++ b/src/ui/vulkan/vulkan_device.cpp
+@@ -12,6 +12,7 @@
+ #include <algorithm>
+ #include <atomic>
+ #include <cctype>
++#include <cstdlib>
+ #include <cstring>
+ #include <string>
+ #include <unordered_map>
+@@ -93,6 +94,17 @@ bool Dbz3TurnipA6xxSafe() {
+   return REXCVAR_GET(dbz3_turnip_a6xx_safe) && g_dbz3_turnip_a6xx.load(std::memory_order_relaxed);
+ }
+ 
++bool Dbz3TurnipA6xxSysmem() {
++  if (!Dbz3TurnipA6xxSafe()) {
++    return false;
++  }
++  static const bool sysmem = [] {
++    const char* tu = std::getenv("TU_DEBUG");
++    return tu != nullptr && std::strstr(tu, "sysmem") != nullptr;
++  }();
++  return sysmem;
++}
++
+ template <typename Structure, VkStructureType StructureType>
+ struct VulkanFeatures {
+   Structure supported = {StructureType};

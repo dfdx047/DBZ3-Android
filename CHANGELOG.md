@@ -3,6 +3,16 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.11 — 2026-10-18
+
+### Turnip on Adreno 6xx
+- GMEM with classic render passes also crashed on the RP5 (same submission: 1280x2048 passes +
+  resolves), so Adreno 6xx stays on sysmem; mode 1 (sysmem with LRZ/UBWC) ran at ~34 fps in the
+  fight vs ~27 in mode 2.
+- In sysmem the safe mode now keeps the tight render area (clears/loads were done on the whole
+  1280x2048 EDRAM area every pass), the full-overwrite color discard and the GPU timestamps, so
+  the performance log shows where GPU time goes (SDK patch 0074).
+
 ## 0.6.10 — 2026-10-18
 
 ### Turnip on Adreno 6xx
