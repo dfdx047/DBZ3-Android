@@ -451,7 +451,7 @@
     <string name="error_details">Detalles</string>
     <string name="close">Cerrar</string>
     <string name="log_app_start">Dragon Fury %1$s iniciado (%2$s)</string>
-    <string name="log_device">Dispositivo: %1$s · Android %2$s · SoC %3$s · CPU ARMv8.2: %4$s</string>
+    <string name="log_device">Dispositivo: %1$s · Android %2$s · SoC %3$s · CPU ARMv8.2: %4$s · RAM %5$s</string>
     <string name="log_import_start">Importando el juego desde %1$s</string>
     <string name="log_import_file">Importando archivo: %1$s</string>
     <string name="log_import_ok">Importación terminada en %1$d s</string>

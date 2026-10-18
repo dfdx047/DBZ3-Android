@@ -32,6 +32,24 @@ object SystemCheck {
         return Cpu(missing == 0, features.size, missing, features.first())
     }
 
+    /** RAM do aparelho em MB (/proc/meminfo): total e disponivel agora. 0 se nao der para ler. */
+    data class Ram(val totalMb: Int, val availableMb: Int)
+
+    fun ram(): Ram = try {
+        var total = 0L
+        var avail = 0L
+        File("/proc/meminfo").forEachLine { line ->
+            val kb = line.substringAfter(':').trim().substringBefore(' ').toLongOrNull() ?: 0L
+            when {
+                line.startsWith("MemTotal:") -> total = kb
+                line.startsWith("MemAvailable:") -> avail = kb
+            }
+        }
+        Ram((total / 1024).toInt(), (avail / 1024).toInt())
+    } catch (e: Exception) {
+        Ram(0, 0)
+    }
+
     /** Fim anormal do processo do jogo. */
     data class GameExit(
         val reason: Int,

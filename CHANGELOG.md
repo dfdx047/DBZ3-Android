@@ -3,6 +3,14 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.13 — 2026-10-18
+
+### Fixes
+- Devices with little RAM (moto g05, Mali-G52, closed by Android for low memory while loading):
+  at 6 GB or less the texture cache is smaller (256/512 MB; 128/256 MB at 4.5 GB or less, Xenia's
+  default is 384/768 MB), so less memory is held by old textures. `cvars.txt` can still change it.
+- The device's RAM (total and free) is now in the launcher log and in the saved log.
+
 ## 0.6.12 — 2026-10-18
 
 ### Turnip on Adreno 6xx

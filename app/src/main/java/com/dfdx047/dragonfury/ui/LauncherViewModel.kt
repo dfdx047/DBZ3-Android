@@ -824,6 +824,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
                 android.os.Build.VERSION.RELEASE,
                 socName,
                 if (cpu.supported) "ok" else "NO (${cpu.coresWithoutAtomics}/${cpu.cores})",
+                SystemCheck.ram().let { "${it.totalMb} MB (${it.availableMb} MB / avail)" },
             )
             var c = GameConfig.load()
             // Render targets diretos: caminho principal de desempenho (e os interruptores

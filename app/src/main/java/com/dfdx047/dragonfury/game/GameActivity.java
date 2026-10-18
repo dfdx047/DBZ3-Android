@@ -70,6 +70,7 @@ public class GameActivity extends SDLActivity {
         // de cada vez que um pipeline faltava (travadinhas), e a sincrona custa
         // menos de 1 ms por frame com a cache do driver. O cvars.txt pode mudar.
         setEnv("REX_DBZ3_ASYNC_SHADERS", "false");
+        applyLowRamLimits();
         applyTurnipCompat();
         applyCvarOverrides(new File(appDir, "cvars.txt"));
         installCustomVulkanDriver(appDir);
@@ -561,6 +562,25 @@ public class GameActivity extends SDLActivity {
         } catch (IOException ignored) {
         }
         return libs[0].getName();
+    }
+
+    /**
+     * 0.6.13: aparelhos com pouca RAM (moto g05, 4 GB, Mali-G52: o Android fechou o jogo por falta
+     * de memoria ao carregar, 18/10). A GPU desses aparelhos usa a mesma RAM: a memoria do jogo
+     * (512 MB na GPU, sem sparse no Mali) + as texturas em cache. Abaixo de ~6 GB a cache de
+     * texturas fica mais pequena (o padrao do Xenia e 384/768 MB). O cvars.txt pode mudar.
+     */
+    private void applyLowRamLimits() {
+        com.dfdx047.dragonfury.data.SystemCheck.Ram ram = com.dfdx047.dragonfury.data.SystemCheck.INSTANCE.ram();
+        Log.i(TAG, "RAM: " + ram.getTotalMb() + " MB no total, " + ram.getAvailableMb() + " MB disponiveis");
+        if (ram.getTotalMb() <= 0 || ram.getTotalMb() > 6144) {
+            return;
+        }
+        boolean veryLow = ram.getTotalMb() <= 4608;
+        setEnv("REX_TEXTURE_CACHE_MEMORY_LIMIT_SOFT", veryLow ? "128" : "256");
+        setEnv("REX_TEXTURE_CACHE_MEMORY_LIMIT_HARD", veryLow ? "256" : "512");
+        setEnv("REX_TEXTURE_CACHE_MEMORY_LIMIT_SOFT_LIFETIME", veryLow ? "10" : "20");
+        Log.i(TAG, "Pouca RAM: cache de texturas limitada (" + (veryLow ? "128/256" : "256/512") + " MB)");
     }
 
     private void applyTurnipCompat() {
