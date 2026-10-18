@@ -470,19 +470,30 @@ public class GameActivity extends SDLActivity {
      * driver Turnip (VK_ERROR_DEVICE_LOST, ver SystemCheck.gpuLost no launcher), o launcher sobe
      * o nivel desse driver e o arranque seguinte junta mais correcoes. Por driver (nome da pasta
      * em driver/.source), para trocar de versao do Turnip comecar do zero.
-     *   0  nada (o modo seguro dos Adreno 6xx, patches 0065-0072, ja vem no runtime)
-     *   1  sem LRZ nem UBWC, texturas BC descomprimidas
-     *   2  + sem GMEM (sysmem: muito mais lento no Adreno)
-     *   3  + caminhos simples (sem dynamic rendering/stencil export), depth float32 e
-     *      sincronizacao total (lento, mas sem corridas entre comandos)
+     *   0  GMEM com render passes classicos (sem dynamic rendering), sem LRZ nem UBWC
+     *   1  sysmem (sem GMEM), com LRZ e UBWC
+     *   2  sysmem sem LRZ nem UBWC (o que funcionou no RP5 com 0.6.8/0.6.9)
+     *   3  + render passes classicos, depth float32 e sincronizacao total
      *   4  + memoria do jogo em 4 blocos, como o driver diz (pode ter defeitos de imagem)
-     * 0.6.9: o sysmem passou do nivel 1 para o 2. Com as correcoes do runtime (texturas no CPU,
-     * resolves com memoria) o Turnip ja desenha bem no RP5, e o sysmem era o que mais custava.
+     * Texturas BC sempre descomprimidas (o runtime ja o faz nos Adreno 6xx).
+     * 0.6.10: no RP5 (Turnip 26.3, 18/10 20:13) o GMEM com dynamic rendering travava a GPU no
+     * menu com e sem LRZ/UBWC (passes 1280x2048 + resolve); so o sysmem passou, mas e o modo
+     * mais lento no Adreno. O nivel 0 tenta o GMEM com render passes classicos e o 1 o sysmem
+     * com a compressao UBWC (menos banda) antes de cair no conjunto que se sabe que funciona.
      */
-    static int turnipAutoFlags(int level) {
+    /** Turnip fora dos Adreno 6xx: a escada antiga (1 sem GMEM/LRZ/UBWC, 2 + passes simples). */
+    static int turnipAutoFlagsOther(int level) {
         int flags = 0;
-        if (level >= 1) flags |= TURNIP_NOLRZ_UBWC | TURNIP_BC_DECOMPRESS;
-        if (level >= 2) flags |= TURNIP_SYSMEM;
+        if (level >= 1) flags |= TURNIP_SYSMEM | TURNIP_NOLRZ_UBWC | TURNIP_BC_DECOMPRESS;
+        if (level >= 2) flags |= TURNIP_SIMPLE_PASSES | TURNIP_FULL_SYNC | TURNIP_DEPTH_F32;
+        return flags;
+    }
+
+    static int turnipAutoFlags(int level) {
+        int flags = TURNIP_BC_DECOMPRESS;
+        if (level == 0) flags |= TURNIP_SIMPLE_PASSES | TURNIP_NOLRZ_UBWC;
+        if (level >= 1) flags |= TURNIP_SYSMEM;
+        if (level >= 2) flags |= TURNIP_NOLRZ_UBWC;
         if (level >= 3) flags |= TURNIP_SIMPLE_PASSES | TURNIP_FULL_SYNC | TURNIP_DEPTH_F32;
         return flags;
     }
@@ -564,17 +575,20 @@ public class GameActivity extends SDLActivity {
         }
         // 0.6.9: os niveis gravados pelas versoes anteriores (o 0.6.3 punha 1 = sysmem em todos
         // os Adreno 6xx) voltam a 0 uma vez; se a GPU cair, o launcher sobe outra vez.
-        if (!prefs.getBoolean("turnip_levels_reset_069", false)) {
+        if (!prefs.getBoolean("turnip_levels_reset_070", false)) {
             SharedPreferences.Editor ed = prefs.edit();
             for (String key : prefs.getAll().keySet()) {
                 if (key.startsWith("turnip_auto_level:")) ed.remove(key);
             }
-            ed.putBoolean("turnip_levels_reset_069", true).apply();
+            ed.putBoolean("turnip_levels_reset_070", true).apply();
         }
         int autoLevel = driver == null ? 0 : prefs.getInt("turnip_auto_level:" + driver, 0);
-        if (autoLevel > 0) {
-            flags |= turnipAutoFlags(autoLevel);
-            if (autoLevel >= 4) {
+        // Os niveis so valem para o Turnip num Adreno 6xx (nos 7xx/8xx o Turnip vai sem flags
+        // ate a GPU cair, como antes).
+        boolean a6xx = driver != null && isAdreno6xx();
+        if (driver != null && (autoLevel > 0 || a6xx)) {
+            flags |= a6xx ? turnipAutoFlags(autoLevel) : turnipAutoFlagsOther(autoLevel);
+            if (autoLevel >= (a6xx ? 4 : 3)) {
                 setEnv("REX_DBZ3_VK_TURNIP_SINGLE_SHARED_BUFFER", "false");
             }
             Log.i(TAG, "Turnip: modo de compatibilidade automatico " + autoLevel + " (" + driver + ")");

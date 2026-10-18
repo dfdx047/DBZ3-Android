@@ -3,6 +3,18 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.10 — 2026-10-18
+
+### Turnip on Adreno 6xx
+- 0.6.9 on the RP5: GMEM (render by tiles) with dynamic rendering crashed the GPU in the menu,
+  with and without LRZ/UBWC (1280x2048 passes + resolve in the GPU log); only sysmem worked, at
+  ~27 fps in fights. New automatic ladder for Adreno 6xx, saved modes reset once:
+  0 = GMEM with classic render passes (no dynamic rendering), no LRZ/UBWC;
+  1 = sysmem with LRZ and UBWC (less bandwidth than before);
+  2 = sysmem without LRZ/UBWC (what worked in 0.6.8/0.6.9);
+  3 = + full sync and float depth; 4 = split guest memory.
+  Turnip on Adreno 7xx/8xx keeps the old ladder.
+
 ## 0.6.9 — 2026-10-18
 
 ### Performance

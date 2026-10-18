@@ -45,8 +45,10 @@ GPU caía (VK_ERROR_DEVICE_LOST). Turnip em Adreno 7xx/8xx não tinha estes prob
 
 - **Não usar `TU_DEBUG=sysmem` por omissão.** Desliga o GMEM (render por tiles do Adreno) e foi o
   maior custo no RP5. Os crashes que levaram a usá-lo tinham outras causas (ver acima).
-- Ladder automático (sobe quando a GPU cai): 0 nada, 1 nolrz/noubwc + BC, 2 + sysmem,
-  3 + passes simples/sync total, 4 + memória do guest em 4 buffers.
+- No RP5 o GMEM com dynamic rendering travou a GPU (passes 1280x2048 + resolve), com e sem
+  LRZ/UBWC; só o sysmem funcionou (mas é o modo mais lento). Escada A6xx (0.6.10): 0 GMEM com
+  render passes clássicos + nolrz/noubwc, 1 sysmem com LRZ/UBWC, 2 sysmem nolrz/noubwc,
+  3 + sync total/depth f32, 4 + memória do guest em 4 buffers.
 - Efeitos pós (bloom/DOF/FXAA) pesam bastante num Adreno 650; testar desempenho com eles
   desligados e ligados em separado.
 

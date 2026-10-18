@@ -1268,3 +1268,15 @@ traz as operações por concluir e o modo seguinte entra sozinho.
 - Próximo, se ainda faltar: medir por categoria (`dbz3_perf_logging`) e ver o custo das texturas
   de resolves recarregadas por frame (0072) — reativar o resolve só para a textura só nos
   destinos que funcionam.
+
+### 2026-10-18 20:40 — v0.6.10: escada do Turnip A6xx (GMEM com render passes clássicos)
+- 0.6.9 no RP5 (zip 201436): nível 0 (sem flags) e nível 1 (nolrz/noubwc) → DEVICE_LOST no menu.
+  gpulog nas duas: submissão com "passe do jogo 1280x2048 (dynamic rendering)", resolve,
+  "passe de transferencia 1280x2048", passe, resolve. Nível 2 (sysmem) funcionou; luta ~27 fps,
+  GPU 80–90 % a 587–670 MHz, efeitos ligados (fx=true/true/true).
+- Escada nova só para Adreno 6xx (`turnipAutoFlags`): 0 GMEM + render passes clássicos
+  (REX_VULKAN_DYNAMIC_RENDERING=false) + nolrz/noubwc; 1 sysmem com LRZ/UBWC; 2 sysmem
+  nolrz/noubwc (o que funciona); 3 + flushall/syncdraw + depth f32; 4 + memória em 4 blocos.
+  Fora dos 6xx fica a escada antiga (`turnipAutoFlagsOther`). Níveis repostos (`turnip_levels_reset_070`).
+- Se o GMEM continuar a cair: suspeita na renderArea 1280x2048 inteira do modo seguro (0065) —
+  com GMEM isso são ~3x mais tiles para carregar/guardar; testar `dbz3_tight_render_area` no A6xx.
