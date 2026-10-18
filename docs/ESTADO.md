@@ -1109,3 +1109,28 @@ diferente?); `dbz3: dedupe:` e `dbz3: passo 4:` no log; perf a 720p vs 540p no C
   animação `GroundBurstAnimation` (chão a rachar, pedras, poeira, raios) no lugar do choque de ki.
 - Menu do jogo único com o tema do launcher (InGameMenu); `quick_menu_buttons = none` (toml e env);
   Select + Start abre/fecha o menu (GameActivity.dispatchKeyEvent).
+
+### 2026-10-18 — v0.6.1: menu do jogo por abas, abas com ícone, redes coloridas, bilinear padrão
+
+- Feedback do 0.6.0: launcher minimalista demais (cores ok, animação do chão ok). Abas de baixo
+  voltaram a ter ícone + nome (cápsula laranja na aba atual, faixa dourado→laranja→azul por cima,
+  rola sozinha até a aba atual). Redes: botão por rede na cor da marca com ícone num círculo
+  branco; `res/drawable/ic_social_<youtube|discord|github|kofi>` (opcional) substitui o ícone
+  genérico pelo logotipo oficial do kit de marca. Títulos dos cartões com o traço inclinado.
+- Menu do jogo (`InGameMenu.kt` + `MenuNav.kt`): abas Jogo/Vídeo/Efeitos/Áudio/Controles/
+  Depuração, painel opaco, linhas de 56dp, linha selecionada com borda dourada. Comando:
+  LB/RB abas, cruz/HAT/analógico esquerdo (com histerese) linhas e valores, A confirma, B volta
+  (cancela a confirmação de saída primeiro), Start fecha. `GameActivity.dispatchKeyEvent` →
+  `GameOverlay.onMenuKey` (consome todos os botões do comando com o menu aberto, Select também);
+  `dispatchGenericMotionEvent` → `onMenuMotion`. Gatilhos não trocam abas (alguns comandos mandam
+  tecla e eixo). Novo no menu: dithering, imagem 16:9/esticar, salvar log (LogExporter).
+- Filtro padrão `bilinear` (default e fallback do GameConfig; migração única
+  `bilinear_default_061`).
+- RP5 (SD865, Turnip_v26.3.0-R6 Purple, single shared buffer): log 15:49 → `tiron 8808 ms`, depois
+  `VK_ERROR_DEVICE_LOST` (tu_knl_kgsl.cc:1777) logo após carregar texturas grandes (mips
+  empacotados); o presenter fica em loop "Failed to submit command buffers"; saída CRASH_NATIVE
+  sinal 0. Driver do sistema (15:44) funciona. O launcher agora deteta (`SystemCheck.gpuLost`:
+  `dragonfury_last.log` mais novo que a última saída vista e com DEVICE_LOST) e explica.
+  Testes pedidos: compat Turnip (flag 64 = `TU_DEBUG=flushall,syncdraw`), Rutabaga, e
+  `dbz3_vk_turnip_single_shared_buffer = false` no `cvars.txt`.
+- Update: HTTP 404 do `releases/latest` = sem update (ainda não há releases).

@@ -62,6 +62,8 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
     private var compose: ComposeView? = null
     private val owner = OverlayOwner()
     private val screen = mutableStateOf(InGameScreen.CLOSED)
+    /** Aba e linha do menu do jogo (navegacao pelo comando). */
+    private val nav = MenuNav().also { n -> n.close = { resume() } }
     private val inputManager = activity.getSystemService(Context.INPUT_SERVICE) as InputManager
 
     /** Modo automatico: os controles estao a mostra (ultimo input foi toque). */
@@ -204,7 +206,7 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
             setContent {
                 DragonFuryTheme(themeMode = ThemeMode.DRAGON, darkMode = DarkMode.DARK) {
-                    InGameOverlay(screen.value, prefs, this@GameOverlay)
+                    InGameOverlay(screen.value, prefs, this@GameOverlay, nav)
                 }
             }
             visibility = View.GONE
@@ -297,7 +299,30 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
     /** Botao Back com o jogo a correr: abre o menu (engrenagem). */
     fun openMenu() = setScreen(InGameScreen.MENU)
 
+    /**
+     * Tecla de um comando com o menu aberto: navega no menu e nao chega ao jogo. No editor so o
+     * B volta. Devolve true se consumiu.
+     */
+    fun onMenuKey(event: KeyEvent): Boolean = when (screen.value) {
+        InGameScreen.MENU, InGameScreen.PORT -> nav.onKey(event)
+        InGameScreen.EDITOR -> if (event.keyCode == KeyEvent.KEYCODE_BUTTON_B) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) closeEditor()
+            true
+        } else {
+            false
+        }
+        InGameScreen.CLOSED -> false
+    }
+
+    /** Cruz/analogico com o menu aberto. */
+    fun onMenuMotion(event: MotionEvent): Boolean = when (screen.value) {
+        InGameScreen.MENU, InGameScreen.PORT -> nav.onMotion(event)
+        else -> false
+    }
+
     private fun setScreen(s: InGameScreen) {
+        // Abrir o menu a partir do jogo comeca na primeira aba (voltar do editor nao).
+        if (screen.value == InGameScreen.CLOSED && s != InGameScreen.CLOSED) nav.reset()
         screen.value = s
         compose?.visibility = if (s == InGameScreen.CLOSED) View.GONE else View.VISIBLE
         if (s != InGameScreen.CLOSED) {

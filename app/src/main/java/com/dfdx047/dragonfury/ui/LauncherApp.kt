@@ -56,6 +56,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -157,43 +162,73 @@ private fun Header() {
 }
 
 /**
- * Barra das abas em baixo (mais facil de alcancar com o polegar): so texto, a aba atual com um
- * traco laranja por cima. Rola na horizontal quando nao cabem todas.
+ * Barra das abas em baixo (mais facil de alcancar com o polegar), com icone e nome como as abas
+ * antigas. A aba atual ganha uma capsula laranja atras do icone e uma faixa de energia
+ * (dourado -> laranja -> azul) corre por cima da barra. Rola na horizontal quando nao cabem.
  */
 @Composable
 private fun BottomTabs(selected: LauncherTab, onSelect: (LauncherTab) -> Unit) {
-    val accent = MaterialTheme.colorScheme.primary
+    val scroll = rememberScrollState()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val itemWidth = 78.dp
+    // Mantem a aba atual a vista (ex.: aberta por um atalho de outra aba).
+    LaunchedEffect(selected) {
+        val px = with(density) { itemWidth.toPx() }
+        val target = (selected.ordinal * px - px * 1.5f).toInt().coerceIn(0, scroll.maxValue)
+        scroll.animateScrollTo(target)
+    }
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .height(48.dp)
-                .padding(horizontal = 4.dp),
+                .drawBehind {
+                    drawRect(
+                        Brush.horizontalGradient(listOf(DfColors.Gold, DfColors.Orange, DfColors.KiBlue.copy(alpha = 0.6f))),
+                        size = androidx.compose.ui.geometry.Size(size.width, 2.dp.toPx()),
+                    )
+                }
+                .horizontalScroll(scroll)
+                .padding(horizontal = 4.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             LauncherTab.entries.forEach { t ->
                 val on = t == selected
-                Box(
+                val pill by androidx.compose.animation.core.animateFloatAsState(if (on) 1f else 0f, label = "tab")
+                Column(
                     Modifier
-                        .fillMaxHeight()
+                        .width(itemWidth)
+                        .clip(RoundedCornerShape(12.dp))
                         .clickable { onSelect(t) }
-                        .drawBehind {
-                            if (on) {
-                                drawRect(
-                                    accent,
-                                    size = androidx.compose.ui.geometry.Size(size.width, 3.dp.toPx()),
-                                )
-                            }
-                        }
-                        .padding(horizontal = 14.dp),
-                    contentAlignment = Alignment.Center,
+                        .padding(vertical = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
+                    Box(
+                        Modifier
+                            .size(width = 52.dp, height = 30.dp)
+                            .graphicsLayer { alpha = 0.25f + 0.75f * pill }
+                            .background(
+                                if (on) Brush.horizontalGradient(listOf(DfColors.Gold, DfColors.Orange))
+                                else Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent)),
+                                RoundedCornerShape(50),
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            t.icon,
+                            null,
+                            tint = if (on) Color(0xFF2B1000) else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
                     Text(
                         stringResource(t.title),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (on) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
+                        color = if (on) DfColors.Gold else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 3.dp),
                     )
                 }
             }

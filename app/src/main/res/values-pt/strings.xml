@@ -337,7 +337,7 @@
     <string name="settings_perf_log">Diagnóstico de desempenho</string>
     <string name="settings_perf_log_sub">A cada 5 s o log regista os FPS, o tempo de GPU por frame e o clock e a carga da GPU. Leve; use para reportar travadinhas.</string>
     <string name="ingame_exit">Sair para o launcher</string>
-    <string name="ingame_exit_confirm">Toque de novo para sair</string>
+    <string name="ingame_exit_confirm">Confirme de novo para sair</string>
     <string name="settings_direct_resolve">Atalho dos efeitos</string>
     <string name="settings_direct_resolve_sub">Copia os efeitos de tela inteira direto para a textura, sem duas conversões. Menos carga na GPU.</string>
     <string name="settings_direct_resolve_fast">Atalho dos efeitos: modo rápido</string>
@@ -498,4 +498,20 @@
     <string name="ingame_section_sound">Som e controle</string>
     <string name="ingame_restart_note">Resolução, FPS, MSAA, filtro de texturas e idioma do jogo ficam no launcher (valem quando o jogo abre).</string>
     <string name="ingame_effects_note">Desligar dá mais FPS em GPUs fracas; muda a imagem.</string>
+    <string name="ingame_tab_game">Jogo</string>
+    <string name="ingame_tab_video">Vídeo</string>
+    <string name="ingame_tab_effects">Efeitos</string>
+    <string name="ingame_tab_audio">Áudio</string>
+    <string name="ingame_tab_controls">Controles</string>
+    <string name="ingame_tab_debug">Depuração</string>
+    <string name="ingame_nav_hint">LB / RB abas · ↑ ↓ escolher · ← → mudar · A confirmar · B voltar</string>
+    <string name="ingame_edit_touch">Editar controles por toque</string>
+    <string name="ingame_touch_mode">Controles por toque na tela</string>
+    <string name="on">Ligado</string>
+    <string name="ingame_log_saved">Log salvo em Downloads: %1$s — mande no Discord</string>
+    <string name="ingame_log_failed">Não deu para salvar o log</string>
+    <string name="ingame_saving">Salvando…</string>
+    <string name="driver_system_name">driver do sistema</string>
+    <string name="err_game_gpu_lost">O driver de vídeo parou de funcionar (%1$s): a GPU travou ou falhou (VK_ERROR_DEVICE_LOST). Isso costuma vir do driver, não do jogo. Na aba Drivers, teste o driver do sistema ou outra versão do Turnip (ou a opção de compatibilidade do Turnip). Se continuar, salve o log e mande no Discord.</string>
+    <string name="log_game_gpu_lost">A GPU caiu durante o jogo (VK_ERROR_DEVICE_LOST), driver: %1$s</string>
 </resources>

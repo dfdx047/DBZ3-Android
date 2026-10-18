@@ -74,11 +74,17 @@ fun SectionCard(
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Column {
-                Text(
-                    title.uppercase(),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Traco inclinado dourado -> laranja antes do titulo (um toque de energia).
+                    SlantStripe(Modifier.size(width = 18.dp, height = 6.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        title.uppercase(),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
                 if (subtitle != null) {
                     Text(
                         subtitle,
@@ -101,10 +107,10 @@ fun OrbIcon(icon: ImageVector, modifier: Modifier = Modifier) {
     }
 }
 
-/** Traco curto de destaque (antes uma faixa inclinada em degrade). */
+/** Traco curto inclinado, em degrade dourado -> laranja. */
 @Composable
 fun SlantStripe(modifier: Modifier = Modifier) {
-    val color = MaterialTheme.colorScheme.primary
+    val color = Brush.horizontalGradient(listOf(DfColors.Gold, DfColors.Orange))
     Box(
         modifier.drawBehind {
             val slant = size.height

@@ -190,6 +190,10 @@ public class GameActivity extends SDLActivity {
         // Select + Start no controle: abre (ou fecha) o menu do jogo. O Start nao chega ao jogo.
         if (event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_SELECT) {
             mSelectHeld = event.getAction() == KeyEvent.ACTION_DOWN;
+            // Com o menu aberto o Select nao vai para o jogo.
+            if (mOverlay != null && mOverlay.isMenuOpen()) {
+                return true;
+            }
         } else if (mOverlay != null && mSelectHeld && event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_START) {
             if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
                 if (mOverlay.isMenuOpen()) {
@@ -198,6 +202,10 @@ public class GameActivity extends SDLActivity {
                     mOverlay.openMenu();
                 }
             }
+            return true;
+        }
+        // Menu aberto: o comando navega no menu (abas, linhas, valores) e nada chega ao jogo.
+        if (mOverlay != null && mOverlay.onMenuKey(event)) {
             return true;
         }
         // Back (o botao Back do Odin e de outros portateis, ou o gesto de voltar):
@@ -219,6 +227,9 @@ public class GameActivity extends SDLActivity {
     public boolean dispatchGenericMotionEvent(MotionEvent event) {
         if (mOverlay != null) {
             mOverlay.onPhysicalInput(event);
+            if (mOverlay.onMenuMotion(event)) {
+                return true;
+            }
         }
         return super.dispatchGenericMotionEvent(event);
     }

@@ -41,7 +41,14 @@ object UpdateChecker {
 
     /** null = ja esta na ultima versao. Lanca excecao se nao der para verificar. */
     fun check(): UpdateInfo? {
-        val r = JSONObject(Http.getText(LATEST))
+        // 404: o repositorio ainda nao tem nenhuma versao publicada (ou e privado) -> sem update.
+        val text = try {
+            Http.getText(LATEST)
+        } catch (e: java.io.IOException) {
+            if (e.message == "HTTP 404") return null
+            throw e
+        }
+        val r = JSONObject(text)
         val tag = r.optString("tag_name").removePrefix("v").removePrefix("V")
         if (tag.isBlank() || !isNewer(tag, currentVersion())) return null
         val body = r.optString("body")

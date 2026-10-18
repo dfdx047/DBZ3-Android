@@ -337,7 +337,7 @@
     <string name="settings_perf_log">Diagnóstico de rendimiento</string>
     <string name="settings_perf_log_sub">Cada 5 s el log registra los FPS, el tiempo de GPU por frame y la frecuencia y carga de la GPU. Es ligero; úsalo para reportar tirones.</string>
     <string name="ingame_exit">Salir al launcher</string>
-    <string name="ingame_exit_confirm">Toca de nuevo para salir</string>
+    <string name="ingame_exit_confirm">Confirma otra vez para salir</string>
     <string name="settings_direct_resolve">Atajo de efectos</string>
     <string name="settings_direct_resolve_sub">Copia los efectos de pantalla completa directamente a la textura, saltándose dos conversiones. Menos carga de GPU.</string>
     <string name="settings_direct_resolve_fast">Atajo de efectos: modo rápido</string>
@@ -498,4 +498,20 @@
     <string name="ingame_section_sound">Sonido y mando</string>
     <string name="ingame_restart_note">Resolución, FPS, MSAA, filtrado de texturas e idioma del juego están en el launcher (se aplican al abrir el juego).</string>
     <string name="ingame_effects_note">Apagarlos da más FPS en GPU débiles; cambia la imagen.</string>
+    <string name="ingame_tab_game">Juego</string>
+    <string name="ingame_tab_video">Vídeo</string>
+    <string name="ingame_tab_effects">Efectos</string>
+    <string name="ingame_tab_audio">Audio</string>
+    <string name="ingame_tab_controls">Controles</string>
+    <string name="ingame_tab_debug">Depuración</string>
+    <string name="ingame_nav_hint">LB / RB pestañas · ↑ ↓ elegir · ← → cambiar · A confirmar · B volver</string>
+    <string name="ingame_edit_touch">Editar controles táctiles</string>
+    <string name="ingame_touch_mode">Controles táctiles en pantalla</string>
+    <string name="on">Activado</string>
+    <string name="ingame_log_saved">Log guardado en Descargas: %1$s — envíalo en Discord</string>
+    <string name="ingame_log_failed">No se pudo guardar el log</string>
+    <string name="ingame_saving">Guardando…</string>
+    <string name="driver_system_name">driver del sistema</string>
+    <string name="err_game_gpu_lost">El driver gráfico dejó de funcionar (%1$s): la GPU falló o se colgó (VK_ERROR_DEVICE_LOST). Esto suele venir del driver, no del juego. En la pestaña Drivers, prueba el driver del sistema u otra versión de Turnip (o la opción de compatibilidad de Turnip). Si sigue pasando, guarda el log y envíalo en Discord.</string>
+    <string name="log_game_gpu_lost">La GPU falló durante el juego (VK_ERROR_DEVICE_LOST), driver: %1$s</string>
 </resources>

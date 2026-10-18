@@ -93,6 +93,20 @@ object SystemCheck {
         )
     }
 
+    /**
+     * A GPU caiu na ultima sessao (VK_ERROR_DEVICE_LOST: o driver deu "GPU faulted or hung").
+     * Visto no Retroid Pocket 5 com um Turnip; o jogo fica preso a falhar o present e nem
+     * sempre termina com um crash, por isso olha-se para o log do runtime.
+     */
+    fun gpuLost(sinceMs: Long): Boolean = try {
+        val f = AppPaths.lastRunLog
+        f.isFile && f.lastModified() > sinceMs && f.useLines { lines ->
+            lines.any { "VK_ERROR_DEVICE_LOST" in it || "GPU faulted or hung" in it }
+        }
+    } catch (e: Exception) {
+        false
+    }
+
     /** As ultimas linhas de aviso/erro do log do runtime (para a tela de erro). */
     fun lastRuntimeErrors(max: Int = 6): List<String> = try {
         AppPaths.lastRunLog.takeIf { it.isFile }?.readLines()

@@ -20,7 +20,7 @@ data class GameConfig(
     // Abaixo de 720p (patches 0055: draw_resolution_percent no Vulkan + atalhos exatos): 100, 75
     // (540p, todos os tamanhos do Budokai 3 exatos) ou 50 (360p). So com resolutionScale = 1.
     val resolutionPercent: Int = 100,         // draw_resolution_percent
-    val presentEffect: String = "fsr",        // dbz3_present_effect bilinear|cas|fsr
+    val presentEffect: String = "bilinear",        // dbz3_present_effect bilinear|cas|fsr
     val fsrRender: String = "native",         // dbz3_fsr_render native|quality|balanced|performance|ultra_performance
     val fsrSharpness: Double = 0.2,           // dbz3_fsr_sharpness 0-2 (0 = mais nitido)
     val casSharpness: Double = 0.0,           // dbz3_cas_sharpness 0-1
@@ -170,7 +170,7 @@ data class GameConfig(
                 resolutionScale = int("dbz3_resolution_scale", d.resolutionScale).coerceIn(1, MAX_RESOLUTION_SCALE),
                 resolutionPercent = int("draw_resolution_percent", d.resolutionPercent).let { if (it in PERCENTS) it else 100 },
                 // fsr3/dlss vindos do PC caem para o FSR 1, que funciona no Vulkan.
-                presentEffect = str("dbz3_present_effect", d.presentEffect).let { if (it in EFFECTS) it else "fsr" },
+                presentEffect = str("dbz3_present_effect", d.presentEffect).let { if (it in EFFECTS) it else "bilinear" },
                 fsrRender = str("dbz3_fsr_render", d.fsrRender).let { if (it in FSR_RENDER) it else "native" },
                 fsrSharpness = dbl("dbz3_fsr_sharpness", d.fsrSharpness),
                 casSharpness = dbl("dbz3_cas_sharpness", d.casSharpness),

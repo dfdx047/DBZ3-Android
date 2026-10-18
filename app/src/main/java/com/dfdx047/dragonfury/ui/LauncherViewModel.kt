@@ -232,14 +232,32 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
             prefs.lastGameExitSeen = System.currentTimeMillis()
             return
         }
-        val exit = SystemCheck.lastGameExit(ctx, since) ?: return
-        prefs.lastGameExitSeen = exit.timestamp
+        val found = SystemCheck.lastGameExit(ctx, since)
+        val gpuLost = SystemCheck.gpuLost(since)
+        if (found == null && !gpuLost) return
+        prefs.lastGameExitSeen = found?.timestamp ?: System.currentTimeMillis()
         val runtime = SystemCheck.lastRuntimeErrors()
         val detail = buildString {
-            append(exit.reasonName())
-            if (exit.description.isNotBlank()) append(" · ").append(exit.description)
+            if (found != null) {
+                append(found.reasonName())
+                if (found.description.isNotBlank()) append(" · ").append(found.description)
+            } else {
+                append("VK_ERROR_DEVICE_LOST")
+            }
             runtime.forEach { append('\n').append(it) }
         }
+        if (gpuLost) {
+            // A GPU caiu: o problema e o driver (ou a GPU), nao o port em si.
+            AppLog.e(R.string.log_game_gpu_lost, null, activeDriver ?: "system")
+            fail(
+                R.string.err_title_game,
+                R.string.err_game_gpu_lost,
+                activeDriver ?: getApplication<Application>().getString(R.string.driver_system_name),
+                detail = detail,
+            )
+            return
+        }
+        val exit = found ?: return
         AppLog.e(R.string.log_game_exit, null, exit.reasonName(), exit.description)
         val cpu = SystemCheck.cpu()
         when {
@@ -810,6 +828,11 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
             if (!prefs.maliPresetApplied) {
                 if (DriverRepository.isMali()) c = c.withMaliPreset().copy(rtDirect = true)
                 prefs.maliPresetApplied = true
+            }
+            // 0.6.1: bilinear passa a ser o filtro padrao (o AMD FSR custa muito desempenho).
+            if (!prefs.bilinearMigrated) {
+                c = c.copy(presentEffect = "bilinear")
+                prefs.bilinearMigrated = true
             }
             val loaded = c
             AppLog.i(R.string.log_settings, "${loaded.resolutionChoice} fps=${loaded.frameCap} " +

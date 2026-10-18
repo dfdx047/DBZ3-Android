@@ -3,6 +3,25 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.1 — 2026-10-18
+
+### Changed
+- In-game menu rebuilt with tabs (Game, Video, Effects, Audio, Controls, Debug), large readable
+  rows on an opaque panel, and full controller navigation: LB/RB switch tabs, D-pad or left stick
+  move and change values, A confirms, B goes back, Start closes. Touch works on every row too.
+  It now also has dithering, image mode (16:9 / stretch), texture packs and **Save log**.
+- Bottom tab bar now uses icons and names again, with an orange highlight on the current tab.
+- Community links are colored buttons for each network (YouTube, Discord, GitHub, Ko-fi).
+- Section titles get a small gold-orange stripe again.
+- Default upscaling filter is now **Bilinear** (AMD FSR costs a lot of GPU time); existing
+  installs are switched once to Bilinear.
+
+### Fixes
+- When the GPU crashes or hangs during the game (`VK_ERROR_DEVICE_LOST`, seen on the Retroid
+  Pocket 5 with a Turnip driver) the launcher now explains it and suggests the system driver or
+  another Turnip version.
+- Update check no longer shows an error when the repository has no published release yet.
+
 ## 0.6.0 — 2026-10-18
 
 ### New
