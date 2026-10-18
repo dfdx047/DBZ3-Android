@@ -1203,3 +1203,18 @@ traz as operações por concluir e o modo seguinte entra sozinho.
   caminho original, gradientes explícitos e captura sem leitura de volta.
 - Por fazer para o Turnip 6xx voltar: captura com o driver do sistema e com o Turnip no mesmo
   sítio e comparar as texturas carregadas (falta registar o conteúdo das texturas na captura).
+
+### 2026-10-18 17:40 — v0.6.5: texturas na captura (patch 0068)
+- Registo 9 (TEXTURE) na .dfc: etapa 0 = saída do shader de carga (cópia do scratch para um buffer
+  de leitura), etapa 1 = nível 0 da imagem (CopyImageToBuffer, novo comando diferido
+  `kVkCopyImageToBuffer`; barreiras TRANSFER_DST→SRC→DST). Só no 1.º frame, até 160 texturas /
+  192 MB; lidas no swap desse frame (AwaitAllQueueOperationsCompletion).
+- No início da captura `TextureCache::Dbz3ReloadAllForCapture` marca todas as texturas para
+  recarregar (tira as vigias da memória), salvo as 2D tiled sem mips (destinos possíveis de
+  resolves sem cópia na memória) e as de resolve com escala.
+- `tools/dfc_textures.py cap.dfc [--png pasta] [--compare outra.dfc]`: por textura, se a imagem
+  é igual à saída da carga (senão: "CÓPIA PARA A IMAGEM ERRADA") e se a carga é igual à da
+  captura com o outro driver. Leitura: carga igual mas imagem diferente → cópia do Turnip;
+  carga diferente → shader de carga (compute/SSBO) no Turnip; tudo igual → amostragem.
+- Procedimento: mesma luta/cena, captura com o driver do sistema; ligar "Usar o Turnip mesmo
+  assim" na aba Drivers; captura no mesmo sítio; salvar log.

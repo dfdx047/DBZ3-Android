@@ -3,6 +3,15 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.5 — 2026-10-18
+
+### Diagnostics
+- Frame captures now record the textures the GPU loaded (SDK patch 0068): when a capture starts,
+  textures are reloaded from memory and, for each one, the output of the load shader and the
+  Vulkan image after the copy are read back and saved. `tools/dfc_textures.py` compares them and
+  compares two captures of the same scene (system driver vs Turnip), to find where Turnip on
+  Adreno 6xx breaks the textures.
+
 ## 0.6.4 — 2026-10-18
 
 ### Changed
