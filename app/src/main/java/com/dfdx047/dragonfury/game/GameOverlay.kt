@@ -104,6 +104,7 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
         }
         engine.onMapChanged = { map ->
             onMap = map
+            applyMapSkyFix()
             view?.let {
                 it.releaseAll()
                 it.layout = currentLayout()
@@ -384,6 +385,29 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
     override fun openPortOptions() = setScreen(InGameScreen.PORT)
 
     override fun isInBattle(): Boolean = inBattle
+
+    /**
+     * 0.6.19: o ceu do mapa do Dragon Universe so sai certo sem os render targets diretos
+     * (autotestes no mapa, RP5 18/10 21:55 e 22:30: com eles fica branco ou com manchas pretas).
+     * No mapa desligam-se ao vivo e voltam ao sair dele; custa GPU so ali (14 -> 28 ms no RP5).
+     */
+    private var mapRtDirectOff = false
+
+    private fun applyMapSkyFix() {
+        if (selfTest != null) return
+        val want = onMap && prefs.mapSkyFix && GameConfig.load().rtDirect
+        if (want == mapRtDirectOff) return
+        mapRtDirectOff = want
+        NativeGameState.setCvarsLive(mapOf("dbz3_rt_direct" to (!want).toString()))
+        engine.diag?.invoke("mapa: render targets diretos " + if (want) "desligados (ceu)" else "de volta")
+    }
+
+    override fun isMapSkyFix(): Boolean = prefs.mapSkyFix
+
+    override fun setMapSkyFix(on: Boolean) {
+        prefs.mapSkyFix = on
+        applyMapSkyFix()
+    }
 
     /** Menu rapido classico do PC: fecha o nosso e carrega Back + Start. */
     override fun openPortMenu() {

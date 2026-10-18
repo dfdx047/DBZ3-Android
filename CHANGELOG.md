@@ -3,6 +3,15 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.19 — 2026-10-18
+
+### Fixes
+- **Dragon Universe sky, for real**: the self-test on the map with 0.6.16 showed the sky white
+  without "Clear 4x straight to 1x" and with black patches with it; it is only correct with direct
+  render targets off. Direct render targets are now switched off live while flying on the map and
+  back on when leaving it (the map costs more GPU: ~14 → 28 ms per frame on the RP5; fights
+  unchanged). In-game menu › Video: "Correct sky on the Dragon Universe map" (on by default).
+
 ## 0.6.18 — 2026-10-18
 
 ### Touch controls

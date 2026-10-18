@@ -418,6 +418,7 @@
     <string name="about_port_text">O Dragon Fury leva essa recompilação para o Android: launcher próprio (importar do .iso, mods, texturas, drivers), controles por toque e um caminho de GPU feito para as GPUs de celular (Adreno e Mali), com drivers Turnip opcionais.</string>
     <string name="about_credits_title">Créditos e licença</string>
     <string name="about_license">Projeto original © 2026 NovaPowers, licença MIT. Port Android por dfdx047.</string>
+    <string name="ingame_map_sky_fix">Céu certo no mapa do Dragon Universe (mais pesado ali)</string>
     <string name="ingame_selftest">Autoteste do render (diagnóstico)</string>
     <string name="ingame_selftest_only_fight">Congela a cena atual (luta, mapa do Dragon Universe, menus), troca cada otimização e compara (~3 min). No fim os logs vão para Download/.</string>
     <string name="perf_fps_title">Taxa de quadros</string>

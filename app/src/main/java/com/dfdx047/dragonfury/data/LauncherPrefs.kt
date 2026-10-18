@@ -79,6 +79,11 @@ class LauncherPrefs(context: Context) {
         get() = prefs.getBoolean(KEY_PAUSE_MENUS, true)
         set(v) = prefs.edit().putBoolean(KEY_PAUSE_MENUS, v).apply()
 
+    /** 0.6.19: no mapa do Dragon Universe desliga os render targets diretos (ceu certo, mais GPU). */
+    var mapSkyFix: Boolean
+        get() = prefs.getBoolean(KEY_MAP_SKY_FIX, true)
+        set(v) = prefs.edit().putBoolean(KEY_MAP_SKY_FIX, v).apply()
+
     var touchMode: TouchMode
         get() {
             val v = prefs.getString(KEY_TOUCH_MODE, null)
@@ -152,6 +157,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_DIRECTIONAL = "touch_directional"
         const val KEY_BADGE = "touch_badge"
         const val KEY_PAUSE_MENUS = "pause_on_menus"
+        const val KEY_MAP_SKY_FIX = "map_sky_fix"
         const val KEY_TOUCH_MODE = "touch_mode"
         const val KEY_TOUCH_ENABLED = "touch_enabled"
         const val KEY_TOUCH_HIDE_WITH_PAD = "touch_hide_with_pad"

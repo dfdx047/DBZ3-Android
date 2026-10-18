@@ -129,6 +129,9 @@ interface InGameActions {
     fun captureFrames()
     /** Autoteste do render (RenderSelfTest): so numa luta. Devolve false se nao deu para comecar. */
     fun startSelfTest(): Boolean = false
+    /** Ceu certo no mapa do Dragon Universe (render targets diretos desligados so no mapa). */
+    fun isMapSkyFix(): Boolean = true
+    fun setMapSkyFix(on: Boolean) {}
 }
 
 /**
@@ -186,6 +189,7 @@ private fun GameMenuPanel(prefs: LauncherPrefs, actions: InGameActions, nav: Men
     var haptics by remember { mutableStateOf(prefs.touchHaptics) }
     var confirmExit by remember { mutableStateOf(false) }
     var selfTestRefused by remember { mutableStateOf(false) }
+    var mapSkyFix by remember { mutableStateOf(actions.isMapSkyFix()) }
     var logStatus by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -258,6 +262,10 @@ private fun GameMenuPanel(prefs: LauncherPrefs, actions: InGameActions, nav: Men
             })
             add(MItem.Toggle(stringResource(R.string.settings_show_fps), c.showFps) {
                 set(c.copy(showFps = it), mapOf("dbz3_show_fps" to it.toString()))
+            })
+            add(MItem.Toggle(stringResource(R.string.ingame_map_sky_fix), mapSkyFix, enabled = c.rtDirect) {
+                mapSkyFix = it
+                actions.setMapSkyFix(it)
             })
         }
         MenuTab.EFFECTS -> listOf(
