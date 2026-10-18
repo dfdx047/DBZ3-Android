@@ -1,0 +1,62 @@
+diff --git a/src/graphics/vulkan/texture_cache.cpp b/src/graphics/vulkan/texture_cache.cpp
+index e3ca274..a14b918 100644
+--- a/src/graphics/vulkan/texture_cache.cpp
++++ b/src/graphics/vulkan/texture_cache.cpp
+@@ -2213,10 +2213,23 @@ bool VulkanTextureCache::Dbz3CpuLoadTexture(Texture& texture_base, uint32_t leve
+                                             uint32_t level_last) {
+   VulkanTexture& texture = static_cast<VulkanTexture&>(texture_base);
+   const TextureKey key = texture.key();
++  // 0070: porque a textura ficou no caminho da GPU (uma linha por formato e motivo).
++  auto gpu_path = [&key](const char* why) {
++    static std::vector<uint32_t> seen;
++    uint32_t sig = uint32_t(key.format);
++    for (const char* c = why; *c; ++c) sig = sig * 31 + uint8_t(*c);
++    if (seen.size() < 64 && std::find(seen.begin(), seen.end(), sig) == seen.end()) {
++      seen.push_back(sig);
++      REXGPU_INFO("dbz3: textura {}x{} fmt={} dim={} tiled={} base={:08X} no caminho da GPU: {}",
++                  key.GetWidth(), key.GetHeight(), uint32_t(key.format), uint32_t(key.dimension),
++                  uint32_t(key.tiled), uint32_t(key.base_page) << 12, why);
++    }
++    return false;
++  };
+   if (key.scaled_resolve || key.dimension != xenos::DataDimension::k2DOrStacked ||
+       key.GetDepthOrArraySize() != 1 || level_first > level_last ||
+       level_last > key.mip_max_level) {
+-    return false;
++    return gpu_path("3D/cubo/array/escala");
+   }
+   const HostFormatPair& host_format_pair = GetHostFormatPair(key);
+   bool host_format_is_signed;
+@@ -2228,7 +2241,7 @@ bool VulkanTextureCache::Dbz3CpuLoadTexture(Texture& texture_base, uint32_t leve
+   const HostFormat& host_format =
+       host_format_is_signed ? host_format_pair.format_signed : host_format_pair.format_unsigned;
+   if (host_format.format == VK_FORMAT_UNDEFINED) {
+-    return false;
++    return gpu_path("formato host indefinido");
+   }
+   const FormatInfo* format_info = FormatInfo::Get(key.format);
+   if (!format_info) {
+@@ -2284,7 +2297,7 @@ bool VulkanTextureCache::Dbz3CpuLoadTexture(Texture& texture_base, uint32_t leve
+       out_texel_bytes = 4;
+       break;
+     default:
+-      return false;
++      return gpu_path("shader de carga sem versao CPU");
+   }
+   if (convert != Convert::kCopy && convert != Convert::kR5G6B5 && convert != Convert::kRGBA4) {
+     const uint32_t expected_bytes = (convert == Convert::kDxt1 || convert == Convert::kDxt5A) ? 8 : 16;
+@@ -2303,12 +2316,12 @@ bool VulkanTextureCache::Dbz3CpuLoadTexture(Texture& texture_base, uint32_t leve
+   const uint32_t mips_address = uint32_t(key.mip_page) << 12;
+   if (level_first == 0 &&
+       memory.Dbz3RangeHasGpuWrittenPages(base_address, texture.GetGuestBaseSize())) {
+-    return false;
++    return gpu_path("base escrita pela GPU (resolve)");
+   }
+   if (level_last != 0 &&
+       (!mips_address || !texture.GetGuestMipsSize() ||
+        memory.Dbz3RangeHasGpuWrittenPages(mips_address, texture.GetGuestMipsSize()))) {
+-    return false;
++    return gpu_path("mips escritos pela GPU ou sem endereco");
+   }
+ 
+   const texture_util::TextureGuestLayout& guest_layout = texture.guest_layout();

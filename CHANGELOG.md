@@ -3,6 +3,18 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.7 — 2026-10-18
+
+### Fixes
+- **Turnip on Adreno 6xx: HUD, menus and effects.** With 0.6.6 the fights render with textures
+  on Turnip; what was still missing (HUD, menus, striped effects) are textures produced by the GPU
+  (resolves), which still went through the texture-load compute shaders. On Adreno 6xx, Turnip
+  reads read-only storage buffers with `isam`, and vector reads (uvec4/uvec2) came back wrong.
+  Internal compute shaders now mark those buffers `Coherent` instead of `NonWritable` on Turnip
+  + Adreno 6xx, so the driver uses plain buffer loads (SDK patch 0070).
+- The log lists textures that still take the GPU load path on Turnip + Adreno 6xx, with the
+  reason (SDK patch 0071).
+
 ## 0.6.6 — 2026-10-18
 
 ### Fixes

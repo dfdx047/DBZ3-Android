@@ -1233,3 +1233,16 @@ traz as operações por concluir e o modo seguinte entra sozinho.
   (GBGR, 10_11_11, profundidade...) e texturas com páginas escritas pela GPU
   (`SharedMemory::Dbz3RangeHasGpuWrittenPages`: a memória do CPU não tem os resolves).
 - Log: "dbz3: textura carregada no CPU WxH fmt=..." (12 primeiras).
+
+### 2026-10-18 20:10 — v0.6.7: Turnip A6xx sem isam nos compute shaders (patches 0070/0071)
+- Autoteste com 0.6.6 (zip 192152, Turnip Mesa 26.3 no RP5): a luta já sai com texturas (cenário,
+  lutadores, céu). Falta o HUD e os menus; o HUD aparece só com `dbz3_direct_resolve_texture=0`
+  (às riscas) ou `dbz3_direct_resolve_skip_memory=false` → o que falta são texturas que vêm de
+  resolves (páginas escritas pela GPU), que continuam nos compute shaders de carga.
+- Conclusão: o que falha no Turnip A6xx são as leituras de SSBO `NonWritable` em vetor (uvec4 nos
+  shaders de carga; o ir3 usa `isam` pelo descritor de textura do buffer). As leituras escalares
+  (uint[] da memória partilhada nos shaders do jogo) funcionam.
+- 0070: `ui::vulkan::util::CreateComputePipeline` (versão com código SPIR-V) troca as decorações
+  NonWritable (24) por Coherent (23) em OpDecorate/OpMemberDecorate no Turnip A6xx → ldib.
+- 0071: linha "dbz3: textura WxH fmt=… no caminho da GPU: <motivo>" (uma por formato/motivo).
+- As texturas 960x720 + 2×480x360 fmt=2 (k_8) carregadas no CPU são os planos Y/U/V dos vídeos.
