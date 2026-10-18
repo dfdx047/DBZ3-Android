@@ -3,6 +3,16 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.18 — 2026-10-18
+
+### Touch controls
+- **Menu layout with the whole controller**: it only had A, Y and Select. The game's menus use
+  A (confirm), Y (back), X (TAG TEAM on the main menu and other screens), B, LT/RT (change form
+  on character select, "LT Previous / RT Next"), LB/RB (pages in lists), Back (help) and Start.
+  Same look and arrangement as the fight and map layouts: A/B/X/Y diamond on the right, triggers
+  in an arc above it, Back and Start at the top. Menu layouts saved by older versions are replaced
+  once (the chosen opacity is kept).
+
 ## 0.6.17 — 2026-10-18
 
 ### Fixes

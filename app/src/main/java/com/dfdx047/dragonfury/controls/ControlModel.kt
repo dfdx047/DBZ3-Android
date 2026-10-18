@@ -141,21 +141,37 @@ object GameActions {
     }
 
     /**
-     * Menus do jogo: so o necessario. No Budokai 3 confirma-se com A (✕), volta-se
-     * com Y (△) e Back/Select mostra a informacao da tela.
+     * Menus do jogo (versao 2, 0.6.18). O Budokai 3 HD usa nos menus o comando quase todo:
+     * A confirma, Y volta (os ✕/△ do PS2), X abre o TAG TEAM no menu principal e serve noutros
+     * ecras (como B), LT/RT trocam a forma na escolha de personagem ("LT Previous / RT Next"),
+     * LB/RB mudam de pagina nas listas (capsulas, edicao de habilidades), Back/Select mostra a
+     * ajuda e Start comeca/pausa. A v1 so tinha A, Y e Select. Mesma disposicao do mapa e da
+     * luta: losango A/B/X/Y a direita, gatilhos num arco por cima, Back e Start em cima.
      */
+    const val MENU_LAYOUT_VERSION = 2
+
     fun defaultMenuLayout(): ControlLayout {
         fun pad(id: String, input: PadInput, x: Float, y: Float, size: Float) =
             ControlElement(id, ElementKind.BUTTON, ControlAction.Press(setOf(input)), ControlIcon.MACRO,
                 classicLabel(input, false), x, y, size)
+        val cx = 0.875f
+        val cy = 0.68f
         return ControlLayout(
             listOf(
                 ControlElement("stick", ElementKind.STICK, ControlAction.Press(emptySet()), ControlIcon.MACRO, "", 0.15f, 0.66f, 150f),
                 ControlElement("dpad", ElementKind.DPAD, ControlAction.Press(emptySet()), ControlIcon.MACRO, "", 0.15f, 0.66f, 150f),
-                pad("m_a", PadInput.A, 0.84f, 0.76f, 68f),
-                pad("m_y", PadInput.Y, 0.93f, 0.56f, 62f),
-                ControlElement("m_back", ElementKind.BUTTON, ControlAction.Press(setOf(PadInput.BACK)), ControlIcon.BACK, "SELECT", 0.84f, 0.30f, 46f),
+                pad("m_x", PadInput.X, cx - 0.075f, cy, 60f),
+                pad("m_y", PadInput.Y, cx, cy - 0.18f, 60f),
+                pad("m_b", PadInput.B, cx + 0.075f, cy, 60f),
+                pad("m_a", PadInput.A, cx, cy + 0.18f, 64f),
+                pad("m_lb", PadInput.LB, 0.70f, 0.46f, 48f),
+                pad("m_lt", PadInput.LT, 0.72f, 0.26f, 48f),
+                pad("m_rt", PadInput.RT, 0.85f, 0.26f, 48f),
+                pad("m_rb", PadInput.RB, 0.95f, 0.40f, 48f),
+                ControlElement("m_back", ElementKind.BUTTON, ControlAction.Press(setOf(PadInput.BACK)), ControlIcon.BACK, "BACK", 0.33f, 0.09f, 42f),
+                ControlElement("m_start", ElementKind.BUTTON, ControlAction.Press(setOf(PadInput.START)), ControlIcon.START, "START", 0.67f, 0.09f, 42f),
             ),
+            version = MENU_LAYOUT_VERSION,
             menu = true,
         )
     }
@@ -235,7 +251,15 @@ object ControlLayoutStore {
         val f = file(kind)
         if (!f.isFile) return GameActions.defaultLayout(kind)
         return try {
-            fromJson(JSONObject(f.readText())).copy(menu = kind != LayoutKind.GAMEPLAY, map = kind == LayoutKind.MAP)
+            val saved = fromJson(JSONObject(f.readText()))
+            // 0.6.18: o layout dos menus gravado pela v1 (so A, Y e Select) da lugar ao novo,
+            // com o comando completo; a opacidade escolhida fica.
+            if (kind == LayoutKind.MENU && saved.version < GameActions.MENU_LAYOUT_VERSION) {
+                val opacity = saved.elements.firstOrNull()?.opacity ?: 1f
+                val fresh = GameActions.defaultMenuLayout()
+                return fresh.copy(elements = fresh.elements.map { it.copy(opacity = opacity) })
+            }
+            saved.copy(menu = kind != LayoutKind.GAMEPLAY, map = kind == LayoutKind.MAP)
         } catch (e: Exception) {
             GameActions.defaultLayout(kind)
         }
