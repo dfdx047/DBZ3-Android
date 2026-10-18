@@ -1218,3 +1218,18 @@ traz as operações por concluir e o modo seguinte entra sozinho.
   carga diferente → shader de carga (compute/SSBO) no Turnip; tudo igual → amostragem.
 - Procedimento: mesma luta/cena, captura com o driver do sistema; ligar "Usar o Turnip mesmo
   assim" na aba Drivers; captura no mesmo sítio; salvar log.
+
+### 2026-10-18 19:30 — v0.6.6: texturas no CPU no Turnip A6xx (patch 0069)
+- Autoteste RP5 (zips 183236 sistema / 184050 Turnip Rutabaga forçado): no Turnip a geometria e
+  as cores de vértice estão certas (céu em gradiente, lutadores com cor) mas o cenário sai preto e
+  não há HUD — as texturas lidas da memória chegam vazias/zero. Log sem erros.
+- Correção: com `Dbz3TurnipA6xxSafe()` e `dbz3_tex_cpu_load` (padrão ligado),
+  `VulkanTextureCache::Dbz3CpuLoadTexture` faz no CPU o untile (`texture_conversion::Untile`, com
+  os offsets da cauda de mips empacotada via `GetPackedMipOffset`), a troca de endian e a
+  descompressão (DXT1/3/5→RGBA8, DXN→RG8, DXT5A→R8, 565/4444→RGBA8; 8–128bpb cópia direta),
+  e envia por staging buffer + `vkCmdCopyBufferToImage` (staging libertado com os dos packs).
+  Sem compute shaders de carga nem SSBO com offset.
+- Fica no caminho normal: 3D/cubo/arrays, resolve com escala, formatos com outros shaders
+  (GBGR, 10_11_11, profundidade...) e texturas com páginas escritas pela GPU
+  (`SharedMemory::Dbz3RangeHasGpuWrittenPages`: a memória do CPU não tem os resolves).
+- Log: "dbz3: textura carregada no CPU WxH fmt=..." (12 primeiras).

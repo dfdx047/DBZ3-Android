@@ -3,6 +3,16 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.6 — 2026-10-18
+
+### Fixes
+- **Turnip on Adreno 6xx: textures.** The self-test on the RP5 with Turnip (Rutabaga) showed the
+  geometry and vertex colors correct but no textures at all (black scenery, no HUD). On Turnip +
+  Adreno 6xx the textures read from game memory are now untiled, endian-swapped and decompressed
+  (DXT1/3/5, DXN, DXT5A, 565, 4444) on the CPU and uploaded with a plain buffer-to-image copy,
+  skipping the texture-load compute shaders (SDK patch 0069, cvar `dbz3_tex_cpu_load`).
+  Textures produced by the GPU (resolves) keep the normal path.
+
 ## 0.6.5 — 2026-10-18
 
 ### Diagnostics

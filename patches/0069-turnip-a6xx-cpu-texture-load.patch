@@ -1,0 +1,477 @@
+diff --git a/include/rex/graphics/shared_memory.h b/include/rex/graphics/shared_memory.h
+index 302128d..b00f774 100644
+--- a/include/rex/graphics/shared_memory.h
++++ b/include/rex/graphics/shared_memory.h
+@@ -95,6 +95,26 @@ class SharedMemory {
+   // regions in those pages.
+   void RangeWrittenByGpu(uint32_t start, uint32_t length);
+ 
++  // DBZ3-Android (0069): o intervalo tem paginas escritas pela GPU (resolves)? Nesse caso a
++  // memoria do guest no CPU nao tem os dados atuais.
++  bool Dbz3RangeHasGpuWrittenPages(uint32_t start, uint32_t length) {
++    if (!length || start >= kBufferSize) {
++      return true;
++    }
++    length = std::min(length, kBufferSize - start);
++    const uint32_t page_first = start >> page_size_log2_;
++    const uint32_t page_last = (start + length - 1) >> page_size_log2_;
++    auto global_lock = global_critical_region_.Acquire();
++    for (uint32_t page = page_first; page <= page_last; ++page) {
++      const size_t block = page >> 6;
++      if (block >= system_page_flags_valid_and_gpu_written_.size() ||
++          ((system_page_flags_valid_and_gpu_written_[block] >> (page & 63)) & 1)) {
++        return true;
++      }
++    }
++    return false;
++  }
++
+  protected:
+   SharedMemory(memory::Memory& memory);
+   // Call in implementation-specific initialization.
+diff --git a/include/rex/graphics/vulkan/texture_cache.h b/include/rex/graphics/vulkan/texture_cache.h
+index b467aa4..158cd57 100644
+--- a/include/rex/graphics/vulkan/texture_cache.h
++++ b/include/rex/graphics/vulkan/texture_cache.h
+@@ -227,6 +227,8 @@ class VulkanTextureCache final : public TextureCache {
+                                   VkDeviceSize scratch_offset, VkDeviceSize level_size,
+                                   uint32_t row_bytes, uint32_t row_texels, uint32_t width,
+                                   uint32_t height, VkFormat format, bool block_compressed);
++  // 0069: carga das texturas no CPU (Turnip dos Adreno 6xx), sem os compute shaders de carga.
++  bool Dbz3CpuLoadTexture(Texture& texture, uint32_t level_first, uint32_t level_last);
+   bool LoadTextureDataFromResidentMemoryImpl(Texture& texture, bool load_base,
+                                              bool load_mips) override;
+ 
+diff --git a/src/graphics/vulkan/texture_cache.cpp b/src/graphics/vulkan/texture_cache.cpp
+index bacf618..e3ca274 100644
+--- a/src/graphics/vulkan/texture_cache.cpp
++++ b/src/graphics/vulkan/texture_cache.cpp
+@@ -59,6 +59,13 @@ REXCVAR_DEFINE_BOOL(dbz3_rit_textures_turnip, false, "GPU",
+                     "DBZ3-Android: o mesmo no Turnip (desligado: la as cores saiam trocadas)")
+     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
+ 
++// DBZ3-Android (0069): no Turnip dos Adreno 6xx o jogo saia sem texturas (cenario preto, sem HUD;
++// RP5/SD865, 2026-10-18) e a geometria certa. As texturas lidas da memoria do guest passam a ser
++// reordenadas (untile) e descomprimidas no CPU e enviadas com uma copia buffer -> imagem, sem os compute
++// shaders de carga. As que vem de resolves (paginas escritas pela GPU) seguem o caminho normal.
++REXCVAR_DEFINE_BOOL(dbz3_tex_cpu_load, true, "GPU",
++                    "DBZ3-Android: no Turnip dos Adreno 6xx, carregar as texturas no CPU");
++
+ namespace rex::graphics::vulkan {
+ 
+ // Generated with `xb buildshaders`.
+@@ -1536,6 +1543,13 @@ bool VulkanTextureCache::LoadTextureDataFromResidentMemoryImpl(Texture& texture,
+     return true;
+   }
+ 
++  // 0069: Turnip num Adreno 6xx - carga no CPU (ver dbz3_tex_cpu_load).
++  if (ui::vulkan::Dbz3TurnipA6xxSafe() && REXCVAR_GET(dbz3_tex_cpu_load) &&
++      Dbz3CpuLoadTexture(vulkan_texture, load_base ? 0 : 1,
++                         load_mips ? uint32_t(texture_key.mip_max_level) : 0)) {
++    return true;
++  }
++
+   // Get the pipeline.
+   const HostFormatPair& host_format_pair = GetHostFormatPair(texture_key);
+   bool host_format_is_signed;
+@@ -2125,6 +2139,400 @@ bool VulkanTextureCache::LoadTextureDataFromResidentMemoryImpl(Texture& texture,
+   return true;
+ }
+ 
++// 0069: descompressao dos blocos DXT (ja com a troca de endian do guest, layout igual ao BC1-5)
++// para RGBA8 / RG8 / R8, como os shaders texture_load_dxt*_rgba8, dxn_rg8 e dxt5a_r8.
++namespace {
++
++void Dbz3DecodeDxtColor(const uint8_t* block, bool dxt1, uint8_t out[16][4]) {
++  const uint32_t c0 = uint32_t(block[0]) | (uint32_t(block[1]) << 8);
++  const uint32_t c1 = uint32_t(block[2]) | (uint32_t(block[3]) << 8);
++  const uint32_t indices = uint32_t(block[4]) | (uint32_t(block[5]) << 8) |
++                           (uint32_t(block[6]) << 16) | (uint32_t(block[7]) << 24);
++  uint32_t palette[4][4];
++  auto expand = [](uint32_t c, uint32_t* rgb) {
++    const uint32_t r = (c >> 11) & 31, g = (c >> 5) & 63, b = c & 31;
++    rgb[0] = (r << 3) | (r >> 2);
++    rgb[1] = (g << 2) | (g >> 4);
++    rgb[2] = (b << 3) | (b >> 2);
++    rgb[3] = 255;
++  };
++  expand(c0, palette[0]);
++  expand(c1, palette[1]);
++  if (!dxt1 || c0 > c1) {
++    for (uint32_t i = 0; i < 3; ++i) {
++      palette[2][i] = (2 * palette[0][i] + palette[1][i] + 1) / 3;
++      palette[3][i] = (palette[0][i] + 2 * palette[1][i] + 1) / 3;
++    }
++    palette[2][3] = palette[3][3] = 255;
++  } else {
++    for (uint32_t i = 0; i < 3; ++i) {
++      palette[2][i] = (palette[0][i] + palette[1][i]) / 2;
++      palette[3][i] = 0;
++    }
++    palette[2][3] = 255;
++    palette[3][3] = 0;
++  }
++  for (uint32_t t = 0; t < 16; ++t) {
++    const uint32_t* c = palette[(indices >> (2 * t)) & 3];
++    out[t][0] = uint8_t(c[0]);
++    out[t][1] = uint8_t(c[1]);
++    out[t][2] = uint8_t(c[2]);
++    out[t][3] = uint8_t(c[3]);
++  }
++}
++
++// Bloco de alfa interpolado (DXT5, DXT5A, cada canal do DXN).
++void Dbz3DecodeDxtAlpha(const uint8_t* block, uint8_t out[16]) {
++  const uint32_t a0 = block[0], a1 = block[1];
++  uint32_t palette[8];
++  palette[0] = a0;
++  palette[1] = a1;
++  if (a0 > a1) {
++    for (uint32_t i = 1; i < 7; ++i) {
++      palette[i + 1] = ((7 - i) * a0 + i * a1 + 3) / 7;
++    }
++  } else {
++    for (uint32_t i = 1; i < 5; ++i) {
++      palette[i + 1] = ((5 - i) * a0 + i * a1 + 2) / 5;
++    }
++    palette[6] = 0;
++    palette[7] = 255;
++  }
++  uint64_t indices = 0;
++  for (uint32_t i = 0; i < 6; ++i) {
++    indices |= uint64_t(block[2 + i]) << (8 * i);
++  }
++  for (uint32_t t = 0; t < 16; ++t) {
++    out[t] = uint8_t(palette[(indices >> (3 * t)) & 7]);
++  }
++}
++
++}  // namespace
++
++bool VulkanTextureCache::Dbz3CpuLoadTexture(Texture& texture_base, uint32_t level_first,
++                                            uint32_t level_last) {
++  VulkanTexture& texture = static_cast<VulkanTexture&>(texture_base);
++  const TextureKey key = texture.key();
++  if (key.scaled_resolve || key.dimension != xenos::DataDimension::k2DOrStacked ||
++      key.GetDepthOrArraySize() != 1 || level_first > level_last ||
++      level_last > key.mip_max_level) {
++    return false;
++  }
++  const HostFormatPair& host_format_pair = GetHostFormatPair(key);
++  bool host_format_is_signed;
++  if (IsSignedVersionSeparateForFormat(key)) {
++    host_format_is_signed = bool(key.signed_separate);
++  } else {
++    host_format_is_signed = host_format_pair.format_unsigned.load_shader == kLoadShaderIndexUnknown;
++  }
++  const HostFormat& host_format =
++      host_format_is_signed ? host_format_pair.format_signed : host_format_pair.format_unsigned;
++  if (host_format.format == VK_FORMAT_UNDEFINED) {
++    return false;
++  }
++  const FormatInfo* format_info = FormatInfo::Get(key.format);
++  if (!format_info) {
++    return false;
++  }
++  const uint32_t block_width = format_info->block_width;
++  const uint32_t block_height = format_info->block_height;
++  const uint32_t bytes_per_block = format_info->bytes_per_block();
++
++  // Conversao de cada bloco do guest. kCopy: os bytes vao tal como estao (o formato host e o
++  // mesmo do guest, como nos shaders 8/16/32/64/128bpb).
++  enum class Convert { kCopy, kDxt1, kDxt3, kDxt5, kDxn, kDxt5A, kR5G6B5, kRGBA4 };
++  Convert convert;
++  uint32_t out_texel_bytes = 0;  // por texel (descomprimido) ou por bloco (kCopy)
++  switch (host_format.load_shader) {
++    case kLoadShaderIndex8bpb:
++    case kLoadShaderIndex16bpb:
++    case kLoadShaderIndex32bpb:
++    case kLoadShaderIndex64bpb:
++    case kLoadShaderIndex128bpb:
++      convert = Convert::kCopy;
++      out_texel_bytes = bytes_per_block;
++      if (!host_format.block_compressed && (block_width != 1 || block_height != 1)) {
++        return false;
++      }
++      break;
++    case kLoadShaderIndexDXT1ToRGBA8:
++      convert = Convert::kDxt1;
++      out_texel_bytes = 4;
++      break;
++    case kLoadShaderIndexDXT3ToRGBA8:
++      convert = Convert::kDxt3;
++      out_texel_bytes = 4;
++      break;
++    case kLoadShaderIndexDXT5ToRGBA8:
++      convert = Convert::kDxt5;
++      out_texel_bytes = 4;
++      break;
++    case kLoadShaderIndexDXNToRG8:
++      convert = Convert::kDxn;
++      out_texel_bytes = 2;
++      break;
++    case kLoadShaderIndexDXT5AToR8:
++      convert = Convert::kDxt5A;
++      out_texel_bytes = 1;
++      break;
++    case kLoadShaderIndexR5G6B5ToRGBA8:
++      convert = Convert::kR5G6B5;
++      out_texel_bytes = 4;
++      break;
++    case kLoadShaderIndexRGBA4ToRGBA8:
++      convert = Convert::kRGBA4;
++      out_texel_bytes = 4;
++      break;
++    default:
++      return false;
++  }
++  if (convert != Convert::kCopy && convert != Convert::kR5G6B5 && convert != Convert::kRGBA4) {
++    const uint32_t expected_bytes = (convert == Convert::kDxt1 || convert == Convert::kDxt5A) ? 8 : 16;
++    if (block_width != 4 || block_height != 4 || bytes_per_block != expected_bytes) {
++      return false;
++    }
++  }
++  if ((convert == Convert::kR5G6B5 || convert == Convert::kRGBA4) &&
++      (block_width != 1 || block_height != 1 || bytes_per_block != 2)) {
++    return false;
++  }
++
++  // Dados que so existem na GPU (resolves): a memoria do CPU esta desatualizada.
++  SharedMemory& memory = shared_memory();
++  const uint32_t base_address = uint32_t(key.base_page) << 12;
++  const uint32_t mips_address = uint32_t(key.mip_page) << 12;
++  if (level_first == 0 &&
++      memory.Dbz3RangeHasGpuWrittenPages(base_address, texture.GetGuestBaseSize())) {
++    return false;
++  }
++  if (level_last != 0 &&
++      (!mips_address || !texture.GetGuestMipsSize() ||
++       memory.Dbz3RangeHasGpuWrittenPages(mips_address, texture.GetGuestMipsSize()))) {
++    return false;
++  }
++
++  const texture_util::TextureGuestLayout& guest_layout = texture.guest_layout();
++  const uint32_t width = key.GetWidth();
++  const uint32_t height = key.GetHeight();
++  const uint32_t level_packed = guest_layout.packed_level;
++
++  struct LevelData {
++    std::vector<uint8_t> bytes;
++    uint32_t row_texels;  // bufferRowLength
++    uint32_t width;
++    uint32_t height;
++    VkDeviceSize offset;
++  };
++  std::vector<LevelData> levels(level_last - level_first + 1);
++  VkDeviceSize buffer_size = 0;
++  std::vector<uint8_t> blocks;
++  for (uint32_t level = level_first; level <= level_last; ++level) {
++    LevelData& out = levels[level - level_first];
++    const uint32_t level_width = std::max(width >> level, UINT32_C(1));
++    const uint32_t level_height = std::max(height >> level, UINT32_C(1));
++    const uint32_t width_blocks = (level_width + block_width - 1) / block_width;
++    const uint32_t height_blocks = (level_height + block_height - 1) / block_height;
++    const uint32_t stored_level = std::min(level, level_packed);
++    const bool from_base = level == 0;
++    const texture_util::TextureGuestLayout::Level& guest_level =
++        from_base ? guest_layout.base : guest_layout.mips[stored_level];
++    const uint32_t level_address =
++        from_base ? base_address : mips_address + guest_layout.mip_offsets_bytes[stored_level];
++    uint32_t offset_blocks_x = 0, offset_blocks_y = 0, offset_z = 0;
++    if (level >= level_packed) {
++      texture_util::GetPackedMipOffset(width, height, 1, key.format, level, offset_blocks_x,
++                                       offset_blocks_y, offset_z);
++    }
++    if (!guest_level.row_pitch_bytes || guest_level.row_pitch_bytes % bytes_per_block) {
++      return false;
++    }
++    const uint8_t* guest = memory.memory().TranslatePhysical<const uint8_t*>(level_address);
++    if (!guest) {
++      return false;
++    }
++    blocks.assign(size_t(width_blocks) * height_blocks * bytes_per_block, 0);
++    const xenos::Endian endian = key.endianness;
++    if (key.tiled) {
++      texture_conversion::UntileInfo info;
++      info.offset_x = offset_blocks_x;
++      info.offset_y = offset_blocks_y;
++      info.width = width_blocks;
++      info.height = height_blocks;
++      info.input_pitch = guest_level.row_pitch_bytes / bytes_per_block;
++      info.output_pitch = width_blocks;
++      info.input_format_info = format_info;
++      info.output_format_info = format_info;
++      info.copy_callback = [endian](void* dst, const void* src, size_t size) {
++        texture_conversion::CopySwapBlock(endian, dst, src, size);
++      };
++      texture_conversion::Untile(blocks.data(), guest, &info);
++    } else {
++      for (uint32_t y = 0; y < height_blocks; ++y) {
++        const uint8_t* src = guest + size_t(offset_blocks_y + y) * guest_level.row_pitch_bytes +
++                             size_t(offset_blocks_x) * bytes_per_block;
++        texture_conversion::CopySwapBlock(
++            endian, blocks.data() + size_t(y) * width_blocks * bytes_per_block, src,
++            size_t(width_blocks) * bytes_per_block);
++      }
++    }
++
++    out.width = level_width;
++    out.height = level_height;
++    if (convert == Convert::kCopy) {
++      out.bytes = blocks;
++      out.row_texels = width_blocks * (host_format.block_compressed ? block_width : 1);
++    } else if (convert == Convert::kR5G6B5 || convert == Convert::kRGBA4) {
++      out.row_texels = width_blocks;
++      out.bytes.resize(size_t(width_blocks) * height_blocks * 4);
++      for (size_t i = 0; i < size_t(width_blocks) * height_blocks; ++i) {
++        const uint32_t v = uint32_t(blocks[i * 2]) | (uint32_t(blocks[i * 2 + 1]) << 8);
++        uint8_t* t = out.bytes.data() + i * 4;
++        if (convert == Convert::kR5G6B5) {
++          // Guest k_5_6_5: R nos bits baixos (ver Dbz3DumpFormatFor).
++          const uint32_t r = v & 31, g = (v >> 5) & 63, b = (v >> 11) & 31;
++          t[0] = uint8_t((r << 3) | (r >> 2));
++          t[1] = uint8_t((g << 2) | (g >> 4));
++          t[2] = uint8_t((b << 3) | (b >> 2));
++          t[3] = 255;
++        } else {
++          t[0] = uint8_t((v & 0xF) * 17);
++          t[1] = uint8_t(((v >> 4) & 0xF) * 17);
++          t[2] = uint8_t(((v >> 8) & 0xF) * 17);
++          t[3] = uint8_t(((v >> 12) & 0xF) * 17);
++        }
++      }
++    } else {
++      const uint32_t texels_x = width_blocks * 4, texels_y = height_blocks * 4;
++      out.row_texels = texels_x;
++      out.bytes.assign(size_t(texels_x) * texels_y * out_texel_bytes, 0);
++      for (uint32_t by = 0; by < height_blocks; ++by) {
++        for (uint32_t bx = 0; bx < width_blocks; ++bx) {
++          const uint8_t* block =
++              blocks.data() + (size_t(by) * width_blocks + bx) * bytes_per_block;
++          uint8_t rgba[16][4];
++          uint8_t a[16], b[16];
++          switch (convert) {
++            case Convert::kDxt1:
++              Dbz3DecodeDxtColor(block, true, rgba);
++              break;
++            case Convert::kDxt3:
++              Dbz3DecodeDxtColor(block + 8, false, rgba);
++              for (uint32_t t = 0; t < 16; ++t) {
++                const uint32_t nibble = (block[t >> 1] >> ((t & 1) * 4)) & 0xF;
++                rgba[t][3] = uint8_t(nibble * 17);
++              }
++              break;
++            case Convert::kDxt5:
++              Dbz3DecodeDxtColor(block + 8, false, rgba);
++              Dbz3DecodeDxtAlpha(block, a);
++              for (uint32_t t = 0; t < 16; ++t) rgba[t][3] = a[t];
++              break;
++            case Convert::kDxn:
++              Dbz3DecodeDxtAlpha(block, a);
++              Dbz3DecodeDxtAlpha(block + 8, b);
++              for (uint32_t t = 0; t < 16; ++t) {
++                rgba[t][0] = a[t];
++                rgba[t][1] = b[t];
++              }
++              break;
++            case Convert::kDxt5A:
++              Dbz3DecodeDxtAlpha(block, a);
++              for (uint32_t t = 0; t < 16; ++t) rgba[t][0] = a[t];
++              break;
++            default:
++              return false;
++          }
++          for (uint32_t t = 0; t < 16; ++t) {
++            const size_t x = size_t(bx) * 4 + (t & 3), y = size_t(by) * 4 + (t >> 2);
++            std::memcpy(out.bytes.data() + (y * texels_x + x) * out_texel_bytes, rgba[t],
++                        out_texel_bytes);
++          }
++        }
++      }
++    }
++    buffer_size = rex::align(buffer_size, VkDeviceSize(16));
++    out.offset = buffer_size;
++    buffer_size += out.bytes.size();
++  }
++  if (!buffer_size || buffer_size > (VkDeviceSize(96) << 20)) {
++    return false;
++  }
++
++  VkBufferCreateInfo buffer_create_info = {};
++  buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
++  buffer_create_info.size = buffer_size;
++  buffer_create_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
++  buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
++  VmaAllocationCreateInfo allocation_create_info = {};
++  allocation_create_info.usage = VMA_MEMORY_USAGE_AUTO;
++  allocation_create_info.flags =
++      VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
++  VkBuffer staging_buffer = VK_NULL_HANDLE;
++  VmaAllocation staging_allocation = VK_NULL_HANDLE;
++  VmaAllocationInfo staging_allocation_info = {};
++  if (vmaCreateBuffer(vma_allocator_, &buffer_create_info, &allocation_create_info, &staging_buffer,
++                      &staging_allocation, &staging_allocation_info) != VK_SUCCESS ||
++      !staging_allocation_info.pMappedData) {
++    if (staging_buffer != VK_NULL_HANDLE) {
++      vmaDestroyBuffer(vma_allocator_, staging_buffer, staging_allocation);
++    }
++    return false;
++  }
++  uint8_t* mapping = static_cast<uint8_t*>(staging_allocation_info.pMappedData);
++  for (const LevelData& level : levels) {
++    std::memcpy(mapping + level.offset, level.bytes.data(), level.bytes.size());
++  }
++  vmaFlushAllocation(vma_allocator_, staging_allocation, 0, buffer_size);
++
++  DeferredCommandBuffer& command_buffer = command_processor_.deferred_command_buffer();
++  command_processor_.PushBufferMemoryBarrier(
++      staging_buffer, 0, VK_WHOLE_SIZE, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
++      VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT);
++  texture.MarkAsUsed();
++  VulkanTexture::Usage texture_old_usage =
++      texture.SetUsage(VulkanTexture::Usage::kTransferDestination);
++  if (texture_old_usage != VulkanTexture::Usage::kTransferDestination) {
++    VkPipelineStageFlags texture_src_stage_mask, texture_dst_stage_mask;
++    VkAccessFlags texture_src_access_mask, texture_dst_access_mask;
++    VkImageLayout texture_old_layout, texture_new_layout;
++    GetTextureUsageMasks(texture_old_usage, texture_src_stage_mask, texture_src_access_mask,
++                         texture_old_layout);
++    GetTextureUsageMasks(VulkanTexture::Usage::kTransferDestination, texture_dst_stage_mask,
++                         texture_dst_access_mask, texture_new_layout);
++    command_processor_.PushImageMemoryBarrier(
++        texture.image(), ui::vulkan::util::InitializeSubresourceRange(), texture_src_stage_mask,
++        texture_dst_stage_mask, texture_src_access_mask, texture_dst_access_mask, texture_old_layout,
++        texture_new_layout);
++  }
++  command_processor_.SubmitBarriers(true);
++  VkBufferImageCopy* copy_regions = command_buffer.CmdCopyBufferToImageEmplace(
++      staging_buffer, texture.image(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
++      uint32_t(levels.size()));
++  for (uint32_t i = 0; i < uint32_t(levels.size()); ++i) {
++    const LevelData& level = levels[i];
++    VkBufferImageCopy& copy_region = copy_regions[i];
++    copy_region.bufferOffset = level.offset;
++    copy_region.bufferRowLength = level.row_texels;
++    copy_region.bufferImageHeight = 0;
++    copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
++    copy_region.imageSubresource.mipLevel = level_first + i;
++    copy_region.imageSubresource.baseArrayLayer = 0;
++    copy_region.imageSubresource.layerCount = 1;
++    copy_region.imageOffset = {0, 0, 0};
++    copy_region.imageExtent = {level.width, level.height, 1};
++  }
++  pending_pack_uploads_.push_back(PendingPackUpload{command_processor_.GetCurrentSubmission(),
++                                                    staging_buffer, staging_allocation});
++  static uint32_t logged = 0;
++  if (logged < 12) {
++    ++logged;
++    REXGPU_INFO("dbz3: textura carregada no CPU {}x{} fmt={} niveis {}-{} tiled={} ({} B)", width,
++                height, uint32_t(key.format), level_first, level_last, uint32_t(key.tiled),
++                buffer_size);
++  }
++  return true;
++}
++
+ void VulkanTextureCache::Dbz3CaptureTextureReadback(Texture& texture_base, VkBuffer scratch,
+                                                     VkDeviceSize scratch_offset,
+                                                     VkDeviceSize level_size, uint32_t row_bytes,
