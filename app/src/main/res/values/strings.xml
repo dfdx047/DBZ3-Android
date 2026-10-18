@@ -420,7 +420,7 @@
     <string name="about_credits_title">Credits and license</string>
     <string name="about_license">Original project © 2026 NovaPowers, MIT license. Android port by dfdx047.</string>
     <string name="ingame_selftest">Render self-test (diagnostic)</string>
-    <string name="ingame_selftest_only_fight">Only during a fight: freezes the picture, toggles each optimization and compares (~3 min). The logs go to Download/ at the end.</string>
+    <string name="ingame_selftest_only_fight">Freezes the current scene (fight, Dragon Universe map, menus), switches each optimization and compares (~3 min). At the end the logs go to Download/.</string>
     <string name="perf_fps_title">Frame rate</string>
     <string name="perf_fps_sub">30 draws one of every two frames (the game keeps its normal speed). 120 adds a generated frame between every two game frames on 120 Hz screens.</string>
     <string name="perf_fps_120_interp">120 (interp.)</string>

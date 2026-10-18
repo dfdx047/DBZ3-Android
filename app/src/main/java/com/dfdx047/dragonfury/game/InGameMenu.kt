@@ -351,12 +351,11 @@ private fun GameMenuPanel(prefs: LauncherPrefs, actions: InGameActions, nav: Men
             // Captura de frames para o renderizador nativo: o jogo continua ao fechar o menu
             // e os 2 frames seguintes ficam em logs/capture (entram no "Salvar log").
             add(MItem.Action(stringResource(R.string.ingame_capture)) { actions.captureFrames(); actions.resume() })
-            // Autoteste do render: congela a luta, troca cada otimizacao e compara a imagem.
+            // Autoteste do render: congela a cena (luta, mapa...), troca cada otimizacao e compara a imagem.
             add(
                 MItem.Action(
                     stringResource(R.string.ingame_selftest),
-                    enabled = actions.isInBattle(),
-                    detail = if (selfTestRefused || !actions.isInBattle()) stringResource(R.string.ingame_selftest_only_fight) else null,
+                    detail = stringResource(R.string.ingame_selftest_only_fight),
                 ) { selfTestRefused = !actions.startSelfTest() },
             )
             val saving = stringResource(R.string.ingame_saving)

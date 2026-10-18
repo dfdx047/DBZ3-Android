@@ -419,7 +419,7 @@
     <string name="about_credits_title">Créditos y licencia</string>
     <string name="about_license">Proyecto original © 2026 NovaPowers, licencia MIT. Port Android por dfdx047.</string>
     <string name="ingame_selftest">Autoprueba del render (diagnóstico)</string>
-    <string name="ingame_selftest_only_fight">Solo en un combate: congela la imagen, cambia cada optimización y compara (~3 min). Al final los logs van a Download/.</string>
+    <string name="ingame_selftest_only_fight">Congela la escena actual (combate, mapa del Dragon Universe, menús), cambia cada optimización y compara (~3 min). Al final los logs van a Download/.</string>
     <string name="perf_fps_title">Tasa de fotogramas</string>
     <string name="perf_fps_sub">30 dibuja uno de cada dos frames (el juego mantiene su velocidad normal). 120 genera un frame entre cada dos del juego, en pantallas de 120 Hz.</string>
     <string name="perf_fps_120_interp">120 (interp.)</string>

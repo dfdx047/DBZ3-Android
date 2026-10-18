@@ -3,6 +3,13 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.14 — 2026-10-18
+
+### Changed
+- The render self-test runs in any scene of the game (Dragon Universe map, menus), not only in a
+  fight: the freeze replays the frame's GPU commands, so it does not depend on the game mode. Needed
+  to find which optimization breaks the Dragon Universe sky.
+
 ## 0.6.13 — 2026-10-18
 
 ### Fixes

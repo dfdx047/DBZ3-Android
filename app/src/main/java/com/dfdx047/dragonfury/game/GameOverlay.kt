@@ -353,7 +353,9 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
 
     override fun startSelfTest(): Boolean {
         val surface = GameActivity.gameSurface() ?: return false
-        if (!inBattle || selfTest != null) return false
+        // 0.6.14: em qualquer cena do jogo (lutas, mapa do Dragon Universe, menus): o
+        // congelamento repete os comandos da GPU do frame, nao depende do modo de jogo.
+        if (selfTest != null) return false
         setScreen(InGameScreen.CLOSED)
         selfTest = RenderSelfTest(activity, surface) { selfTest = null }.also { it.start() }
         return true
