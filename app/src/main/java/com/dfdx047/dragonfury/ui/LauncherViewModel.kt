@@ -20,6 +20,7 @@ import com.dfdx047.dragonfury.R
 import com.dfdx047.dragonfury.data.AppLanguage
 import com.dfdx047.dragonfury.data.AppLog
 import com.dfdx047.dragonfury.data.SystemCheck
+import com.dfdx047.dragonfury.data.TurnipCompat
 import com.dfdx047.dragonfury.data.ControlStyle
 import com.dfdx047.dragonfury.data.DarkMode
 import com.dfdx047.dragonfury.data.FileStatus
@@ -247,14 +248,22 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
             runtime.forEach { append('\n').append(it) }
         }
         if (gpuLost) {
-            // A GPU caiu: o problema e o driver (ou a GPU), nao o port em si.
-            AppLog.e(R.string.log_game_gpu_lost, null, activeDriver ?: "system")
-            fail(
-                R.string.err_title_game,
-                R.string.err_game_gpu_lost,
-                activeDriver ?: getApplication<Application>().getString(R.string.driver_system_name),
-                detail = detail,
-            )
+            // A GPU caiu: o problema e o driver (ou a GPU), nao o port em si. Com um Turnip, o
+            // proximo arranque junta mais correcoes sozinho (TurnipCompat / GameActivity).
+            val driver = DriverRepository.activeDir()
+            AppLog.e(R.string.log_game_gpu_lost, null, driver ?: "system")
+            val name = driver ?: ctx.getString(R.string.driver_system_name)
+            if (driver != null && TurnipCompat.isTurnip(driver)) {
+                val level = TurnipCompat.raise(ctx, driver)
+                if (level > 0) {
+                    AppLog.w(R.string.log_turnip_raise, driver, level)
+                    fail(R.string.err_title_game, R.string.err_game_gpu_lost_turnip, name, level, detail = detail)
+                } else {
+                    fail(R.string.err_title_game, R.string.err_game_gpu_lost_turnip_last, name, detail = detail)
+                }
+                return
+            }
+            fail(R.string.err_title_game, R.string.err_game_gpu_lost, name, detail = detail)
             return
         }
         val exit = found ?: return

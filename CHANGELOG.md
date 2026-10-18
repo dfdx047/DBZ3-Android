@@ -3,6 +3,22 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.2 — 2026-10-18
+
+### Fixes
+- **Turnip on Adreno 6xx** (Snapdragon 865 / Retroid Pocket 5, 855, 480+…): the GPU crashed or hung
+  on the title screen (`VK_ERROR_DEVICE_LOST`). These GPUs now get a safe mode by themselves: no
+  GPU timestamps, simulated occlusion queries, full render area and no colour-discard passes. An
+  occlusion query that ended inside a render pass (invalid in Vulkan) now ends outside it on every
+  GPU (SDK patch 0065).
+- **Automatic Turnip compatibility**: if the GPU still crashes with a Turnip driver, the next
+  start adds safer settings by itself, one step at a time (mode 1: no GMEM/LRZ/UBWC and
+  decompressed BC textures; 2: simple passes, float depth and full sync; 3: guest memory split as
+  the driver reports). The error window says which mode is next; the Drivers tab shows the mode
+  and can reset it.
+- When the GPU is lost, the log lists the GPU work that had not finished (passes, resolves,
+  texture loads, queries), so the exact command can be found from a user log.
+
 ## 0.6.1 — 2026-10-18
 
 ### Changed

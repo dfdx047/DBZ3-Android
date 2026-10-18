@@ -1,0 +1,444 @@
+diff --git a/include/rex/graphics/vulkan/dbz3_gpulog.h b/include/rex/graphics/vulkan/dbz3_gpulog.h
+new file mode 100644
+index 0000000..3125008
+--- /dev/null
++++ b/include/rex/graphics/vulkan/dbz3_gpulog.h
+@@ -0,0 +1,60 @@
++#pragma once
++// DBZ3-Android (0065): registo das ultimas operacoes de GPU gravadas (passes, resolves, cargas
++// de texturas, queries, submissoes) com a submissao em que foram parar. Quando a GPU cai
++// (VK_ERROR_DEVICE_LOST) o log mostra o que estava nas submissoes que nao acabaram, para se
++// saber que comando a travou sem acesso ao aparelho.
++//
++// So na thread do command processor: estado global simples, sem locks.
++
++#include <array>
++#include <cstdint>
++#include <string>
++#include <utility>
++
++#include <rex/logging.h>
++
++namespace rex::graphics::vulkan::dbz3_gpulog {
++
++struct Entry {
++  uint64_t submission = 0;
++  std::string text;
++};
++
++inline constexpr uint32_t kSize = 256;
++inline std::array<Entry, kSize> g_ring;
++inline uint32_t g_head = 0;
++inline bool g_dumped = false;
++
++inline void Note(uint64_t submission, std::string text) {
++  Entry& e = g_ring[g_head % kSize];
++  ++g_head;
++  e.submission = submission;
++  e.text = std::move(text);
++}
++
++// Escreve no log (uma vez) as operacoes das submissoes depois de `completed`.
++inline void Dump(uint64_t completed, const char* why) {
++  if (g_dumped) return;
++  g_dumped = true;
++  REXGPU_ERROR("dbz3: GPU perdida ({}); ultima submissao concluida {}. Operacoes por concluir:",
++               why, completed);
++  const uint32_t count = g_head < kSize ? g_head : kSize;
++  uint32_t shown = 0;
++  for (uint32_t i = 0; i < count; ++i) {
++    const Entry& e = g_ring[(g_head - count + i) % kSize];
++    if (e.submission <= completed || e.text.empty()) continue;
++    REXGPU_ERROR("dbz3:   [sub {}] {}", e.submission, e.text);
++    ++shown;
++  }
++  if (!shown) {
++    // Nada registado depois da ultima concluida: mostra as ultimas 24 operacoes.
++    const uint32_t from = count > 24 ? count - 24 : 0;
++    for (uint32_t i = from; i < count; ++i) {
++      const Entry& e = g_ring[(g_head - count + i) % kSize];
++      if (e.text.empty()) continue;
++      REXGPU_ERROR("dbz3:   [sub {} (ja concluida?)] {}", e.submission, e.text);
++    }
++  }
++}
++
++}  // namespace rex::graphics::vulkan::dbz3_gpulog
+diff --git a/include/rex/ui/vulkan/device.h b/include/rex/ui/vulkan/device.h
+index 947817f..d6ee1f3 100644
+--- a/include/rex/ui/vulkan/device.h
++++ b/include/rex/ui/vulkan/device.h
+@@ -20,6 +20,15 @@ namespace rex {
+ namespace ui {
+ namespace vulkan {
+ 
++// DBZ3-Android (0065): o dispositivo criado e o Turnip num Adreno 6xx, e o modo seguro desses
++// aparelhos (cvar dbz3_turnip_a6xx_safe) esta ligado.
++bool Dbz3IsTurnipA6xx();
++bool Dbz3TurnipA6xxSafe();
++// Chamado pelo callback de debug do Vulkan quando o driver diz VK_ERROR_DEVICE_LOST (na thread
++// que fez a chamada ao driver), antes de qualquer outra coisa: o command processor escreve o
++// registo das operacoes por concluir (dbz3_gpulog) ali, porque a seguir o processo pode acabar.
++void Dbz3SetDeviceLostHook(void (*hook)());
++
+ class VulkanDevice {
+  public:
+   static std::unique_ptr<VulkanDevice> CreateIfSupported(const VulkanInstance* vulkan_instance,
+diff --git a/src/graphics/vulkan/command_processor.cpp b/src/graphics/vulkan/command_processor.cpp
+index 4b3db96..6808b11 100644
+--- a/src/graphics/vulkan/command_processor.cpp
++++ b/src/graphics/vulkan/command_processor.cpp
+@@ -10,6 +10,8 @@
+  */
+ 
+ #include <algorithm>
++#include <atomic>
++#include <thread>
+ #include <cmath>
+ #include <cstdlib>
+ #include <array>
+@@ -42,6 +44,7 @@
+ #include <rex/graphics/vulkan/command_processor.h>
+ #include <rex/graphics/vulkan/dbz3_capture.h>
+ #include <rex/graphics/vulkan/dbz3_gpuprof.h>
++#include <rex/graphics/vulkan/dbz3_gpulog.h>
+ #include <rex/graphics/vulkan/dbz3_hitch.h>
+ #include <rex/graphics/vulkan/pipeline_cache.h>
+ #include <rex/graphics/vulkan/render_target_cache.h>
+@@ -371,6 +374,10 @@ void VulkanCommandProcessor::Dbz3AreaAdd(int32_t x0, int32_t y0, int32_t x1, int
+ void VulkanCommandProcessor::Dbz3AreaApplyBeforePassEnd() {
+   const bool active = dbz3_area_active_;
+   dbz3_area_active_ = false;
++  // 0065: modo seguro do Turnip 6xx: renderArea inteira (como antes do 0049).
++  if (ui::vulkan::Dbz3TurnipA6xxSafe()) {
++    return;
++  }
+   if (!active || !dbz3_area_has_ || !in_render_pass_ || !current_framebuffer_ ||
+       render_pass_begin_position_ == SIZE_MAX) {
+     return;
+@@ -1100,7 +1107,23 @@ bool VulkanCommandProcessor::CompileGlslToSpirv(VkShaderStageFlagBits stage,
+   return CompileGlslToSpirvInternal(glslang_stage, source, spirv_out, error_out);
+ }
+ 
++namespace {
++// 0065: thread do command processor e a submissao concluida mais recente, para o gancho do
++// VK_ERROR_DEVICE_LOST (callback de debug do Vulkan) escrever o dbz3_gpulog.
++std::atomic<std::thread::id> g_dbz3_cp_thread{};
++std::atomic<uint64_t> g_dbz3_completed_submission{0};
++void Dbz3DeviceLostHook() {
++  if (std::this_thread::get_id() != g_dbz3_cp_thread.load(std::memory_order_relaxed)) {
++    return;  // outra thread (apresentacao): o command processor escreve-o no seu caminho
++  }
++  dbz3_gpulog::Dump(g_dbz3_completed_submission.load(std::memory_order_relaxed),
++                    "aviso do driver");
++}
++}  // namespace
++
+ bool VulkanCommandProcessor::SetupContext() {
++  g_dbz3_cp_thread.store(std::this_thread::get_id(), std::memory_order_relaxed);
++  ui::vulkan::Dbz3SetDeviceLostHook(Dbz3DeviceLostHook);
+   if (!CommandProcessor::SetupContext()) {
+     REXGPU_ERROR("Failed to initialize base command processor context");
+     return false;
+@@ -2697,6 +2720,12 @@ void Init(const ui::vulkan::VulkanDevice* vulkan_device) {
+   std::vector<VkQueueFamilyProperties> families(family_count);
+   ifn.vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &family_count, families.data());
+   const uint32_t family = vulkan_device->queue_family_graphics_compute();
++  // 0065: no Turnip dos Adreno 6xx o perfil (timestamps dentro dos command buffers do jogo) fica
++  // desligado no modo seguro.
++  if (ui::vulkan::Dbz3TurnipA6xxSafe()) {
++    REXGPU_INFO("dbz3: gpu_ms indisponivel (Turnip num Adreno 6xx, modo seguro)");
++    return;
++  }
+   if (family >= family_count || families[family].timestampValidBits == 0) {
+     REXGPU_INFO("dbz3: gpu_ms indisponivel (fila sem timestamps)");
+     return;
+@@ -4143,6 +4172,11 @@ void VulkanCommandProcessor::SubmitBarriersAndEnterRenderTargetCacheRenderPass(
+                                                   VK_SUBPASS_CONTENTS_INLINE);
+   }
+   in_render_pass_ = true;
++  dbz3_gpulog::Note(GetCurrentSubmission(),
++                    fmt::format("passe do jogo {}x{} ({}){}", framebuffer->host_extent.width,
++                                framebuffer->host_extent.height,
++                                use_dynamic_rendering ? "dynamic rendering" : "render pass",
++                                dbz3_discard::g_pass_limited ? " sem carregar a cor" : ""));
+   // Passe dos draws do jogo: a renderArea e ajustada no fim a area desenhada (salvo num passe
+   // sem carga da cor: ali a area ja e a do scissor e alargar-la escreveria lixo).
+   dbz3_area_active_ = REXCVAR_GET(dbz3_tight_render_area) && !dbz3_discard::g_pass_limited;
+@@ -4248,6 +4282,10 @@ void VulkanCommandProcessor::SubmitBarriersAndEnterRenderTargetCacheRenderPass(
+   }
+   in_render_pass_ = true;
+   dbz3_discard::g_pass_limited = false;
++  dbz3_gpulog::Note(GetCurrentSubmission(),
++                    fmt::format("passe de transferencia {}x{}{}", framebuffer->host_extent.width,
++                                framebuffer->host_extent.height,
++                                transfer_dest_is_depth ? " (profundidade)" : ""));
+   // Passes de transferencia/limpeza do render target cache: renderArea inteira.
+   dbz3_area_active_ = false;
+   dbz3_area_has_ = false;
+@@ -5611,7 +5649,8 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type, uint32_t
+     const uint64_t discard_vs = vertex_shader->ucode_data_hash();
+     const bool is_clear_vs = discard_vs == UINT64_C(0x1E6883FCCDE1F688);
+     const bool discard_candidate =
+-        REXCVAR_GET(dbz3_discard_full_overwrite) && pixel_shader && !pixel_shader->kills_pixels() &&
++        REXCVAR_GET(dbz3_discard_full_overwrite) && !ui::vulkan::Dbz3TurnipA6xxSafe() &&
++        pixel_shader && !pixel_shader->kills_pixels() &&
+         !pixel_shader->writes_depth() && !memexport_used_vertex && !memexport_used_pixel &&
+         ((prim_type == xenos::PrimitiveType::kQuadList && index_count == 4) ||
+          (prim_type == xenos::PrimitiveType::kRectangleList && index_count == 3)) &&
+@@ -6058,6 +6097,13 @@ bool VulkanCommandProcessor::IssueCopy() {
+   ReadbackResolveMode readback_mode = GetReadbackResolveMode(REXCVAR_GET(vulkan_readback_resolve));
+   // Dragon Burst: durante uma captura (1.o frame) cada resolve e lido de volta da GPU e
+   // gravado na captura (dbz3_capture::kResolveData).
++  {
++    const uint32_t dest = register_file_->values[XE_GPU_REG_RB_COPY_DEST_BASE];
++    const uint32_t pitch = register_file_->values[XE_GPU_REG_RB_COPY_DEST_PITCH];
++    dbz3_gpulog::Note(GetCurrentSubmission(),
++                      fmt::format("resolve dest={:08X} pitch={:08X} copy_control={:08X}", dest,
++                                  pitch, register_file_->values[XE_GPU_REG_RB_COPY_CONTROL]));
++  }
+   if (readback_mode == ReadbackResolveMode::kDisabled && !dbz3_capture::WantsResolveReadback()) {
+     uint32_t written_address, written_length;
+     return render_target_cache_->Resolve(*memory_, *shared_memory_, *texture_cache_,
+@@ -6495,6 +6541,8 @@ bool VulkanCommandProcessor::AcquireOcclusionQueryIndex(uint32_t& host_index_out
+ void VulkanCommandProcessor::DisableHostOcclusionQueries() {
+   if (active_occlusion_query_.valid && occlusion_query_pool_ != VK_NULL_HANDLE) {
+     if (BeginSubmission(true)) {
++      // 0065: fora do passe, como o inicio (ver EndSubmission).
++      EndRenderPass();
+       deferred_command_buffer_.CmdVkEndQuery(occlusion_query_pool_,
+                                              active_occlusion_query_.host_index);
+       EndSubmission(false);
+@@ -6506,6 +6554,12 @@ void VulkanCommandProcessor::DisableHostOcclusionQueries() {
+ }
+ 
+ bool VulkanCommandProcessor::BeginGuestOcclusionQuery(uint32_t sample_count_address) {
++  // 0065: no modo seguro do Turnip 6xx as queries de oclusao ficam simuladas
++  // (query_occlusion_fake_sample_count): cada uma era uma espera completa pela GPU e o fim de uma
++  // query no Turnip 6xx espera pelo contador de amostras dentro do command buffer.
++  if (ui::vulkan::Dbz3TurnipA6xxSafe()) {
++    return false;
++  }
+   if (!REXCVAR_GET(occlusion_query_enable) || !occlusion_query_resources_available_ ||
+       occlusion_query_pool_ == VK_NULL_HANDLE || occlusion_query_readback_mapping_ == nullptr) {
+     return false;
+@@ -6530,6 +6584,7 @@ bool VulkanCommandProcessor::BeginGuestOcclusionQuery(uint32_t sample_count_addr
+   DeferredCommandBuffer& command_buffer = deferred_command_buffer();
+   command_buffer.CmdVkResetQueryPool(occlusion_query_pool_, host_index, 1);
+   command_buffer.CmdVkBeginQuery(occlusion_query_pool_, host_index, 0);
++  dbz3_gpulog::Note(GetCurrentSubmission(), fmt::format("query de oclusao {} comeca", host_index));
+   active_occlusion_query_.sample_count_address = sample_count_address;
+   active_occlusion_query_.host_index = host_index;
+   active_occlusion_query_.valid = true;
+@@ -6554,6 +6609,8 @@ bool VulkanCommandProcessor::EndGuestOcclusionQuery(uint32_t sample_count_addres
+ 
+   DeferredCommandBuffer& command_buffer = deferred_command_buffer();
+   command_buffer.CmdVkEndQuery(occlusion_query_pool_, host_index);
++  dbz3_gpulog::Note(GetCurrentSubmission(),
++                    fmt::format("query de oclusao {} acaba (copia com espera)", host_index));
+   command_buffer.CmdVkCopyQueryPoolResults(occlusion_query_pool_, host_index, 1,
+                                            occlusion_query_readback_buffer_,
+                                            sizeof(uint64_t) * host_index, sizeof(uint64_t),
+@@ -6670,6 +6727,7 @@ void VulkanCommandProcessor::CheckSubmissionFenceAndDeviceLoss(uint64_t await_su
+       REXGPU_ERROR("Failed to await submission completion Vulkan fences");
+       if (wait_result == VK_ERROR_DEVICE_LOST) {
+         device_lost_ = true;
++        dbz3_gpulog::Dump(submission_completed_, "espera pela submissao");
+       }
+     }
+   }
+@@ -6682,6 +6740,7 @@ void VulkanCommandProcessor::CheckSubmissionFenceAndDeviceLoss(uint64_t await_su
+     if (fence_status != VK_SUCCESS) {
+       if (fence_status == VK_ERROR_DEVICE_LOST) {
+         device_lost_ = true;
++        dbz3_gpulog::Dump(submission_completed_ + fences_awaited, "estado da submissao");
+       }
+       break;
+     }
+@@ -6697,6 +6756,8 @@ void VulkanCommandProcessor::CheckSubmissionFenceAndDeviceLoss(uint64_t await_su
+     // Not updated - no need to reclaim or download things.
+     return;
+   }
++  g_dbz3_completed_submission.store(submission_completed_ + fences_awaited,
++                                    std::memory_order_relaxed);
+   // Reclaim fences.
+   fences_free_.reserve(fences_free_.size() + fences_awaited);
+   auto submissions_in_flight_fences_awaited_end = submissions_in_flight_fences_.cbegin();
+@@ -6983,6 +7044,10 @@ bool VulkanCommandProcessor::EndSubmission(bool is_swap) {
+   }
+ 
+   bool is_closing_frame = is_swap && frame_open_;
++  if (submission_open_) {
++    dbz3_gpulog::Note(GetCurrentSubmission(),
++                      is_swap ? std::string("fim da submissao (swap)") : std::string("fim da submissao"));
++  }
+ 
+   if (is_closing_frame) {
+     texture_cache_->EndFrame();
+@@ -6993,14 +7058,18 @@ bool VulkanCommandProcessor::EndSubmission(bool is_swap) {
+   if (submission_open_) {
+     assert_false(scratch_buffer_used_);
+ 
++    // 0065: a query comecou fora de um passe (BeginGuestOcclusionQuery fecha o passe antes):
++    // tem de acabar fora dele tambem (regra do Vulkan; no Turnip um fim dentro de um passe vai
++    // para o draw_cs, corrido no binning e em cada tile). Antes, o EndQuery vinha antes do
++    // EndRenderPass.
++    EndRenderPass();
++
+     if (active_occlusion_query_.valid && occlusion_query_pool_ != VK_NULL_HANDLE) {
+       deferred_command_buffer_.CmdVkEndQuery(occlusion_query_pool_,
+                                              active_occlusion_query_.host_index);
+       active_occlusion_query_ = {};
+     }
+ 
+-    EndRenderPass();
+-
+     pipeline_cache_->EndSubmission();
+ 
+     render_target_cache_->EndSubmission();
+@@ -7116,6 +7185,7 @@ bool VulkanCommandProcessor::EndSubmission(bool is_swap) {
+       REXGPU_ERROR("Failed to submit a Vulkan command buffer");
+       if (submit_result == VK_ERROR_DEVICE_LOST && !device_lost_) {
+         device_lost_ = true;
++        dbz3_gpulog::Dump(submission_completed_, "vkQueueSubmit");
+         if (graphics_system_) {
+           graphics_system_->OnHostGpuLossFromAnyThread(true);
+         }
+diff --git a/src/graphics/vulkan/texture_cache.cpp b/src/graphics/vulkan/texture_cache.cpp
+index edcc403..ad218ff 100644
+--- a/src/graphics/vulkan/texture_cache.cpp
++++ b/src/graphics/vulkan/texture_cache.cpp
+@@ -28,6 +28,7 @@
+ #include <rex/graphics/pipeline/texture/info.h>
+ #include <rex/graphics/pipeline/texture/util.h>
+ #include <rex/graphics/vulkan/command_processor.h>
++#include <rex/graphics/vulkan/dbz3_gpulog.h>
+ #include <rex/graphics/vulkan/dbz3_hitch.h>
+ #include <rex/graphics/vulkan/deferred_command_buffer.h>
+ #include <rex/graphics/vulkan/texture_cache.h>
+@@ -1493,6 +1494,15 @@ bool VulkanTextureCache::LoadTextureDataFromResidentMemoryImpl(Texture& texture,
+       dbz3_load_downscaled ? Dbz3HostSize(texture_key.GetWidth()) : texture_key.GetWidth(),
+       dbz3_load_downscaled ? Dbz3HostSize(texture_key.GetHeight()) : texture_key.GetHeight(),
+       texture_key.GetDepthOrArraySize(), uint32_t(texture_key.format));
++  // 0065: registo para o caso de a GPU cair (dbz3_gpulog).
++  dbz3_gpulog::Note(command_processor_.GetCurrentSubmission(),
++                    fmt::format("textura {}x{}x{} fmt={} mips={} packed={} tiled={} base={:08X}{}",
++                                texture_key.GetWidth(), texture_key.GetHeight(),
++                                texture_key.GetDepthOrArraySize(), uint32_t(texture_key.format),
++                                uint32_t(texture_key.mip_max_level),
++                                uint32_t(texture_key.packed_mips), uint32_t(texture_key.tiled),
++                                uint32_t(texture_key.base_page) << 12,
++                                load_base ? "" : " (so mips)"));
+   // DBZ3-Android: descricao das texturas grandes carregadas (uma vez por chave), para
+   // ligar aos resolves grandes (mesmo endereco) no atalho render target -> textura.
+   if (dbz3_gpuprof::g_state.enabled &&
+diff --git a/src/ui/vulkan/vulkan_device.cpp b/src/ui/vulkan/vulkan_device.cpp
+index edd4628..615929c 100644
+--- a/src/ui/vulkan/vulkan_device.cpp
++++ b/src/ui/vulkan/vulkan_device.cpp
+@@ -10,6 +10,8 @@
+  */
+ 
+ #include <algorithm>
++#include <atomic>
++#include <cctype>
+ #include <cstring>
+ #include <string>
+ #include <unordered_map>
+@@ -69,10 +71,28 @@ REXCVAR_DEFINE_INT32(dbz3_vk_max_storage_buffer_range_mb, 0, "UI/Vulkan",
+ REXCVAR_DEFINE_BOOL(dbz3_vk_turnip_single_shared_buffer, true, "UI/Vulkan",
+                     "DBZ3-Android: no Turnip, memoria do guest num so storage buffer de 512 MB");
+ 
++// DBZ3-Android (0065): Turnip num Adreno 6xx (SD865/RP5, SD480+...). O jogo travava a GPU
++// (VK_ERROR_DEVICE_LOST, "GPU faulted or hung") logo no ecra titulo, so com o Turnip e so nos
++// 6xx (no 8 Elite funciona). Ligado: nesses aparelhos desligam-se as otimizacoes e diagnosticos
++// mais recentes que mexem nos passes e nas queries (ver Dbz3TurnipA6xxSafe()).
++REXCVAR_DEFINE_BOOL(dbz3_turnip_a6xx_safe, true, "UI/Vulkan",
++                    "DBZ3-Android: no Turnip dos Adreno 6xx, modo seguro (sem timestamps da GPU, "
++                    "queries de oclusao simuladas, renderArea inteira, sem descarte da cor)");
++
+ namespace rex {
+ namespace ui {
+ namespace vulkan {
+ 
++namespace {
++std::atomic<bool> g_dbz3_turnip_a6xx{false};
++}  // namespace
++
++bool Dbz3IsTurnipA6xx() { return g_dbz3_turnip_a6xx.load(std::memory_order_relaxed); }
++
++bool Dbz3TurnipA6xxSafe() {
++  return REXCVAR_GET(dbz3_turnip_a6xx_safe) && g_dbz3_turnip_a6xx.load(std::memory_order_relaxed);
++}
++
+ template <typename Structure, VkStructureType StructureType>
+ struct VulkanFeatures {
+   Structure supported = {StructureType};
+@@ -672,6 +692,24 @@ std::unique_ptr<VulkanDevice> VulkanDevice::CreateIfSupported(
+   XE_UI_VULKAN_LIMIT(maxImageDimensionCube)
+   XE_UI_VULKAN_LIMIT(maxImageArrayLayers)
+   XE_UI_VULKAN_LIMIT(maxStorageBufferRange)
++  if (ext_1_2_KHR_driver_properties &&
++      properties_1_2_KHR_driver_properties.driverID == VK_DRIVER_ID_MESA_TURNIP) {
++    // O Turnip poe o chip id no deviceID: 0x06xxxxxx nos 6xx (0x6050002 = Adreno 650); os
++    // 7xx/8xx novos usam 0x43../0x44.. ou 0x07... O nome ("Turnip Adreno (TM) 650") confirma.
++    const char* adreno = std::strstr(properties.deviceName, "Adreno (TM) ");
++    const bool a6xx = (properties.deviceID >> 24) == 6 ||
++                      (adreno && adreno[12] == '6' && std::isdigit(uint8_t(adreno[13])));
++    g_dbz3_turnip_a6xx.store(a6xx, std::memory_order_relaxed);
++    if (a6xx) {
++      REXLOG_INFO("dbz3: Turnip num Adreno 6xx ({}): modo seguro {}", properties.deviceName,
++                  REXCVAR_GET(dbz3_turnip_a6xx_safe) ? "ligado (sem timestamps da GPU, queries "
++                                                        "de oclusao simuladas, renderArea "
++                                                        "inteira, sem descarte da cor)"
++                                                      : "desligado (dbz3_turnip_a6xx_safe)");
++    }
++  } else {
++    g_dbz3_turnip_a6xx.store(false, std::memory_order_relaxed);
++  }
+   if (REXCVAR_GET(dbz3_vk_max_storage_buffer_range_mb) <= 0 &&
+       REXCVAR_GET(dbz3_vk_turnip_single_shared_buffer) && ext_1_2_KHR_driver_properties &&
+       properties_1_2_KHR_driver_properties.driverID == VK_DRIVER_ID_MESA_TURNIP &&
+diff --git a/src/ui/vulkan/vulkan_instance.cpp b/src/ui/vulkan/vulkan_instance.cpp
+index 2da6869..91e02ba 100644
+--- a/src/ui/vulkan/vulkan_instance.cpp
++++ b/src/ui/vulkan/vulkan_instance.cpp
+@@ -9,6 +9,7 @@
+  * @modified    Tom Clay, 2026 - Adapted for ReXGlue runtime
+  */
+ 
++#include <atomic>
+ #include <sstream>
+ #include <string>
+ #include <unordered_map>
+@@ -709,6 +710,14 @@ void VulkanInstance::EnumeratePhysicalDevices(
+   }
+ }
+ 
++namespace {
++std::atomic<void (*)()> g_dbz3_device_lost_hook{nullptr};
++}  // namespace
++
++void Dbz3SetDeviceLostHook(void (*hook)()) {
++  g_dbz3_device_lost_hook.store(hook, std::memory_order_release);
++}
++
+ VkBool32 VulkanInstance::DebugUtilsMessengerCallback(
+     VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
+     VkDebugUtilsMessageTypeFlagsEXT message_types,
+@@ -765,6 +774,15 @@ VkBool32 VulkanInstance::DebugUtilsMessengerCallback(
+   }
+ 
+   auto msg = log_str.str();
++  // DBZ3-Android (0065): GPU perdida (o Turnip diz "GPU faulted or hung (VK_ERROR_DEVICE_LOST)").
++  const bool dbz3_device_lost = msg.find("DEVICE_LOST") != std::string::npos;
++  if (dbz3_device_lost) {
++    REXGPU_ERROR("{}", msg);
++    if (void (*hook)() = g_dbz3_device_lost_hook.load(std::memory_order_acquire)) {
++      hook();
++    }
++    return VK_FALSE;
++  }
+   if (message_severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+     REXGPU_ERROR("{}", msg);
+   } else if (message_severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {

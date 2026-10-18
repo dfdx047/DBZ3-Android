@@ -1134,3 +1134,42 @@ diferente?); `dbz3: dedupe:` e `dbz3: passo 4:` no log; perf a 720p vs 540p no C
   Testes pedidos: compat Turnip (flag 64 = `TU_DEBUG=flushall,syncdraw`), Rutabaga, e
   `dbz3_vk_turnip_single_shared_buffer = false` no `cvars.txt`.
 - Update: HTTP 404 do `releases/latest` = sem update (ainda não há releases).
+
+### 2026-10-18 — v0.6.2: Turnip nos Adreno 6xx (patch 0065) e compatibilidade automática
+
+Análise dos logs do RP5 (Turnip_v26.3.0-R6, 15:49) e do logcat (crashes iguais a 16/10 21:46/21:47,
+~15 s de uptime: sempre no ecrã título, logo depois do vídeo de abertura):
+- Durante o vídeo, 8,8 s sem swaps do jogo, mas o presenter continuou a 61 fps e a GPU a 9–25%:
+  não era a GPU travada (o mesmo atraso existe, menor, no driver do sistema). O CP não esperou
+  por fences (espera_gpu 0) nem carregou texturas nesse intervalo.
+- Ao chegar ao título: arranca o perfil de GPU (timestamps; o primeiro fim de janela de 5 s foi
+  só aqui por causa do vídeo), cargas das primeiras texturas grandes com mips empacotados (8888 e
+  DXT2/3 = BC2) e 0,4 s depois `GPU faulted or hung (VK_ERROR_DEVICE_LOST)`
+  (tu_knl_kgsl.cc); SIGABRT na thread do CP. No driver do sistema as mesmas texturas passam.
+- O UnleashedRecomp-Android tem o mesmo sintoma no RP5 com Turnip 26.3.0-devel (issue #170).
+- Turnip (Mesa main, lido o código): nos 6xx (`has_event_write_sample_count` só nos 7xx gen2+) o
+  fim de uma query de oclusão espera no CP (CP_WAIT_REG_MEM) pelo ZPASS_DONE; dentro de um passe
+  vai para o draw_cs (binning + cada tile). O nosso EndSubmission fechava a query **antes** do
+  EndRenderPass (fim dentro de um passe de uma query começada fora: inválido). O limite de
+  storage buffer dos 6xx é 2^27 elementos de textura (o descritor de 32 bits com 512 MB fica
+  exatamente no limite; o de 16 bits passa-o, mas só serve acessos de 16 bits).
+
+Patch 0065 (SDK):
+- `dbz3_turnip_a6xx_safe` (ligado): Turnip num Adreno 6xx (deviceID 0x06…, ou nome "Adreno (TM)
+  6xx") → sem timestamps da GPU (perfil), queries de oclusão simuladas, renderArea inteira (sem
+  `dbz3_tight_render_area`) e sem `dbz3_discard_full_overwrite`. Log "dbz3: Turnip num Adreno 6xx".
+- Query de oclusão: EndRenderPass antes do EndQuery no EndSubmission e no
+  DisableHostOcclusionQueries (todas as GPUs).
+- `dbz3_gpulog`: anel de 256 operações (passes do jogo/transferência, resolves, cargas de
+  texturas, queries, fins de submissão) com a submissão de cada uma. Na perda da GPU (aviso do
+  driver no callback de debug, na thread do CP; espera de fences; vkQueueSubmit) escreve
+  "dbz3: GPU perdida … Operações por concluir: [sub N] …" — diz o comando que travou.
+
+App: modo de compatibilidade automático do Turnip (`TurnipCompat`, pref
+`turnip_auto_level:<driver>`). A cada GPU perdida com um Turnip o nível sobe (1: sysmem, nolrz,
+noubwc, BC descomprimido; 2: + sem dynamic rendering/stencil export, depth f32,
+flushall+syncdraw; 3: + memória em 4 blocos). GameActivity junta os bits às correções manuais. A
+janela de erro diz "modo N/3, aperte Jogar de novo"; a aba Drivers mostra o modo e volta ao 0.
+
+Por testar no RP5: (1) com o 0.6.2 o título e uma luta com o Turnip R6; (2) se cair, o log agora
+traz as operações por concluir e o modo seguinte entra sozinho.

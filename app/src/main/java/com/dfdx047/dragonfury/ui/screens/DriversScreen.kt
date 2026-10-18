@@ -37,12 +37,17 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.dfdx047.dragonfury.R
+import com.dfdx047.dragonfury.data.TurnipCompat
 import com.dfdx047.dragonfury.drivers.DriverRelease
 import com.dfdx047.dragonfury.drivers.DriverRepository
 import com.dfdx047.dragonfury.drivers.InstalledDriver
@@ -104,6 +109,26 @@ fun DriversScreen(vm: LauncherViewModel) {
                     }
                 }
                 Text(stringResource(R.string.drivers_restart_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // Modo de compatibilidade automatico do Turnip (sobe sozinho quando a GPU cai).
+                if (active != null && TurnipCompat.isTurnip(active)) {
+                    val ctx = LocalContext.current
+                    var level by remember(active) { mutableIntStateOf(TurnipCompat.level(ctx, active)) }
+                    Text(
+                        stringResource(R.string.turnip_auto_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        stringResource(R.string.turnip_auto_text, active, level),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    if (level > 0) {
+                        TextButton(onClick = {
+                            TurnipCompat.reset(ctx, active)
+                            level = 0
+                        }) { Text(stringResource(R.string.turnip_auto_reset)) }
+                    }
+                }
             }
         }
         item {

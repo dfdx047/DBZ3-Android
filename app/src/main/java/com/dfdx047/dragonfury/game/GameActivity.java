@@ -465,10 +465,54 @@ public class GameActivity extends SDLActivity {
             TURNIP_BC_DECOMPRESS = 8, TURNIP_SIMPLE_PASSES = 16, TURNIP_DEPTH_F32 = 32,
             TURNIP_FULL_SYNC = 64;
 
+    /**
+     * Modo de compatibilidade automatico do Turnip (0.6.2): quando o jogo trava a GPU com um
+     * driver Turnip (VK_ERROR_DEVICE_LOST, ver SystemCheck.gpuLost no launcher), o launcher sobe
+     * o nivel desse driver e o arranque seguinte junta mais correcoes. Por driver (nome da pasta
+     * em driver/.source), para trocar de versao do Turnip comecar do zero.
+     *   0  nada (o modo seguro dos Adreno 6xx, patch 0065, ja vem no runtime)
+     *   1  sem GMEM, sem LRZ nem UBWC, texturas BC descomprimidas (a GPU do RP5 caiu logo a
+     *      seguir as primeiras texturas DXT com mips empacotados do ecra titulo)
+     *   2  + caminhos simples (sem dynamic rendering/stencil export), depth float32 e
+     *      sincronizacao total (lento, mas sem corridas entre comandos)
+     *   3  + memoria do jogo em 4 blocos, como o driver diz (pode ter defeitos de imagem)
+     */
+    static int turnipAutoFlags(int level) {
+        int flags = 0;
+        if (level >= 1) flags |= TURNIP_SYSMEM | TURNIP_NOLRZ_UBWC | TURNIP_BC_DECOMPRESS;
+        if (level >= 2) flags |= TURNIP_SIMPLE_PASSES | TURNIP_FULL_SYNC | TURNIP_DEPTH_F32;
+        return flags;
+    }
+
+    private String activeDriverSource() {
+        File appDir = getExternalFilesDir(null);
+        if (appDir == null) return null;
+        File dir = new File(appDir, "driver");
+        File[] libs = dir.listFiles((d, name) -> name.endsWith(".so"));
+        if (libs == null || libs.length == 0) return null;
+        File src = new File(dir, ".source");
+        try {
+            if (src.isFile()) return new String(Files.readAllBytes(src.toPath())).trim();
+        } catch (IOException ignored) {
+        }
+        return libs[0].getName();
+    }
+
     private void applyTurnipCompat() {
         @SuppressWarnings("deprecation")
         SharedPreferences prefs = getSharedPreferences("dragonfury", MODE_MULTI_PROCESS);
         int flags = prefs.getInt("turnip_compat_flags", 0);
+        String driver = activeDriverSource();
+        int autoLevel = driver == null ? 0 : prefs.getInt("turnip_auto_level:" + driver, 0);
+        if (autoLevel > 0) {
+            flags |= turnipAutoFlags(autoLevel);
+            if (autoLevel >= 3) {
+                setEnv("REX_DBZ3_VK_TURNIP_SINGLE_SHARED_BUFFER", "false");
+            }
+            Log.i(TAG, "Turnip: modo de compatibilidade automatico " + autoLevel + " (" + driver + ")");
+            com.dfdx047.dragonfury.data.AppLog.info(com.dfdx047.dragonfury.R.string.log_turnip_level,
+                    autoLevel + " · " + driver);
+        }
         if (flags == 0) {
             return;
         }
@@ -480,7 +524,7 @@ public class GameActivity extends SDLActivity {
             tu.setLength(tu.length() - 1);
             setEnv("TU_DEBUG", tu.toString());
         }
-        if ((flags & TURNIP_SINGLE_BUFFER) != 0) {
+        if ((flags & TURNIP_SINGLE_BUFFER) != 0 && autoLevel < 3) {
             setEnv("REX_DBZ3_VK_MAX_STORAGE_BUFFER_RANGE_MB", "512");
         }
         if ((flags & TURNIP_BC_DECOMPRESS) != 0) {
