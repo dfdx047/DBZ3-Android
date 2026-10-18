@@ -1,18 +1,8 @@
 diff --git a/include/rex/graphics/pipeline/texture/cache.h b/include/rex/graphics/pipeline/texture/cache.h
-index 88b1fb4..050fe86 100644
+index 88b1fb4..5419578 100644
 --- a/include/rex/graphics/pipeline/texture/cache.h
 +++ b/include/rex/graphics/pipeline/texture/cache.h
-@@ -255,6 +255,9 @@ class TextureCache {
- 
-     void WatchCallback(const std::unique_lock<std::recursive_mutex>& global_lock, bool is_mip);
- 
-+    // 0068: volta a carregar da memoria no proximo uso (captura de frames).
-+    void Dbz3ForceReload(const std::unique_lock<std::recursive_mutex>& global_lock);
-+
-     // DBZ3: la saca de la lista LRU (RetireTexture: la cache ya no la encuentra por su key).
-     void RemoveFromUsageList();
- 
-@@ -593,6 +596,10 @@ class TextureCache {
+@@ -593,6 +593,10 @@ class TextureCache {
    // Procura uma textura ja criada com esta chave (sem criar) e marca-a como
    // carregada depois de o conteudo ter sido escrito por outro caminho.
    Texture* Dbz3FindTexture(const TextureKey& key);
@@ -172,60 +162,47 @@ index 0d33625..b467aa4 100644
                                               bool load_mips) override;
  
 diff --git a/src/graphics/pipeline/texture/cache.cpp b/src/graphics/pipeline/texture/cache.cpp
-index 71135c1..2be6b92 100644
+index 71135c1..2fe33be 100644
 --- a/src/graphics/pipeline/texture/cache.cpp
 +++ b/src/graphics/pipeline/texture/cache.cpp
-@@ -813,6 +813,48 @@ std::string TextureCache::Dbz3DescribeTexturesAt(uint32_t base_page) const {
+@@ -813,6 +813,35 @@ std::string TextureCache::Dbz3DescribeTexturesAt(uint32_t base_page) const {
    return count ? out : std::string(" (nenhuma)");
  }
  
-+void TextureCache::Texture::Dbz3ForceReload(
-+    const std::unique_lock<std::recursive_mutex>& global_lock) {
-+  SharedMemory& shared_memory = texture_cache().shared_memory();
-+  if (base_watch_handle_) {
-+    shared_memory.UnwatchMemoryRange(base_watch_handle_);
-+    base_watch_handle_ = nullptr;
-+  }
-+  if (mips_watch_handle_) {
-+    shared_memory.UnwatchMemoryRange(mips_watch_handle_);
-+    mips_watch_handle_ = nullptr;
-+  }
-+  uint32_t mask = 0;
-+  if (GetGuestBaseSize()) {
-+    base_outdated_ = true;
-+    mask |= kOutdatedBitBase;
-+  }
-+  if (GetGuestMipsSize()) {
-+    mips_outdated_ = true;
-+    mask |= kOutdatedBitMips;
-+  }
-+  outdated_mask_.fetch_or(mask, std::memory_order_release);
-+}
-+
 +uint32_t TextureCache::Dbz3ReloadAllForCapture() {
-+  auto global_lock = global_critical_region_.Acquire();
-+  uint32_t count = 0;
-+  for (auto& entry : textures_) {
-+    Texture* texture = entry.second.get();
-+    if (!texture) continue;
-+    const TextureKey& key = texture->key();
-+    if (key.scaled_resolve) continue;
-+    if (key.tiled && key.mip_max_level == 0 &&
-+        key.dimension == xenos::DataDimension::k2DOrStacked) {
-+      continue;
++  // Os intervalos sao invalidados como se o CPU os tivesse escrito: a memoria volta a ser
++  // enviada para a GPU a partir da do guest e as texturas que os vigiam ficam desatualizadas.
++  std::vector<std::pair<uint32_t, uint32_t>> ranges;
++  {
++    auto global_lock = global_critical_region_.Acquire();
++    for (auto& entry : textures_) {
++      Texture* texture = entry.second.get();
++      if (!texture) continue;
++      const TextureKey& key = texture->key();
++      if (key.scaled_resolve) continue;
++      if (key.tiled && key.mip_max_level == 0 &&
++          key.dimension == xenos::DataDimension::k2DOrStacked) {
++        continue;
++      }
++      if (texture->GetGuestBaseSize()) {
++        ranges.emplace_back(uint32_t(key.base_page) << 12, texture->GetGuestBaseSize());
++      }
++      if (texture->GetGuestMipsSize()) {
++        ranges.emplace_back(uint32_t(key.mip_page) << 12, texture->GetGuestMipsSize());
++      }
 +    }
-+    texture->Dbz3ForceReload(global_lock);
-+    ++count;
 +  }
-+  texture_became_outdated_.store(true, std::memory_order_release);
-+  return count;
++  for (const auto& range : ranges) {
++    shared_memory().MemoryInvalidationCallback(range.first, range.second, true);
++  }
++  return uint32_t(ranges.size());
 +}
 +
  void TextureCache::Dbz3MarkTextureLoaded(Texture& texture) {
    texture.MakeUpToDateAndWatch(global_critical_region_.Acquire());
  }
 diff --git a/src/graphics/vulkan/command_processor.cpp b/src/graphics/vulkan/command_processor.cpp
-index 7cd7a22..4534e3b 100644
+index 7cd7a22..1ca0d80 100644
 --- a/src/graphics/vulkan/command_processor.cpp
 +++ b/src/graphics/vulkan/command_processor.cpp
 @@ -3057,9 +3057,18 @@ void VulkanCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr, uint32_t frontb
@@ -240,7 +217,7 @@ index 7cd7a22..4534e3b 100644
                           frontbuffer_height);
      if (!capture_was_active && dbz3_capture::Active()) {
 +      if (texture_cache_) {
-+        REXGPU_INFO("dbz3: captura: {} texturas marcadas para recarregar (lidas de volta no 1.o "
++        REXGPU_INFO("dbz3: captura: {} intervalos de texturas a recarregar (lidos de volta no 1.o "
 +                    "frame)",
 +                    texture_cache_->Dbz3CaptureBegin());
 +      }
