@@ -1,0 +1,36 @@
+diff --git a/src/graphics/vulkan/render_target_cache.cpp b/src/graphics/vulkan/render_target_cache.cpp
+index 24c5f60..856fe06 100644
+--- a/src/graphics/vulkan/render_target_cache.cpp
++++ b/src/graphics/vulkan/render_target_cache.cpp
+@@ -1184,6 +1184,12 @@ bool Dbz3PostFxNoteResolve(uint32_t dest, uint32_t base_tiles, uint32_t pitch_ti
+ bool Dbz3BloomSkipsSmallTargets();
+ extern uint64_t g_dbz3_frame_index;
+ 
++// DBZ3-Android (0075): o 0072 como interruptor (para o autoteste medir o custo): no Turnip dos
++// Adreno 6xx os resolves escrevem sempre a memoria do guest (sem isto faltavam o HUD e os menus).
++REXCVAR_DEFINE_BOOL(dbz3_turnip_a6xx_resolve_memory, true, "GPU",
++                    "DBZ3-Android: no Turnip dos Adreno 6xx, resolves sempre com escrita na memoria")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++
+ // DBZ3-Android (dbz3_direct_resolve_skip_memory): destinos de resolves feitos so na textura,
+ // sem escrita na memoria do guest. Se outra textura (que o atalho nao encontrou) for carregada
+ // da memoria desse intervalo logo a seguir, leria conteudo velho (piscada preta/lixo): esse
+@@ -1349,7 +1355,7 @@ bool VulkanRenderTargetCache::Resolve(const memory::Memory& memory,
+   // falta (autoteste RP5 2026-10-18: com dbz3_direct_resolve_skip_memory=false a imagem fica
+   // completa); ali o resolve escreve sempre a memoria.
+   if (resolve_info.copy_dest_extent_length && !draw_resolution_scaled && !dbz3_capture_readback &&
+-      !ui::vulkan::Dbz3TurnipA6xxSafe() &&
++      !(ui::vulkan::Dbz3TurnipA6xxSafe() && REXCVAR_GET(dbz3_turnip_a6xx_resolve_memory)) &&
+       rex::cvar::GetFlagByName("dbz3_direct_resolve_skip_memory") == "true" &&
+       std::find(g_dbz3_need_memory.begin(), g_dbz3_need_memory.end(),
+                 resolve_info.copy_dest_base) == g_dbz3_need_memory.end()) {
+@@ -7867,7 +7873,8 @@ VkImageView VulkanRenderTargetCache::Dbz3RitBegin(VulkanTextureCache& texture_ca
+   if (g_active || !signature || IsDrawResolutionScaled() ||
+       rex::cvar::GetFlagByName("dbz3_render_into_texture") != "true" ||
+       rex::cvar::GetFlagByName("dbz3_direct_resolve_skip_memory") != "true" ||
+-      ui::vulkan::Dbz3TurnipA6xxSafe() || dbz3_capture::WantsResolveReadback()) {
++      (ui::vulkan::Dbz3TurnipA6xxSafe() && REXCVAR_GET(dbz3_turnip_a6xx_resolve_memory)) ||
++      dbz3_capture::WantsResolveReadback()) {
+     return VK_NULL_HANDLE;
+   }
+   auto it = g_table.find(signature);

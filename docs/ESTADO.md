@@ -1299,3 +1299,15 @@ traz as operações por concluir e o modo seguinte entra sozinho.
   Antes do 0074 a luta ficava em 27–34 fps → o custo era a renderArea 1280x2048 inteira.
 - Por testar (opcional): o GMEM com a área justa (o modo seguro em GMEM ainda força a área
   inteira, e pode ser essa a causa dos travamentos com GMEM).
+
+### 2026-10-18 21:10 — 0.6.11 numa luta (zip 204737) e v0.6.12 (patch 0075)
+- Os 7 min a 60 fps do zip 204301 eram no menu. Na luta (efeitos ligados): 17–29 fps, gpu_ms
+  ~28 (desenho ~10 ms/21 passes, resolve ~17 ms; 14–21 resolves/f, 10 Mpx: 1280x720 x10,
+  320x184 x5, 160x96 x2, 80x48 x2). No driver do sistema (autoteste 183236) os mesmos resolves
+  custam ~8–9 ms com sem_memoria e ~16 ms sem → o 0072 é a maior perda no Turnip.
+- Pistas sobre o 0072: no autoteste de 0.6.6, "sem resolve direto na textura" tinha bandas pretas
+  de 32 linhas em cada 96 na imagem final (carga compute de 1280x720 tiled vinda de resolve) →
+  as cargas compute de texturas tiled continuam erradas no Turnip A6xx; o resolve com memória +
+  escrita direta na textura evita essas cargas.
+- 0075: o 0072 passa a cvar `dbz3_turnip_a6xx_resolve_memory` (hot reload); o autoteste ganhou
+  "Turnip 6xx: resolves com memoria" para medir o ganho e ver se o HUD some.

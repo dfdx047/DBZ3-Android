@@ -3,6 +3,16 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.12 — 2026-10-18
+
+### Turnip on Adreno 6xx
+- 0.6.11 measured in a fight (RP5, effects on): 17–29 fps, GPU ~28 ms/frame, of which resolves
+  ~17 ms (14–21 resolves/frame, 10 Mpx) and drawing ~10 ms. On the system driver the same
+  resolves cost ~8–9 ms with texture-only resolves and ~16 ms when they also write memory, so the
+  forced memory writes from 0072 are the main loss on Turnip.
+- 0072 is now the cvar `dbz3_turnip_a6xx_resolve_memory` (SDK patch 0075) and the render
+  self-test toggles it, so one run shows both the GPU time saved and whether the HUD/menus break.
+
 ## 0.6.11 — 2026-10-18
 
 ### Turnip on Adreno 6xx

@@ -70,6 +70,9 @@ class RenderSelfTest(
         Opt("render targets diretos", mapOf("dbz3_rt_direct" to ("true" to "false"))),
         Opt("resolve direto na textura", mapOf("dbz3_direct_resolve_texture" to ("1" to "0"))),
         Opt("resolve sem memoria", mapOf("dbz3_direct_resolve_skip_memory" to ("true" to "false"))),
+        // 0075: no Turnip dos Adreno 6xx os resolves escrevem sempre a memoria (0072); "sem" mede o
+        // que se ganharia com o resolve so para a textura (e mostra se o HUD/menus somem).
+        Opt("Turnip 6xx: resolves com memoria", mapOf("dbz3_turnip_a6xx_resolve_memory" to ("true" to "false"))),
         // 0060/0061: a copia do resolve como desenho (fragmentos) em vez de compute (so Mali).
         Opt("resolve por desenho", mapOf("dbz3_resolve_draw" to ("true" to "false"))),
         // Efeitos do jogo: mudam a imagem de proposito ("DIFERENTE" e o esperado); estao aqui
