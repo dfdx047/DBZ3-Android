@@ -1173,3 +1173,17 @@ janela de erro diz "modo N/3, aperte Jogar de novo"; a aba Drivers mostra o modo
 
 Por testar no RP5: (1) com o 0.6.2 o título e uma luta com o Turnip R6; (2) se cair, o log agora
 traz as operações por concluir e o modo seguinte entra sozinho.
+
+### 2026-10-18 17:00 — logs do RP5 com 0.6.2 e v0.6.3 (patch 0066)
+- Nível 0 (só o modo seguro do 0065): a GPU cai no ecrã título com os três Turnip (R6, R8
+  "GPU faulted or hung", Rutabaga "KGSL timestamp wait failed: Protocol error"), 0,2 s depois das
+  primeiras texturas grandes com mips empacotados (8888 e DXT2/3). O dbz3_gpulog mostra uma
+  submissão pequena por concluir (2 passes do jogo, 2 resolves, 1 transferência): a falha vem de
+  antes (o KGSL dá a submissão faltosa como concluída), a carga das texturas.
+- Nível 1 (sysmem, nolrz, noubwc, BC descomprimido): título e lutas a 60 fps durante minutos.
+  Só caiu no autoteste, no passo "com transferências profundidade->profundidade"
+  (`dbz3_rt_keep_dd`), que no jogo normal não corre (rt_direct salta-as).
+- Correção (0.6.3): Turnip num Adreno 6xx começa sempre no nível 1 (GameActivity: nome da GPU do
+  último arranque, `/sys/class/kgsl/kgsl-3d0/gpu_model`, SOC_MODEL ou placa); no SDK (0066), no
+  modo seguro dos 6xx, BC sempre descomprimido e sem `VK_EXT_shader_stencil_export` (deteção pelo
+  nome "… Adreno (TM) 6xx" antes de escolher as extensões).

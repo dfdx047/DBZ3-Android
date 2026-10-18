@@ -1,0 +1,77 @@
+diff --git a/include/rex/graphics/vulkan/dbz3_gpulog.h b/include/rex/graphics/vulkan/dbz3_gpulog.h
+index 3125008..688264b 100644
+--- a/include/rex/graphics/vulkan/dbz3_gpulog.h
++++ b/include/rex/graphics/vulkan/dbz3_gpulog.h
+@@ -39,6 +39,12 @@ inline void Dump(uint64_t completed, const char* why) {
+   REXGPU_ERROR("dbz3: GPU perdida ({}); ultima submissao concluida {}. Operacoes por concluir:",
+                why, completed);
+   const uint32_t count = g_head < kSize ? g_head : kSize;
++  // O KGSL pode dar a submissao que falhou como concluida: mostra tambem a ultima concluida.
++  for (uint32_t i = 0; i < count; ++i) {
++    const Entry& e = g_ring[(g_head - count + i) % kSize];
++    if (e.submission != completed || e.text.empty()) continue;
++    REXGPU_ERROR("dbz3:   [sub {} concluida] {}", e.submission, e.text);
++  }
+   uint32_t shown = 0;
+   for (uint32_t i = 0; i < count; ++i) {
+     const Entry& e = g_ring[(g_head - count + i) % kSize];
+diff --git a/src/graphics/vulkan/texture_cache.cpp b/src/graphics/vulkan/texture_cache.cpp
+index ad218ff..f80acaa 100644
+--- a/src/graphics/vulkan/texture_cache.cpp
++++ b/src/graphics/vulkan/texture_cache.cpp
+@@ -34,6 +34,7 @@
+ #include <rex/graphics/vulkan/texture_cache.h>
+ #include <rex/logging.h>
+ #include <rex/math.h>
++#include <rex/ui/vulkan/device.h>
+ #include <rex/ui/vulkan/mem_alloc.h>
+ #include <rex/ui/vulkan/ui_samplers.h>
+ #include <rex/ui/vulkan/util.h>
+@@ -3405,8 +3406,12 @@ bool VulkanTextureCache::Initialize() {
+   // S3TC. vulkan_mask_features=textureCompressionBC takes the decompression fallbacks (as
+   // on Mali / PowerVR, which have no BC formats). Patch from RB2-Android (BSD-3); a cvar e
+   // definida no rexui, lida por nome (outro .so).
++  // 0066: no Turnip dos Adreno 6xx as texturas BC (DXT) com mips empacotados travavam a GPU no
++  // ecra titulo (RP5, 18/10, Turnip R6/R8/Rutabaga): no modo seguro descomprimem-se sempre.
+   const bool mask_bc =
+-      rex::cvar::GetFlagByName("vulkan_mask_features").find("textureCompressionBC") != std::string::npos;
++      rex::cvar::GetFlagByName("vulkan_mask_features").find("textureCompressionBC") !=
++          std::string::npos ||
++      ui::vulkan::Dbz3TurnipA6xxSafe();
+   // Not checking the textureCompressionBC feature because its availability
+   // means that all BC formats are supported, however, the device may expose
+   // some BC formats without this feature. Xenia doesn't use BC6H and BC7 at
+diff --git a/src/ui/vulkan/vulkan_device.cpp b/src/ui/vulkan/vulkan_device.cpp
+index 615929c..c943d36 100644
+--- a/src/ui/vulkan/vulkan_device.cpp
++++ b/src/ui/vulkan/vulkan_device.cpp
+@@ -234,7 +234,19 @@ std::unique_ptr<VulkanDevice> VulkanDevice::CreateIfSupported(
+       start = end + 1;
+     }
+   }
++  // 0066: Turnip (ou derivado, ex. Rutabaga) num Adreno 6xx, visto pelo nome antes de escolher
++  // as extensoes ("Turnip Adreno (TM) 650"; o driver da Qualcomm chama-se so "Adreno (TM) 650").
++  // No modo seguro fica sem VK_EXT_shader_stencil_export: as transferencias profundidade ->
++  // profundidade com stencil exportado travavam a GPU no RP5 (autoteste, 18/10 17:00); o Xenia
++  // usa entao a escrita do stencil bit a bit, como no driver da Qualcomm.
++  const char* const dbz3_adreno = std::strstr(properties.deviceName, "Adreno (TM) 6");
++  const bool dbz3_early_turnip_a6xx = REXCVAR_GET(dbz3_turnip_a6xx_safe) && dbz3_adreno &&
++                                      dbz3_adreno != properties.deviceName &&
++                                      std::isdigit(uint8_t(dbz3_adreno[13]));
+   const auto dbz3_extension_disabled = [&](const char* const name) {
++    if (dbz3_early_turnip_a6xx && std::strcmp(name, "VK_EXT_shader_stencil_export") == 0) {
++      return true;
++    }
+     return std::find(dbz3_disabled_extensions.cbegin(), dbz3_disabled_extensions.cend(), name) !=
+            dbz3_disabled_extensions.cend();
+   };
+@@ -704,7 +716,8 @@ std::unique_ptr<VulkanDevice> VulkanDevice::CreateIfSupported(
+       REXLOG_INFO("dbz3: Turnip num Adreno 6xx ({}): modo seguro {}", properties.deviceName,
+                   REXCVAR_GET(dbz3_turnip_a6xx_safe) ? "ligado (sem timestamps da GPU, queries "
+                                                         "de oclusao simuladas, renderArea "
+-                                                        "inteira, sem descarte da cor)"
++                                                        "inteira, sem descarte da cor, BC "
++                                                        "descomprimido, sem stencil export)"
+                                                       : "desligado (dbz3_turnip_a6xx_safe)");
+     }
+   } else {

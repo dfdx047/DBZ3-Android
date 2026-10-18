@@ -484,6 +484,57 @@ public class GameActivity extends SDLActivity {
         return flags;
     }
 
+    /** SoCs com Adreno 6xx (Build.SOC_MODEL), para quando nao ha outra pista. */
+    private static final String[] ADRENO_6XX_SOCS = {
+        "SM8250", "SM8150", "SM7250", "SM7225", "SM7150", "SM7125", "SM6150", "SM6125",
+        "SM6115", "SM6225", "SM6350", "SM6375", "SM4350", "SM4375", "SM7325", "SM7350",
+        "SM8350", "SDM845", "SDM855", "SDM730", "SDM710", "SDM670", "SM7315", "SM6450",
+    };
+
+    /**
+     * Adreno 6xx? Por ordem: o nome da GPU no ultimo arranque (vulkan_driver_status.txt, ex.
+     * "Turnip Adreno (TM) 650"), o modelo no KGSL (/sys/class/kgsl/kgsl-3d0/gpu_model, ex.
+     * "Adreno650v2") e a lista de SoCs.
+     */
+    private boolean isAdreno6xx() {
+        File appDir = getExternalFilesDir(null);
+        if (appDir != null) {
+            File status = new File(appDir, "logs/vulkan_driver_status.txt");
+            try {
+                if (status.isFile()) {
+                    String text = new String(Files.readAllBytes(status.toPath()));
+                    java.util.regex.Matcher m =
+                            java.util.regex.Pattern.compile("Adreno \\(TM\\) (\\d)\\d\\d").matcher(text);
+                    if (m.find()) {
+                        return "6".equals(m.group(1));
+                    }
+                }
+            } catch (IOException ignored) {
+            }
+        }
+        try {
+            String model = new String(Files.readAllBytes(
+                    new File("/sys/class/kgsl/kgsl-3d0/gpu_model").toPath())).trim();
+            if (model.toLowerCase(Locale.ROOT).startsWith("adreno")) {
+                String digits = model.substring(6).replaceAll("[^0-9].*$", "");
+                if (!digits.isEmpty()) {
+                    return digits.charAt(0) == '6' && digits.length() == 3;
+                }
+            }
+        } catch (IOException | RuntimeException ignored) {
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            String soc = android.os.Build.SOC_MODEL;
+            for (String s : ADRENO_6XX_SOCS) {
+                if (s.equalsIgnoreCase(soc)) return true;
+            }
+        }
+        String board = android.os.Build.BOARD.toLowerCase(Locale.ROOT);
+        return board.equals("kona") || board.equals("msmnile") || board.equals("lito")
+                || board.equals("trinket") || board.equals("bengal") || board.equals("holi")
+                || board.equals("atoll") || board.equals("lahaina") || board.equals("sdm845");
+    }
+
     private String activeDriverSource() {
         File appDir = getExternalFilesDir(null);
         if (appDir == null) return null;
@@ -504,6 +555,15 @@ public class GameActivity extends SDLActivity {
         int flags = prefs.getInt("turnip_compat_flags", 0);
         String driver = activeDriverSource();
         int autoLevel = driver == null ? 0 : prefs.getInt("turnip_auto_level:" + driver, 0);
+        // 0.6.3: Turnip num Adreno 6xx comeca sempre no nivel 1. Nos logs do RP5 (18/10, Turnip
+        // R6, R8 e Rutabaga) o nivel 0 travava a GPU no ecra titulo em todos; com o nivel 1
+        // (sem GMEM/LRZ/UBWC, BC descomprimido) o jogo correu as lutas a 60 fps.
+        if (driver != null && autoLevel < 1 && isAdreno6xx()) {
+            autoLevel = 1;
+            // Gravado: se a GPU ainda cair, o launcher sobe a partir daqui (nivel 2).
+            prefs.edit().putInt("turnip_auto_level:" + driver, 1).apply();
+            Log.i(TAG, "Turnip num Adreno 6xx: nivel 1 por omissao");
+        }
         if (autoLevel > 0) {
             flags |= turnipAutoFlags(autoLevel);
             if (autoLevel >= 3) {

@@ -3,6 +3,16 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.3 — 2026-10-18
+
+### Fixes
+- **Turnip on Adreno 6xx works**: the RP5 logs (Turnip R6, R8 and Rutabaga) showed the GPU crash
+  on the title screen in mode 0 with every driver, and fights running at 60 fps in compatibility
+  mode 1. Adreno 6xx with a Turnip driver now always starts in mode 1 (no GMEM/LRZ/UBWC), BC (DXT)
+  textures are always decompressed there, and `VK_EXT_shader_stencil_export` is off (depth to
+  depth transfers with exported stencil crashed the GPU during the self-test). SDK patch 0066.
+- The GPU-loss log also lists the last finished submission.
+
 ## 0.6.2 — 2026-10-18
 
 ### Fixes
