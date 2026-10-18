@@ -3,6 +3,14 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.20 — 2026-10-18
+
+### Fixes
+- 4K (3x) still closed the game on the Snapdragon 8 Elite: its driver reports sparse buffers, so
+  0.6.17's check let 3x through, but the 4.6 GB scaled-resolve buffer is still refused. The runtime
+  now tries to create that buffer before setting up the renderer and drops to 2x if the driver
+  refuses it (SDK patch 0077).
+
 ## 0.6.19 — 2026-10-18
 
 ### Fixes

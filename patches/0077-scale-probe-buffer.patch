@@ -1,0 +1,50 @@
+diff --git a/src/graphics/vulkan/command_processor.cpp b/src/graphics/vulkan/command_processor.cpp
+index 53af2ad..33cf889 100644
+--- a/src/graphics/vulkan/command_processor.cpp
++++ b/src/graphics/vulkan/command_processor.cpp
+@@ -1277,12 +1277,39 @@ bool VulkanCommandProcessor::SetupContext() {
+   // Sem buffers esparsos (driver da Qualcomm, Turnip, Mali) tem de ser alocado inteiro: a 3x sao
+   // 4.6 GB e a criacao falhava ("Failed to create a scaled resolve buffer with 4608 MB"), o jogo
+   // fechava ao abrir (Honor Magic 7 Pro / 8 Elite, 18/10). Ai a escala fica em 2x (2 GB).
+-  if (!device_properties.sparseResidencyBuffer &&
+-      draw_resolution_scale_x * draw_resolution_scale_y > 4) {
+-    REXGPU_WARN("dbz3: escala {}x{} precisa de buffers esparsos (o driver nao tem); a usar 2x2",
+-                draw_resolution_scale_x, draw_resolution_scale_y);
+-    draw_resolution_scale_x = std::min(draw_resolution_scale_x, UINT32_C(2));
+-    draw_resolution_scale_y = std::min(draw_resolution_scale_y, UINT32_C(2));
++  // 0077: com buffers esparsos tambem pode falhar (8 Elite, driver da Qualcomm: diz ter
++  // sparseResidencyBuffer, mas o buffer de 4.6 GB passa do tamanho maximo de um buffer). Antes de
++  // criar as caches, experimenta criar o buffer (sem memoria); se nao der, fica em 2x.
++  if (draw_resolution_scale_x * draw_resolution_scale_y > 4) {
++    bool scaled_buffer_ok = false;
++    if (device_properties.sparseResidencyBuffer) {
++      const ui::vulkan::VulkanDevice* const probe_device = GetVulkanDevice();
++      VkBufferCreateInfo probe_info = {};
++      probe_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
++      probe_info.flags = VK_BUFFER_CREATE_SPARSE_BINDING_BIT | VK_BUFFER_CREATE_SPARSE_RESIDENCY_BIT;
++      probe_info.size = VkDeviceSize(SharedMemory::kBufferSize) * draw_resolution_scale_x *
++                        draw_resolution_scale_y;
++      probe_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
++      probe_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
++      VkBuffer probe = VK_NULL_HANDLE;
++      if (probe_device->functions().vkCreateBuffer(probe_device->device(), &probe_info, nullptr,
++                                                   &probe) == VK_SUCCESS) {
++        VkMemoryRequirements req;
++        probe_device->functions().vkGetBufferMemoryRequirements(probe_device->device(), probe,
++                                                                &req);
++        scaled_buffer_ok = (req.memoryTypeBits & probe_device->memory_types().device_local) != 0;
++        probe_device->functions().vkDestroyBuffer(probe_device->device(), probe, nullptr);
++      }
++    }
++    if (!scaled_buffer_ok) {
++      REXGPU_WARN("dbz3: escala {}x{}: o driver nao cria o buffer dos resolves com escala "
++                  "({} MB); a usar 2x2",
++                  draw_resolution_scale_x, draw_resolution_scale_y,
++                  (uint64_t(SharedMemory::kBufferSize) * draw_resolution_scale_x *
++                   draw_resolution_scale_y) >> 20);
++      draw_resolution_scale_x = std::min(draw_resolution_scale_x, UINT32_C(2));
++      draw_resolution_scale_y = std::min(draw_resolution_scale_y, UINT32_C(2));
++    }
+   }
+   if (draw_resolution_scale_x > 1 || draw_resolution_scale_y > 1) {
+     REXGPU_WARN(
