@@ -109,7 +109,9 @@ def textures(regs):
         w = (d[2] & 0x1FFF) + 1
         h = ((d[2] >> 13) & 0x1FFF) + 1
         tiled = (d[0] >> 31) & 1
-        out.append((i, addr << 12, w, h, TEX_FMT.get(fmt, str(fmt)), tiled))
+        endian = (d[1] >> 6) & 3
+        swz = ''.join('xyzw01__'[(d[3] >> (1 + 3 * c)) & 7] for c in range(4))
+        out.append((i, addr << 12, w, h, TEX_FMT.get(fmt, str(fmt)), tiled, endian, swz))
     return out
 
 
@@ -198,7 +200,7 @@ def main():
                 if a.draws:
                     print('   draw %4d %-10s n=%-6d vs=%016x ps=%016x blend=%08x depth=%08x tex=%s vf=%s' % (
                         e['i'], e['prim'], e['count'], e['vs'], e['ps'], e['blend'], e['depth'],
-                        ['%dx%d %s%s@%08x' % (t[2], t[3], t[4], 'T' if t[5] else 'L', t[1]) for t in e['tex']],
+                        ['%dx%d %s%s@%08x e%d %s' % (t[2], t[3], t[4], 'T' if t[5] else 'L', t[1], t[6], t[7]) for t in e['tex']],
                         ['@%08x+%d' % (v[1], v[2] * 4) for v in e['vf']]))
             elif kind == 'copy':
                 if cur is not None:
