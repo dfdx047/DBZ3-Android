@@ -70,6 +70,12 @@ public class GameActivity extends SDLActivity {
         // de cada vez que um pipeline faltava (travadinhas), e a sincrona custa
         // menos de 1 ms por frame com a cache do driver. O cvars.txt pode mudar.
         setEnv("REX_DBZ3_ASYNC_SHADERS", "false");
+        // 0.6.15: o pre-passo 4x MSAA do inicio do frame fica saltado (dbz3_skip_msaa_prepass).
+        // No mapa do Dragon Universe ele estragava o ceu (manchas pretas, nuvens escuras) com o
+        // "Clear 4x direto em 1x"; o autoteste no mapa (RP5, 18/10 21:55) deu o ceu certo so com
+        // ele saltado ou sem esse clear, e nas lutas saltar da a mesma imagem (todos os
+        // autotestes) e poupa GPU (no Mali ~17 ms). O cvars.txt pode voltar a liga-lo.
+        setEnv("REX_DBZ3_SKIP_MSAA_PREPASS", "true");
         applyLowRamLimits();
         applyTurnipCompat();
         applyCvarOverrides(new File(appDir, "cvars.txt"));

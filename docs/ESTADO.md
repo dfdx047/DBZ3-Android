@@ -1311,3 +1311,12 @@ traz as operações por concluir e o modo seguinte entra sozinho.
   escrita direta na textura evita essas cargas.
 - 0075: o 0072 passa a cvar `dbz3_turnip_a6xx_resolve_memory` (hot reload); o autoteste ganhou
   "Turnip 6xx: resolves com memoria" para medir o ganho e ver se o HUD some.
+
+### 2026-10-18 22:10 — v0.6.15: céu do Dragon Universe (pre-passo 4x saltado)
+- Captura no mapa (driver do sistema, zip 214248): o 1.º passe (71 draws) sai certo; no passe
+  principal o céu fica com manchas pretas/nuvens escuras.
+- Autoteste no mapa (0.6.14, zip 215934): céu certo só em "sem Clear 4x direto em 1x" (17.8 %),
+  "com pre-passo 4x saltado" (17.8 %), "sem render targets diretos" e "TUDO desligado".
+  Nas lutas o pre-passo saltado deu sempre "igual" (sistema e Turnip).
+- 0.6.15: o launcher liga `dbz3_skip_msaa_prepass` por omissão (env, o cvars.txt pode mudar).
+  GPU no mapa: 14.1 → 13.5 ms.

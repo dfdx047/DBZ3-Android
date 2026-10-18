@@ -3,6 +3,15 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.6.15 — 2026-10-18
+
+### Fixes
+- **Dragon Universe sky**: black patches and dark smeared clouds on the map. The render self-test
+  run on the map showed the sky correct only with the start-of-frame 4x MSAA pre-pass skipped (or
+  without "Clear 4x straight to 1x"). The pre-pass is now skipped by default
+  (`dbz3_skip_msaa_prepass`): fights give the same picture in every self-test so far, and it saves
+  GPU time (~0.6 ms on the RP5, ~17 ms on Mali).
+
 ## 0.6.14 — 2026-10-18
 
 ### Changed
