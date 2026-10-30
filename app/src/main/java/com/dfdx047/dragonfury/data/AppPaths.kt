@@ -55,4 +55,6 @@ object AppPaths {
     /** Voo livre pelo mapa do Dragon Universe. */
     val controlsMapFile: File get() = File(internalDir, "controls/layout_map_v1.json")
     val updatesDir: File get() = File(cacheDir, "updates")
+    /** ISOs de PS2 do Gateway do B3 (Budokai 2, Infinite World, Lenda do Satan): o jogo procura-as em ps2_games/ ao lado do toml. */
+    val ps2GamesDir: File get() = File(appDir, "ps2_games")
 }

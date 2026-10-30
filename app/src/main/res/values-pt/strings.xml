@@ -553,4 +553,13 @@
     <string name="renut_crash_keep">Continuar no Renut</string>
     <string name="menu_renderer">Renderizador (próximo arranque)</string>
     <string name="perf_resolution_screen">Tela (%1$dp)</string>
+    <string name="settings_hub">HUB no menu principal</string>
+    <string name="settings_hub_sub">Tag Team, Online, batalha rápida, torre, sobrevivência, desafios e o Gateway numa fila.</string>
+    <string name="settings_tutorials">Tutoriais dos modos novos</string>
+    <string name="settings_tutorials_sub">Ajuda curta na primeira vez que entra em cada modo novo.</string>
+    <string name="settings_ps2">Gateway (jogos de PS2)</string>
+    <string name="settings_ps2_sub">HUB do Budokai 3 → Gateway: a lenda do Mr. Satan e as histórias do Budokai 2 e do Infinite World usam a sua imagem do disco de PS2 (.iso). A cópia leva alguns minutos.</string>
+    <string name="settings_ps2_pick">Escolher .iso</string>
+    <string name="msg_ps2_ok">%1$s copiada. Abra em HUB → Gateway.</string>
+    <string name="msg_ps2_failed">Não deu para copiar a ISO: %1$s</string>
 </resources>

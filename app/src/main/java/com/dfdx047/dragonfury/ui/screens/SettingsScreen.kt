@@ -1,7 +1,19 @@
 package com.dfdx047.dragonfury.ui.screens
 
 import android.os.Build
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material.icons.filled.Album
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import com.dfdx047.dragonfury.data.Ps2Games
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -88,6 +100,16 @@ fun SettingsScreen(vm: LauncherViewModel) {
                 stringResource(R.string.settings_form_select_sub),
                 checked = c.formSelect,
             ) { on -> vm.updateConfig { it.copy(formSelect = on) } }
+            SettingSwitch(
+                stringResource(R.string.settings_hub),
+                stringResource(R.string.settings_hub_sub),
+                checked = c.hub,
+            ) { on -> vm.updateConfig { it.copy(hub = on) } }
+            SettingSwitch(
+                stringResource(R.string.settings_tutorials),
+                stringResource(R.string.settings_tutorials_sub),
+                checked = c.tutorials,
+            ) { on -> vm.updateConfig { it.copy(tutorials = on) } }
             SettingSegmented(
                 title = stringResource(R.string.orientation),
                 options = listOf(
@@ -98,6 +120,34 @@ fun SettingsScreen(vm: LauncherViewModel) {
                 selected = vm.gameOrientation,
                 onSelect = vm::setOrientation,
             )
+        }
+
+        // ------------------------------------------------- Gateway (ISOs de PS2)
+        SectionCard(stringResource(R.string.settings_ps2), Icons.Filled.Album) {
+            Text(
+                stringResource(R.string.settings_ps2_sub),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            var pending by remember { mutableStateOf(Ps2Games.Kind.BUDOKAI2) }
+            val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+                if (uri != null) vm.importPs2(uri, pending)
+            }
+            for ((kind, label) in listOf(
+                Ps2Games.Kind.BUDOKAI to "Budokai (PS2)",
+                Ps2Games.Kind.BUDOKAI2 to "Budokai 2 (PS2)",
+                Ps2Games.Kind.INFINITE_WORLD to "Infinite World (PS2)",
+            )) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(label, Modifier.weight(1f))
+                    if (kind in vm.ps2Installed) {
+                        Text("✓ ", color = MaterialTheme.colorScheme.primary)
+                    }
+                    FilledTonalButton(onClick = { pending = kind; pick.launch(arrayOf("*/*")) }) {
+                        Text(stringResource(R.string.settings_ps2_pick))
+                    }
+                }
+            }
         }
 
         // -------------------------------------------------------------- aplicacao

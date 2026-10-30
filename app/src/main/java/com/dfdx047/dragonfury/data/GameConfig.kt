@@ -42,6 +42,8 @@ data class GameConfig(
     val tagTeam: Boolean = true,              // dbz3_tag_team_enabled
     val online: Boolean = true,               // dbz3_online_enabled (ONLINE no Duelo/SELECT)
     val formSelect: Boolean = true,           // dbz3_form_select_enabled (LT/RT escolhem a forma inicial)
+    val hub: Boolean = true,                  // dbz3_hub_enabled (fila HUB do menu principal, PC v1.5.5.5)
+    val tutorials: Boolean = true,            // dbz3_tutoriales (tutorial na primeira entrada de cada modo novo)
     val texturePacksOn: Boolean = true,       // dbz3_texture_packs_on
     // Audio
     val masterVolume: Double = 1.0,           // dbz3_master_volume
@@ -111,6 +113,8 @@ data class GameConfig(
         "dbz3_tag_team_enabled" to tagTeam,
         "dbz3_online_enabled" to online,
         "dbz3_form_select_enabled" to formSelect,
+        "dbz3_hub_enabled" to hub,
+        "dbz3_tutoriales" to tutorials,
         "dbz3_texture_packs_on" to texturePacksOn,
         "dbz3_master_volume" to masterVolume.coerceIn(0.0, 1.0),
         "dbz3_mute" to mute,
@@ -224,6 +228,8 @@ data class GameConfig(
                 tagTeam = bool("dbz3_tag_team_enabled", d.tagTeam),
                 online = bool("dbz3_online_enabled", d.online),
                 formSelect = bool("dbz3_form_select_enabled", d.formSelect),
+                hub = bool("dbz3_hub_enabled", d.hub),
+                tutorials = bool("dbz3_tutoriales", d.tutorials),
                 texturePacksOn = bool("dbz3_texture_packs_on", d.texturePacksOn),
                 masterVolume = dbl("dbz3_master_volume", d.masterVolume),
                 mute = bool("dbz3_mute", d.mute),

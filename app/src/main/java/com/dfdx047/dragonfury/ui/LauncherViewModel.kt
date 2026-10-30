@@ -377,6 +377,29 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** ISOs de PS2 do Gateway ja copiadas (Ps2Games). */
+    var ps2Installed by mutableStateOf(com.dfdx047.dragonfury.data.Ps2Games.installed())
+        private set
+
+    fun importPs2(uri: Uri, kind: com.dfdx047.dragonfury.data.Ps2Games.Kind) {
+        val ctx = getApplication<Application>()
+        viewModelScope.launch(Dispatchers.IO) {
+            busy = Busy(R.string.busy_importing, kind.fileName, 0f)
+            try {
+                com.dfdx047.dragonfury.data.Ps2Games.import(ctx, uri, kind) { done, total ->
+                    busy = Busy(R.string.busy_importing, kind.fileName, if (total > 0) done.toFloat() / total else null)
+                }
+                AppLog.i(R.string.log_import_file, kind.fileName)
+                say(R.string.msg_ps2_ok, kind.fileName)
+            } catch (e: Exception) {
+                say(R.string.msg_ps2_failed, e.message ?: "-")
+            } finally {
+                ps2Installed = com.dfdx047.dragonfury.data.Ps2Games.installed()
+                busy = null
+            }
+        }
+    }
+
     fun importGame(uri: Uri) = runImport(uri) { ctx, progress -> GameFiles.import(ctx, uri, progress) }
 
     /** Importa direto do .iso do disco de Xbox 360 (os dois jogos de uma vez). */
