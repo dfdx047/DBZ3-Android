@@ -38,14 +38,20 @@ std::atomic<int64_t> g_dbz3_map_fly_ms{0};
 
 namespace {
 
-// Enderecos do Budokai 3 (US). No Budokai 1 ainda nao ha: kBattleCfgPtr = 0 desliga a leitura
-// (sem luta, P1 a esquerda) ate os sinais dele serem achados.
+// Enderecos do Budokai 3 (US). O Budokai 1 nao tem o ponteiro da batalha (kBattleCfgPtr = 0): os lutadores estao num
+// bloco fixo da imagem (achado em 30/10 comparando a memoria em menus e em luta, Practice Goku x Krillin):
+// kB1Fighters = posicao do P1 (x, y, z, 1; x = -15 no inicio do assalto) e +16 a do P2 (x = +15). As posicoes ficam
+// la depois da luta; o que separa a luta dos menus e kB1BattleState (0 nos menus, 3 na luta e na pausa dela).
 #if defined(DF_GAME_B3)
 constexpr uint32_t kBattleCfgPtr = 0x823D6CF4;
 constexpr uint32_t kFightFlag = 0x823F39A0;
+constexpr uint32_t kB1Fighters = 0;
+constexpr uint32_t kB1BattleState = 0;
 #else
 constexpr uint32_t kBattleCfgPtr = 0;
 constexpr uint32_t kFightFlag = 0;
+constexpr uint32_t kB1Fighters = 0x82348B20;
+constexpr uint32_t kB1BattleState = 0x82339FF8;
 #endif
 
 uint32_t LoadU32(const uint8_t* base, uint32_t addr) {
@@ -75,6 +81,17 @@ struct FightPositions {
 
 FightPositions ReadFight(const uint8_t* base) {
   FightPositions f;
+  if (kB1Fighters != 0) {
+    if (LoadU32(base, kB1BattleState) == 0) return f;
+    const float x1 = LoadF32(base, kB1Fighters), z1 = LoadF32(base, kB1Fighters + 8);
+    const float x2 = LoadF32(base, kB1Fighters + 16), z2 = LoadF32(base, kB1Fighters + 24);
+    if (!std::isfinite(x1) || !std::isfinite(z1) || !std::isfinite(x2) || !std::isfinite(z2)) return f;
+    if (std::fabs(x1) < 0.01f && std::fabs(z1) < 0.01f && std::fabs(x2) < 0.01f && std::fabs(z2) < 0.01f) return f;
+    f.active = true;
+    f.dx = x2 - x1;
+    f.dz = z2 - z1;
+    return f;
+  }
   if (kBattleCfgPtr == 0) return f;
   const uint32_t cfg = LoadU32(base, kBattleCfgPtr);
   if (cfg == 0 || cfg >= 0xF0000000u) return f;
@@ -300,7 +317,7 @@ extern "C" JNIEXPORT jboolean JNICALL
 Java_com_dfdx047_dragonfury_game_NativeGameState_nativeDumpFight(JNIEnv* env, jclass, jstring jpath,
                                                                  jint kind, jlong ms) {
   const uint8_t* base = g_dragonfury_guest_base.load(std::memory_order_acquire);
-  if (!base || !ReadFight(base).active) return JNI_FALSE;
+  if (!base || kBattleCfgPtr == 0 || !ReadFight(base).active) return JNI_FALSE;
   const uint32_t cfg = LoadU32(base, kBattleCfgPtr);
   const uint32_t len = 2096 + 2 * 8240;
   const char* path = env->GetStringUTFChars(jpath, nullptr);
@@ -327,6 +344,13 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_com_dfdx047_dragonfury_game_NativeGameState_nativeBattleDebug(JNIEnv* env, jclass) {
   const uint8_t* base = g_dragonfury_guest_base.load(std::memory_order_acquire);
   if (!base) return env->NewStringUTF("sem jogo");
+  if (kB1Fighters != 0) {
+    char text[160];
+    snprintf(text, sizeof(text), "estado=%u p1=(%.1f,%.1f) p2=(%.1f,%.1f)", LoadU32(base, kB1BattleState),
+             LoadF32(base, kB1Fighters), LoadF32(base, kB1Fighters + 8), LoadF32(base, kB1Fighters + 16),
+             LoadF32(base, kB1Fighters + 24));
+    return env->NewStringUTF(text);
+  }
   if (kBattleCfgPtr == 0) return env->NewStringUTF("sem enderecos de luta neste jogo");
   const uint32_t flag = LoadU32(base, kFightFlag);
   const uint32_t cfg = LoadU32(base, kBattleCfgPtr);

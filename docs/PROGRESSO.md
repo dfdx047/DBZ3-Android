@@ -171,3 +171,14 @@ Base: o Renut do mgr-nx-deko (`ba1a837`) com os patches do Dragon Burst `patches
   crescer). Fotos: luta e mapa iguais (`m3_b3_both.png`), `vp_b1intro.png`, `vp_mid.png`, `vp_logo.png`,
   `vp_b3du.png`. Investigado e não é defeito: a linha comprida do rasto da Kinto'un no plano da ilha do Kame (B1) sai
   igual no Xenia, frame a frame em vídeo (`isl_cmp.png`): é do jogo, nos primeiros 0,6 s do plano.
+- Item 8, troca automática dos controlos de toque (30/10 13:20-13:47, Cube, Renut). O B1 não tinha sinal de luta
+  (`controles.log`: "sem enderecos de luta neste jogo", o toque ficava sempre no layout de menus, também a lutar).
+  Achado comparando a imagem do jogo (0x82000000, 6,6 MB) em 8 momentos (menu, seleção, escolha do cenário, luta no
+  início, depois de andar para a direita e para a esquerda, pausa, seleção depois de sair): posições do P1 em
+  0x82348B20 (x, y, z, 1; -14,8 no início, mexem com o direcional) e do P2 em +16 (x = +15). Ficam lá depois da luta;
+  o que separa é 0x82339FF8 (0 nos menus e nas cutscenes, 3/9/15 na luta, na pausa e no "Continue?"). Provas
+  (`controles.log` + fotos com os controlos ligados): B1 Practice menu -> luta 13:34:42, luta -> menus ao sair para a
+  seleção 13:35:16, revanche -> luta 13:35:34 (`tr_b1_touch.png`); história: cutscenes em menus, luta com o Raditz ->
+  luta 13:39:36, sair -> menus 13:43:09 (`tr_b1_story.png`). B3 igual ao que era (`tr_b3_touch.png`: menu -> luta
+  13:45:41, seleção 13:46:27, revanche 13:46:49). Ficam no layout de luta a pausa do jogo e o "Continue?/Exit?"
+  (são da cena da luta; os botões A e o direcional estão lá).
