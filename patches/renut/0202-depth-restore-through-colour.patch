@@ -1,0 +1,308 @@
+diff --git a/app/src/renut_engine/gpu/backend/video.cpp b/app/src/renut_engine/gpu/backend/video.cpp
+index f9eae5f..b3e240d 100644
+--- a/app/src/renut_engine/gpu/backend/video.cpp
++++ b/app/src/renut_engine/gpu/backend/video.cpp
+@@ -54,6 +54,7 @@
+ #include "host_shaders/target_readback_cs.spirv.h"
+ #include "host_shaders/texture_mip_ps.spirv.h"
+ #include "host_shaders/resolve_copy_ps.spirv.h"
++#include "host_shaders/depth_restore_ps.spirv.h"  // Dragon Fury
+ #if defined(PLUME_DEKO3D)  // banjo-nx (2026-10-17): the deko3d back end's (tools/deko3d_host_shader.py)
+ #include "host_shaders/depth_resolve_ms_ps.deko3d.h"
+ #include "host_shaders/depth_resolve_ps.deko3d.h"
+@@ -325,6 +326,9 @@ bool BuildPresentPipeline(VideoState &s) {
+ bool BuildDepthResolvePipelines(VideoState &s) {
+   // banjo-nx (2026-10-18): the colour resolves drawn on deko3d (DrawResolveCopy); optional.
+   s.resolve_copy_ps = CreateHostShader(s.device.get(), RENUT_HOST_SHADER(resolve_copy_ps), "resolve_copy_ps");
++#if !defined(_WIN32) && !defined(PLUME_DEKO3D)
++  s.depth_restore_ps = CreateHostShader(s.device.get(), RENUT_HOST_SHADER(depth_restore_ps), "depth_restore_ps");
++#endif
+   s.depth_resolve_ps[0] =
+       CreateHostShader(s.device.get(), RENUT_HOST_SHADER(depth_resolve_ps), "depth_resolve_ps");
+   s.depth_resolve_ps[1] = CreateHostShader(s.device.get(), RENUT_HOST_SHADER(depth_resolve_ms_ps),
+diff --git a/app/src/renut_engine/gpu/backend/video.h b/app/src/renut_engine/gpu/backend/video.h
+index faf992a..f50f061 100644
+--- a/app/src/renut_engine/gpu/backend/video.h
++++ b/app/src/renut_engine/gpu/backend/video.h
+@@ -200,6 +200,9 @@ struct VideoState {
+   // Depth resolves (draw.cpp): [0] single-sampled source, [1] multisampled.
+   std::unique_ptr<plume::RenderShader> depth_resolve_ps[2];
+   std::unique_ptr<plume::RenderShader> resolve_copy_ps;  // banjo-nx (2026-10-18): DrawResolveCopy
++  // Dragon Fury (2026-10-30): RestoreDepthThroughColorLocked, a pipeline per depth format.
++  std::unique_ptr<plume::RenderShader> depth_restore_ps;
++  std::unordered_map<uint32_t, std::unique_ptr<plume::RenderPipeline>> depth_restore_pipelines;
+   std::unordered_map<uint32_t, std::unique_ptr<plume::RenderPipeline>> resolve_copy_pipelines;  // by format
+   std::unique_ptr<plume::RenderPipeline> depth_resolve_pipeline[2];
+   // banjo-nx (2026-10-19, banjo_renut_depth_words_lazy): the same with the words target's writes masked off.
+diff --git a/app/src/renut_engine/gpu/render/draw.cpp b/app/src/renut_engine/gpu/render/draw.cpp
+index b7b3e9f..b2af042 100644
+--- a/app/src/renut_engine/gpu/render/draw.cpp
++++ b/app/src/renut_engine/gpu/render/draw.cpp
+@@ -91,6 +91,9 @@ REXCVAR_DEFINE_BOOL(swordman_renut_draw_resolves, false, "SwordMan",
+ REXCVAR_DEFINE_STRING(swordman_renut_diag_vs, "", "SwordMan",
+                       "Dragon Burst (diagnostic): vertex shader hashes (hex, first 8 digits, comma separated) whose "
+                       "vertex layouts and patched vfetches are logged");
++REXCVAR_DEFINE_BOOL(swordman_renut_depth_restore, true, "SwordMan",
++                    "Renut (Dragon Fury): a colour draw of a depth resolve over the depth buffer's EDRAM restores the "
++                    "depth (RestoreDepthThroughColorLocked)");
+ REXCVAR_DEFINE_STRING(swordman_renut_skip_ps, "", "SwordMan",
+                       "Renut (diagnostic): pixel shader hashes (hex, comma separated) whose draws are skipped")
+     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+@@ -1144,6 +1147,7 @@ struct Targets {
+ // before a depth target is bound again.
+ const Targets *g_handover_targets = nullptr;
+ void DepthHandOverBeforeBindLocked(HostSurface *surface, const plume::RenderRect *clear_rect, u32 clear_flags);
++bool RestoreDepthThroughColorLocked(const GuestDevice &device, const ShaderRecord *ps);
+ 
+ // A rect in guest pixels as host pixels of targets 'scale' times the size.
+ plume::RenderRect ScaleRect(const plume::RenderRect &rect, RenderScale scale) {
+@@ -4386,6 +4390,11 @@ bool DrawStateLocked(const u8 *device_state, const DrawCall &call, const ReplayC
+   auto *ps = FindShaderLocked(device.U32(d3d::kDeviceOffsetPixelShader), RecordKind::PixelShader);
+   if (ps && SkipPixelShader(ps->hash))
+     return true;  // SwordMan: swordman_renut_skip_ps
++  if (REXCVAR_GET(swordman_renut_depth_restore) && RestoreDepthThroughColorLocked(device, ps)) {
++    if (swordman::frame_dump::On() && swordman::frame_dump::Active(TextureFrameLocked()))
++      swordman::frame_dump::Line(fmt::format("S ps {:016X} (depth restored through colour: copied)", ps->hash));
++    return true;
++  }
+   // Dragon Burst (2026-10-28): the emulated path's per-pixel-shader overrides (rex/graphics/draw_overrides.h), by the
+   // same ucode hash. Burst Limit's post effects the options leave off (depth_of_field, glow_blur, motion_blur,
+   // soft_filter: burstlimit_patches.cpp) are dropped here as there, and the depth of field composite keeps the sharp
+@@ -5972,6 +5981,143 @@ void DepthHandOverBeforeBindLocked(HostSurface *surface, const plume::RenderRect
+   }
+ }
+ 
++// Dragon Fury (2026-10-30): the Budokai put a depth buffer back by drawing it as colour. After the frame's first pass
++// they resolve the depth (a whole depth resolve), clear, and later draw that resolve's memory, sampled as 8_8_8_8,
++// into a colour surface over the depth buffer's EDRAM (no depth bound): on the console the words land in the depth
++// tiles, and the second pass (the Dragon Universe map's sky and clouds) tests against the depth as it was resolved.
++// Here colour and depth targets are separate images, so the depth kept what the first pass left: the sky failed its
++// test in blocks, black where the clear showed through. The draw becomes a copy of the depth image the resolve's
++// destination holds (the hand-over keeps it whole: handed_from or held) into the depth target. false: drawn as is.
++bool RestoreDepthThroughColorLocked(const GuestDevice &device, const ShaderRecord *ps) {
++  if (!ps || !ps->entry || device.U32(d3d::kDeviceOffsetDepthStencil) ||
++      device.U32(d3d::kDeviceOffsetRenderTargets + 4))
++    return false;
++  const u32 color_va = device.U32(d3d::kDeviceOffsetRenderTargets);
++  HostSurface *color = color_va ? FindHostSurfaceLocked(color_va) : nullptr;
++  HostSurface *depth = DepthAliasLocked(color);
++  if (!depth || depth->samples != plume::RenderSampleCount::COUNT_1)
++    return false;
++  HostTexture *dest = nullptr;
++  for (u32 bits = ps->entry->textureFetchMask; bits && !dest; bits &= bits - 1) {
++    const u32 r = u32(__builtin_ctz(bits));
++    const TextureFetch fetch = DeviceTextureFetch(device.dev(), r);
++    if (fetch.Type() == 2)
++      dest = DepthResolveAtPageLocked(fetch.BasePage());
++  }
++  if (!dest || dest->width != depth->width || dest->height != depth->height) {
++    static uint32_t logged_dest = 0;
++    if (logged_dest++ < 8) {
++      std::string pages;
++      for (u32 bits = ps->entry->textureFetchMask; bits; bits &= bits - 1) {
++        const TextureFetch fetch = DeviceTextureFetch(device.dev(), u32(__builtin_ctz(bits)));
++        pages += fmt::format(" t{} type {} page {:05X}", __builtin_ctz(bits), fetch.Type(), fetch.BasePage());
++      }
++      RGPU_INFO("[df-depth] colour {:08X} over depth {:08X}: no depth resolve sampled ({}){}", color_va,
++                depth->guest_va, dest ? "size" : "none", pages);
++    }
++    return false;
++  }
++  const uint32_t w = depth->scale.Size(depth->width), h = depth->scale.Size(depth->height);
++  {
++    static uint32_t logged_src = 0;
++    if (logged_src++ < 4)
++      RGPU_INFO("[df-depth] colour {:08X} over depth {:08X}, resolve {:08X}: handed {} held {}", color_va,
++                depth->guest_va, dest->guest_va, dest->handed_from ? dest->handed_from->guest_va : 0,
++                dest->held && dest->held_current ? 1 : 0);
++  }
++  auto &s = State();
++  plume::RenderCommandList *cmd = Video::CommandListLocked();
++  if (!cmd)
++    return false;
++  // The content is in a target's image (the hand-over): copied whole.
++  plume::RenderTexture *source = nullptr;
++  if (HostSurface *from = dest->handed_from) {
++    if (!from->texture || from->generation != dest->handed_generation || from->writes != dest->handed_writes ||
++        from->format != depth->format || from->samples != depth->samples || from->scale.code != depth->scale.code ||
++        from->width != depth->width || from->height != depth->height)
++      return false;
++    if (from == depth)
++      return true;  // the depth buffer still holds it
++    TransitionSurfaceLocked(from, plume::RenderTextureLayout::COPY_SOURCE);
++    source = from->texture.get();
++  } else if (dest->held && dest->held_current && dest->held->texture) {
++    DepthImage &image = *dest->held;
++    if (image.format != depth->format || image.samples != depth->samples || image.host_width != w ||
++        image.host_height != h)
++      return false;
++    if (image.layout != plume::RenderTextureLayout::COPY_SOURCE) {
++      cmd->barriers(plume::RenderBarrierStage::COPY,
++                    plume::RenderTextureBarrier(image.texture.get(), plume::RenderTextureLayout::COPY_SOURCE));
++      image.layout = plume::RenderTextureLayout::COPY_SOURCE;
++    }
++    source = image.texture.get();
++  }
++  DepthHandOverBeforeBindLocked(depth, nullptr, 0);  // what others hold of its content, first
++  if (source) {
++    TransitionSurfaceLocked(depth, plume::RenderTextureLayout::COPY_DEST);
++    cmd->copyTexture(depth->texture.get(), source);
++  } else {
++    // Drawn: the resolve's float, the depth it loaded, written as the depth (depth_restore_ps.hlsl).
++    if (!s.depth_restore_ps || !dest->texture || dest->scale.code != depth->scale.code ||
++        dest->alloc_width < w || dest->alloc_height < h)
++      return false;
++    auto &pipeline = s.depth_restore_pipelines[uint32_t(depth->format)];
++    if (!pipeline) {
++      plume::RenderGraphicsPipelineDesc desc;
++      desc.pipelineLayout = s.utility_layout.get();
++      desc.vertexShader = s.present_vs.get();
++      desc.pixelShader = s.depth_restore_ps.get();
++      desc.primitiveTopology = plume::RenderPrimitiveTopology::TRIANGLE_LIST;
++      desc.cullMode = plume::RenderCullMode::NONE;
++      desc.renderTargetCount = 0;
++      desc.depthTargetFormat = depth->format;
++      desc.depthEnabled = true;
++      desc.depthWriteEnabled = true;
++      desc.depthFunction = plume::RenderComparisonFunction::ALWAYS;
++      pipeline = s.device->createGraphicsPipeline(desc);
++      if (!pipeline)
++        return false;
++      pipeline->setName("renut depth restore");
++    }
++    const uint32_t slot = PlainSlotLocked(*dest);
++    if (slot == UINT32_MAX || slot == kInvalidDescriptor)
++      return false;
++    Targets t;
++    t.depth = depth;
++    t.width = depth->width;
++    t.height = depth->height;
++    t.scale = depth->scale;
++    t.guest_width = depth->width;
++    t.guest_height = depth->height;
++    TransitionTextureLocked(dest, plume::RenderTextureLayout::SHADER_READ);
++    if (!BindTargets(t))
++      return false;
++    cmd->setViewports(plume::RenderViewport(0.0f, 0.0f, float(w), float(h)));
++    cmd->setScissors(plume::RenderRect(0, 0, int32_t(w), int32_t(h)));
++    cmd->setGraphicsPipelineLayout(s.utility_layout.get());
++    cmd->setPipeline(pipeline.get());
++    cmd->setGraphicsDescriptorSet(s.texture_set.get(), 0);
++    cmd->setGraphicsDescriptorSet(s.sampler_set.get(), 1);
++    UtilityPush push{};
++    push.scale[0] = push.scale[1] = 1.0f;
++    push.texture_index = slot;
++    push.sampler_index = kPointClampSamplerSlot;
++    cmd->setGraphicsPushConstants(0, &push, 0, sizeof(push));
++    cmd->drawInstanced(3, 1, 0, 0);
++    // The draw path binds its own layout, pipeline, targets and viewport again.
++    g_bound.framebuffer = nullptr;
++    g_bound.pipeline = nullptr;
++    g_bound.layout = false;
++    g_bound.viewport_set = false;
++  }
++  ++depth->writes;
++  static uint32_t logged = 0;
++  if (logged++ < 4)
++    RGPU_INFO("[df-depth] depth {:08X} restored from depth resolve {:08X} ({}x{}, {})", depth->guest_va,
++              dest->guest_va, depth->width, depth->height, source ? "copied" : "drawn");
++  return true;
++}
++
+ // banjo-nx (2026-10-18, banjo_deko3d_draw_resolves): a single-sampled colour resolve drawn into the destination
+ // (shaders/host/resolve_copy_ps.hlsl) rather than copied. deko3d copies images on the copy engine, which plume_deko3d
+ // fences with a full barrier before and after (the 3D engine idle for the whole copy); a draw is ordered by the usual
+diff --git a/app/src/renut_engine/gpu/render/surfaces.cpp b/app/src/renut_engine/gpu/render/surfaces.cpp
+index d315571..c2712db 100644
+--- a/app/src/renut_engine/gpu/render/surfaces.cpp
++++ b/app/src/renut_engine/gpu/render/surfaces.cpp
+@@ -396,6 +396,22 @@ void ColorAliasesLocked(const HostSurface *surface, std::vector<HostSurface *> &
+   }
+ }
+ 
++HostSurface *DepthAliasLocked(const HostSurface *surface) {
++  if (!surface || surface->depth)
++    return nullptr;
++  // TargetKey: base, pitch and samples in bits 0-27, depth in 28, scale in 29-31.
++  constexpr uint64_t kViewMask = 0xEFFFFFFFull;
++  for (const auto &[key, target] : g_targets) {
++    if (target.get() != surface)
++      continue;
++    for (const auto &[other_key, other] : g_targets)
++      if (other && other->depth && other->texture && (other_key & kViewMask) == (key & kViewMask))
++        return other.get();
++    return nullptr;
++  }
++  return nullptr;
++}
++
+ HostSurface *GetHostSurfaceSlow(u32 surface_va, const d3d::SurfaceDesc *desc);
+ 
+ HostSurface *GetHostSurfaceLocked(u32 surface_va) {
+diff --git a/app/src/renut_engine/gpu/render/surfaces.h b/app/src/renut_engine/gpu/render/surfaces.h
+index 9d8742b..dd4aac5 100644
+--- a/app/src/renut_engine/gpu/render/surfaces.h
++++ b/app/src/renut_engine/gpu/render/surfaces.h
+@@ -122,6 +122,10 @@ HostSurface *FindHostSurfaceLocked(u32 surface_va);
+ // memory, so what a clear writes through one is what the others then hold.
+ void ColorAliasesLocked(const HostSurface *surface, std::vector<HostSurface *> &out);
+ 
++// Dragon Fury (2026-10-30): the depth target over the same EDRAM view as the color target 'surface' (base tile,
++// pitch, samples and scale), or nullptr. A color draw there writes the depth buffer's memory on the console.
++HostSurface *DepthAliasLocked(const HostSurface *surface);
++
+ // Predicated tiling (D3DDevice_BeginTiling .. EndTiling): the game draws the
+ // frame into surfaces the size of one EDRAM tile, and the GPU replays the
+ // draws once per tile with the tile's screen offset, resolving each tile into
+diff --git a/app/src/renut_engine/gpu/render/textures.cpp b/app/src/renut_engine/gpu/render/textures.cpp
+index 3b9daaf..de086c1 100644
+--- a/app/src/renut_engine/gpu/render/textures.cpp
++++ b/app/src/renut_engine/gpu/render/textures.cpp
+@@ -1176,6 +1176,15 @@ HostTexture *FindHostTextureLocked(u32 texture_va) {
+   return it != g_textures.end() ? it->second.get() : nullptr;
+ }
+ 
++HostTexture *DepthResolveAtPageLocked(u32 base_page) {
++  auto it = g_depth_words.find(base_page);
++  return it != g_depth_words.end() ? it->second : nullptr;
++}
++
++uint32_t PlainSlotLocked(HostTexture &t) {
++  return SlotForSwizzle(t, 0 | 1 << 3 | 2 << 6 | 3 << 9);
++}
++
+ void ReleaseHostTextureLocked(u32 texture_va) {
+   auto it = g_textures.find(texture_va);
+   if (it == g_textures.end())
+diff --git a/app/src/renut_engine/gpu/render/textures.h b/app/src/renut_engine/gpu/render/textures.h
+index 017e5c8..5d887f4 100644
+--- a/app/src/renut_engine/gpu/render/textures.h
++++ b/app/src/renut_engine/gpu/render/textures.h
+@@ -247,6 +247,10 @@ HostTexture *GetDepthResolveTextureLocked(u32 texture_va, RenderScale scale,
+ 
+ // Existing host texture for a guest texture VA, or nullptr.
+ HostTexture *FindHostTextureLocked(u32 texture_va);
++// Dragon Fury (2026-10-30): the depth resolve destination whose memory starts at 'base_page' (a fetch's), or nullptr.
++HostTexture *DepthResolveAtPageLocked(u32 base_page);
++// Its bindless slot without the fetch swizzle (the float the resolve wrote in X).
++uint32_t PlainSlotLocked(HostTexture &t);
+ 
+ void ReleaseHostTextureLocked(u32 texture_va);
+ 
+diff --git a/app/src/renut_engine/gpu/shaders/host/depth_restore_ps.hlsl b/app/src/renut_engine/gpu/shaders/host/depth_restore_ps.hlsl
+new file mode 100644
+index 0000000..1a1c881
+--- /dev/null
++++ b/app/src/renut_engine/gpu/shaders/host/depth_restore_ps.hlsl
+@@ -0,0 +1,11 @@
++// Dragon Fury (2026-10-30): a depth resolve written back into a depth target (draw.cpp, RestoreDepthThroughColorLocked).
++// The Budokai put a depth buffer back by drawing its resolve as colour over the depth buffer's EDRAM; here the
++// resolve's float (depth_resolve.hlsli: the depth it loaded) becomes the depth again. The destination pixel plus
++// g_Push.translate is the source texel; present_vs draws the fullscreen triangle. The stencil is left as it is.
++#include "utility.hlsli"
++
++float main(float4 position : SV_Position) : SV_Depth
++{
++    const int2 texel = int2(position.xy) + int2(g_Push.translate);
++    return g_Textures[g_Push.textureIndex].Load(int3(texel, 0)).x;
++}

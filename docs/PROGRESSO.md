@@ -86,5 +86,10 @@ Base: o Renut do mgr-nx-deko (`ba1a837`) com os patches do Dragon Burst `patches
 - Prova (RP5, Xenia | Renut, mesmas cenas): título do B1, ilha do Kame e luta Goku vs Raditz (B1), luta Goku vs
   Goku Kaioken (B3): iguais. Fotos `out/shots/cmp_b1_*.png`, `cmp_b3_fight*.png`. Renut a 60 fps com GPU 1,3-7 ms
   por frame (Xenia: 7-17 ms).
-- Por resolver: o céu do mapa do Dragon Universe no Renut sai em blocos pretos (`cmp_b3_map*.png`); opção do
-  renderizador no launcher e no menu do jogo; o Renut ainda não é o padrão.
+- `0202` (30/10 05:15-05:50): céu do mapa do Dragon Universe em blocos pretos. O jogo resolve o depth, limpa e
+  depois devolve-o desenhando a resolução como cor sobre o EDRAM do depth (sem depth ligado); no Renut cor e depth
+  são imagens à parte e o depth ficava com o da 1.ª passagem, onde o céu e as nuvens falhavam o teste. Agora esse
+  draw vira um restauro do depth (`depth_restore_ps`: o float da resolução escrito como profundidade; ou cópia da
+  imagem quando a resolução ficou no hand-over), `swordman_renut_depth_restore`. Prova: `cmp_b3_mapfix.png`
+  (Xenia | Renut iguais); lutas dos dois jogos e abertura do B1 sem mudança (`reg_k.png`, `cmp_b1_story_k.png`).
+- Por resolver: opção do renderizador no launcher e no menu do jogo; o Renut ainda não é o padrão.
