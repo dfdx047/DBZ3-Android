@@ -198,3 +198,37 @@ Base: o Renut do mgr-nx-deko (`ba1a837`) com os patches do Dragon Burst `patches
     jogo), por isso o 120 nativo pede um passo fixo de 60 Hz na lógica, como o `burstlimit_patches` do Burst Limit,
     e uma tela de 120 Hz para medir. Fica por fazer (estimativa: 6-10 h com o Odin 3). Desbloqueado: o Android não o
     oferece (já visto no Dragon Burst, B3), fica de fora.
+- Item 5, drivers no RP5 (30/10 11:50-14:40, perfil 480+). O Renut com o Turnip 26.3 R6 perdia a GPU no ecrã título
+  (kgsl "GPU hang detected", `VK_ERROR_DEVICE_LOST`) nos níveis 0-3 do modo de compatibilidade. A/B com `env:TU_DEBUG`
+  no `cvars.txt` (2 min cada, perdas contadas no logcat): `sysmem,nolrz,noubwc` cai (2 de 2), `syncdraw` só cai,
+  `flushall` só cai, `sysmem,nolrz,noubwc,syncdraw` não cai; barreiras do Renut (`banjo_renut_precise_barriers`,
+  `banjo_deko3d_barrier_merge/lean`) e retângulos no CPU não mudam nada. Correção (`GameActivity.applyTurnipCompat`):
+  Turnip num Adreno 6xx com o Renut leva sempre `sysmem,nolrz,noubwc,syncdraw`. Falta achar a barreira que o driver da
+  Qualcomm tolera (pendente). Tabela (driver x jogo x renderizador; 600 s nas 3 primeiras linhas, 120 s nas outras
+  a pedido do dono; dmesg filtrado para "GPU hang"/"gpu fault"):
+
+  | driver | jogo | renderizador | fps / GPU ms | perdas da GPU | hangs no dmesg |
+  |---|---|---|---|---|---|
+  | sistema (Qualcomm) | B3 | Renut | 60,0 / 13,7-14,9 | 0 | 0 |
+  | sistema | B3 | Xenia | 34,0 / 28,6 | 0 | 0 |
+  | sistema | B1 | Renut | 60,0 / 10,8-11,2 | 0 | 0 |
+  | sistema | B1 | Xenia | 50,3 / 16,3 | 0 | 0 |
+  | Turnip R6 | B3 | Renut | 60,0 / 8,2 | 0 | 0 |
+  | Turnip R6 | B3 | Xenia | - | 1 (nível 0; o app sobe o nível) | 0 |
+  | Turnip R6 | B1 | Renut | 59,8 / 15,5 | 0 | 0 |
+  | Turnip R6 | B1 | Xenia | 28,2 / 18,7 | 0 | 6 (recuperados) |
+
+  As normais verde-oliva do Xenia no Turnip A650 não apareceram nestas corridas (fotos `drv_r6.png`); o bisect com os
+  builds do Zandatsu fica por fazer. Logs: `out/drv/*.txt`.
+- Item 7, widescreen: a HD Collection já desenha em 16:9 (Original 16:9 / Esticar existem). Para lá de 16:9: no B1 o
+  aspeto da projeção é a constante 0x82024B2C (16/9; com 2,37 o logótipo 3D fica mais estreito, `wide_b1_aspect_test.png`).
+  Falta alargar os alvos do Renut e o HUD como o `renut/0022` do MGR faz; nos dois aparelhos de teste (16:9 e 1:1) não
+  muda nada. Pendente (estimativa 6-8 h).
+- Item 9, port de PC: o upstream vai na v1.5.5.5 (30 commits desde a nossa v1.4.5.1; 697 ficheiros, +226 mil linhas):
+  Dragon HUB, Budokai 2 e Infinite World (precisam do disco de PS2), modo Herói, Lenda do Mr. Satan, Tag Team com IA,
+  online lockstep, câmara livre, pack HD V1/V2, opção 480p. Não trazido nesta sessão (cada parte mexe no código do
+  jogo e no launcher do PC; estimativa 10-15 h para o núcleo B3: Tag Team IA, câmaras, correções).
+- Item 10, otimização: alvos cumpridos (480+: 60 fps a 720p na luta e na campanha nos dois jogos; Cube a "Tela": B3
+  luta 60,0 / 8,7-9,1 ms, B3 mapa 60,0 / 7,7-8,1 ms, B1 luta 60,0 / 12,2 ms, B1 história 58-60 / 9-9,5 ms). Censo
+  (`renut_gpu_profile = 10`, Cube, B1 luta 720p, 12,4 ms): cena 3,9; resolves de profundidade 2,3; resolves 1,9; 2 draws
+  de profundidade em ecrã inteiro 1,7; present 1,2; cor 0,9; sombra 1024² 0,5.

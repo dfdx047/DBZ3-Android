@@ -211,6 +211,17 @@ public class GameActivity extends SDLActivity {
     /** Esta sessao corre no Renut (o toml do jogo, swordman_renderer = "renut"; markRenutRun). */
     private boolean mRenut;
 
+    /** O toml do jogo pede o Renut (antes do markRenutRun, para o applyTurnipCompat). */
+    private boolean rendererIsRenut() {
+        try {
+            File appDir = getExternalFilesDir(null);
+            String toml = new String(java.nio.file.Files.readAllBytes(new File(appDir, mGame.getTomlName()).toPath()));
+            return toml.contains("swordman_renderer = \"renut\"");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     /**
      * O jogo no Renut: renut_run.pending (com o id do jogo) enquanto esta em primeiro plano (do arranque ao onPause, e
      * de novo no onResume). Se o processo cair, fica la: o launcher encontra-o (RenutCrash.check), mostra o aviso e
@@ -737,6 +748,15 @@ public class GameActivity extends SDLActivity {
             com.dfdx047.dragonfury.data.AppLog.info(com.dfdx047.dragonfury.R.string.log_turnip_level,
                     autoLevel + " · " + driver);
         }
+        // Dragon Fury (30/10): o Renut no Turnip de um Adreno 6xx (RP5, Turnip 26.3 R6) perdia a GPU no ecra titulo
+        // (kgsl "GPU hang detected", VK_ERROR_DEVICE_LOST) em todos os niveis ate ao 3; com TU_DEBUG
+        // sysmem,nolrz,noubwc,syncdraw nao (o syncdraw sozinho, ou sem o syncdraw, caem). Falta uma barreira no Renut
+        // que o driver da Qualcomm tolera; ate ser achada, esse conjunto vai sempre nesse caso.
+        boolean renutSync = a6xx && rendererIsRenut();
+        if (renutSync) {
+            flags |= TURNIP_SYSMEM | TURNIP_NOLRZ_UBWC;
+            Log.i(TAG, "Turnip A6xx com o Renut: sysmem,nolrz,noubwc,syncdraw");
+        }
         if (flags == 0) {
             return;
         }
@@ -744,6 +764,7 @@ public class GameActivity extends SDLActivity {
         if ((flags & TURNIP_SYSMEM) != 0) tu.append("sysmem,");
         if ((flags & TURNIP_NOLRZ_UBWC) != 0) tu.append("nolrz,noubwc,");
         if ((flags & TURNIP_FULL_SYNC) != 0) tu.append("flushall,syncdraw,");
+        else if (renutSync) tu.append("syncdraw,");
         if (tu.length() > 0) {
             tu.setLength(tu.length() - 1);
             setEnv("TU_DEBUG", tu.toString());
