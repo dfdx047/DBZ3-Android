@@ -6,8 +6,8 @@
 
 # Dragon Fury
 
-**Dragon Fury** es un port nativo para Android de *Dragon Ball Z: Budokai 3 HD* (de la *Budokai HD
-Collection* de Xbox 360). Parte de la recompilación para PC de
+**Dragon Fury** es un port nativo para Android de *Dragon Ball Z: Budokai 3 HD* y *Budokai HD* (Budokai 1),
+de la *Budokai HD Collection* de Xbox 360). Parte de la recompilación para PC de
 [novapowers0](https://github.com/novapowers0/DBZ-Budokai-3-HD-Collection) (ReXGlue SDK) y lleva el
 juego a teléfonos y consolas portátiles ARM64, con launcher propio, controles táctiles, Tag Team,
 online y una ruta de GPU reescrita para las GPU móviles.
@@ -16,6 +16,10 @@ online y una ruta de GPU reescrita para las GPU móviles.
 
 ## Lo más destacado
 
+- **Los dos juegos de la colección**: Budokai 3 y Budokai 1; una importación del disco trae los dos (0.7.0).
+- **Renut**, un renderizador nativo (el Direct3D de Xbox 360 traducido a Vulkan, sin emular la GPU), es el
+  predeterminado en todas las GPU: 60 FPS en combate y campaña a 720p en un Snapdragon 865 con 11–14 ms de GPU,
+  y 60 FPS en una Mali-G57. El renderizador emulado (Xenia) sigue como opción.
 - **60 FPS a la resolución nativa de 720p en un Snapdragon 865** (Retroid Pocket 5), con el driver
   de Qualcomm del sistema. Empezó en ~37 fps; la mejora vino de reescribir cómo se ejecuta el
   trabajo de la GPU de Xbox 360 en las GPU tiler móviles (ver [Rendimiento](#rendimiento)).
@@ -39,9 +43,9 @@ online y una ruta de GPU reescrita para las GPU móviles.
 
 | Dispositivo | SoC / GPU | Resultado |
 |---|---|---|
-| Retroid Pocket 5 | Snapdragon 865 / Adreno 650 | 60 FPS estables en combate (driver del sistema y Turnip) |
+| Retroid Pocket 5 | Snapdragon 865 / Adreno 650 | Renut: 60 FPS en combate y campaña, en los dos juegos (driver del sistema y Turnip) |
 | AYN Odin 3 | Snapdragon 8 Elite | Funciona (primer dispositivo donde arrancó el port) |
-| Anbernic RG Cube | Unisoc T770 / Mali-G57 | ~22–24 FPS en combate; usa el modo 30 FPS y desactiva los efectos |
+| Anbernic RG Cube | Unisoc T770 / Mali-G57 | Renut: 60 FPS en combate y en el mapa del Dragon Universe (resolución "Pantalla") |
 
 Otros chips de la clase del Snapdragon 865 o superiores (Snapdragon 8 Gen 1/2/3, Dimensity 1100+,
 Exynos recientes) deberían ir a velocidad completa o cerca. Se agradecen reportes.
@@ -49,9 +53,9 @@ Exynos recientes) deberían ir a velocidad completa o cerca. Se agradecen report
 ## Instalación
 
 1. Descarga el `DragonFury-*.apk` más reciente en [Releases](../../releases) e instálalo.
-2. Copia el `.iso` de tu disco Budokai 3 HD Collection (USA) al dispositivo.
+2. Copia el `.iso` de tu disco Budokai HD Collection (USA) al dispositivo.
 3. Abre Dragon Fury → **Importar .iso** → elige el archivo. Solo se extraen de la imagen el
-   ejecutable de Budokai 3 y sus datos (unos 2,5 GB, unos minutos); el ejecutable se comprueba por
+   los ejecutables de Budokai 3 y Budokai 1 y sus datos (unos 2,5 GB, unos minutos); el ejecutable se comprueba por
    SHA-256. Después puedes borrar el `.iso`.
    - ¿Ya extrajiste el disco? **Carpeta extraída** → elige la carpeta `DBZ3` (contiene
      `yae3_xenon.xex` y la carpeta `us/`).

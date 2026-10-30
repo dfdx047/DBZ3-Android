@@ -232,3 +232,8 @@ Base: o Renut do mgr-nx-deko (`ba1a837`) com os patches do Dragon Burst `patches
   luta 60,0 / 8,7-9,1 ms, B3 mapa 60,0 / 7,7-8,1 ms, B1 luta 60,0 / 12,2 ms, B1 história 58-60 / 9-9,5 ms). Censo
   (`renut_gpu_profile = 10`, Cube, B1 luta 720p, 12,4 ms): cena 3,9; resolves de profundidade 2,3; resolves 1,9; 2 draws
   de profundidade em ecrã inteiro 1,7; present 1,2; cor 0,9; sombra 1024² 0,5.
+- Fecho (30/10 14:40): notas da 0.7.0 em `docs/releases/v0.7.0.md` (PT/EN/ES) e READMEs nas três línguas com o B1 e o
+  Renut. Aparelhos repostos: APK final nos dois, `dbz3_user.toml` e saves do B3 do backup de 30/10, B1 com o
+  renderizador em Auto, sem `cvars.txt` nem driver alternativo, perfil 480+ do RP5 desfeito ("no profile active"),
+  Cube com os controlos de toque em Automático e o B3 escolhido. Fica no RP5 o nível de compatibilidade do Turnip R6
+  subido pelos testes (volta a 0 em Drivers -> "Voltar ao modo 0" com o R6 ativo).
