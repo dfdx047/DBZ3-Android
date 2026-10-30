@@ -20,6 +20,11 @@
 
 #include <rex/hook.h>
 
+#if defined(DF_RENUT)
+#include "renut_engine/gpu/banjo_renut_select.h"
+#include "renut_engine/gpu/banjo_shared_hooks.h"
+#endif
+
 // CBlocker::Check de cada jogo (mapa do Optxbox, maps/dbz-budokai-hd/): Budokai 3 82235918,
 // Budokai 1 821C4A58.
 #if defined(DF_GAME_B3)
@@ -45,11 +50,9 @@ std::atomic<bool> g_dragonfury_pause{false};
 std::mutex g_dragonfury_pause_mu;
 std::condition_variable g_dragonfury_pause_cv;
 
-REX_HOOK_RAW(DF_CBLOCKER_CHECK) {
-  using clock = std::chrono::steady_clock;
-  thread_local clock::time_point last_call{};
-  thread_local uint32_t spins = 0;
-
+// A base da memoria e o ponto de pausa, em todos os frames: aqui (Xenia) e no Swap do Renut (renut_glue.cpp), onde
+// esta espera nao corre (o BlockOnFence do Renut espera pela thread de render, sem CBlocker).
+void DragonFuryFramePoint(uint8_t* base) {
   if (g_dragonfury_guest_base.load(std::memory_order_relaxed) != base) {
     g_dragonfury_guest_base.store(base, std::memory_order_release);
   }
@@ -57,6 +60,21 @@ REX_HOOK_RAW(DF_CBLOCKER_CHECK) {
     std::unique_lock<std::mutex> lock(g_dragonfury_pause_mu);
     g_dragonfury_pause_cv.wait(lock, [] { return !g_dragonfury_pause.load(std::memory_order_acquire); });
   }
+}
+
+REX_HOOK_RAW(DF_CBLOCKER_CHECK) {
+  using clock = std::chrono::steady_clock;
+  thread_local clock::time_point last_call{};
+  thread_local uint32_t spins = 0;
+
+  DragonFuryFramePoint(base);
+#if defined(DF_RENUT)
+  // Renut: o lado dele do CBlocker::Check (patches/renut/0200, partilhado) responde "feito".
+  if (banjo::renut_gpu::Active()) {
+    RENUT_NATIVE(RENUT_SUB_CBLOCKER_CHECK)(ctx, base);
+    return;
+  }
+#endif
 
   const auto now = clock::now();
   // Uma pausa grande desde a ultima chamada = nova espera: recomeca a contagem.

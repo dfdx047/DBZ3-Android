@@ -1,0 +1,59 @@
+Dragon Fury (2026-10-30): the Renut on the app phases (as the Dragon Burst's patches/game/0006), only with DF_RENUT.
+
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -62,6 +62,11 @@
+ #include "ingame/menu.h"
+ #include "ingame/online_panel.h"
+ #include "ingame/tagteam_panel.h"
++
++// Dragon Fury: o Renut (swordman_renderer = renut), app/src/main/cpp/renut/df_renut_app.h.
++#if defined(DF_RENUT)
++#include "df_renut_app.h"
++#endif
+ #include <rex/audio/sdl/sdl_audio_system.h>
+ #include <rex/input/input_system.h>
+ #include <rex/kernel/init.h>
+@@ -292,8 +297,32 @@
+         } catch (...) {
+             REXLOG_ERROR("dbz3: settings apply failed (unknown error), continuing with defaults");
+         }
++#if defined(DF_RENUT)
++        // Depois do dbz3_user.toml (o launcher escreve la o swordman_renderer): com o Renut, sem plugin da GPU.
++        DfRenutPreSetup(config);
++#endif
+     }
+ 
++#if defined(DF_RENUT)
++    // A janela ja existe: o dispositivo Vulkan do Renut antes do runtime.
++    std::optional<rex::PathConfig> OnFinalizePaths(const rex::PathConfig& defaults,
++                                                   std::function<void(rex::PathConfig)> resume) override {
++        DfRenutStart(app_context(), [this] { return imgui_drawer(); });
++        return ReXApp::OnFinalizePaths(defaults, std::move(resume));
++    }
++
++    // Renut: o ImGui do SDK (menus) desenhado pelo plume, e a janela dele.
++    std::unique_ptr<rex::ui::ImmediateDrawer> OnCreateImmediateDrawer() override {
++        if (banjo::renut_gpu::Active()) return renut::gpu::CreateOverlayDrawer();
++        return ReXApp::OnCreateImmediateDrawer();
++    }
++
++    void OnWindowPixelSizeChanged(uint32_t width, uint32_t height) override {
++        ReXApp::OnWindowPixelSizeChanged(width, height);
++        if (banjo::renut_gpu::Active()) renut::gpu::OnWindowResized();
++    }
++#endif
++
+     // Called after runtime is fully initialized, before window creation
+     void OnPostSetup() override {
+         PhaseLog("OnPostSetup");
+@@ -753,6 +782,9 @@
+     // Called before cleanup begins
+     void OnShutdown() override {
+         REXLOG_INFO("OnShutdown called");
++#if defined(DF_RENUT)
++        if (banjo::renut_gpu::Active()) renut::gpu::ShutdownRenderer();
++#endif
+         dbz3::SessionEnd(true);   // partida cerrada bien: sus mods pasan a "ultima partida buena"
+         if (drop_listener_added_ && window()) {
+             window()->RemoveListener(&drop_listener_);

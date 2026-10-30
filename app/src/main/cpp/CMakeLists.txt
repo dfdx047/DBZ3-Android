@@ -256,6 +256,17 @@ target_compile_options(game_b1 PRIVATE -march=armv8.2-a)
 target_link_options(game_b1 PRIVATE -Wl,-Bsymbolic-functions)
 
 #-----------------------------------------------------------------------------
+# Renut: renderizador nativo de Direct3D do mgr-nx-deko (do Dragon Burst / Zandatsu), escolhido no arranque com
+# swordman_renderer = renut. Shaders: tools/renut-shaders.sh. Mapa de hooks: docs/renut/HOOKMAP_BUDOKAI.md.
+#-----------------------------------------------------------------------------
+option(DF_RENUT "Compila o Renut (swordman_renderer = renut)" ON)
+if(DF_RENUT)
+    include("${DBZ3_REPO_ROOT}/cmake/renut.cmake")
+    df_renut_setup(game_b3 b3)
+    df_renut_setup(game_b1 b1)
+endif()
+
+#-----------------------------------------------------------------------------
 # Os libgame fora do APK (do Zandatsu / Dragon Burst). O codigo de cada jogo so pode estar no aparelho de quem tem o
 # disco: o APK leva cada libgame encriptado (AES-256-GCM, chave = SHA-256 da imagem PE do executavel desse jogo) e o
 # libmain.so, que no import le o executavel do jogador (loader/xex_image.cpp) para o GameLib.kt derivar a chave,

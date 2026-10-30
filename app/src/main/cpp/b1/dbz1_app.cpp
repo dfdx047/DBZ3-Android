@@ -27,6 +27,11 @@
 
 #include "generated/dbz1_init.h"
 
+// O Renut (swordman_renderer = renut), renut/df_renut_app.h.
+#if defined(DF_RENUT)
+#include "renut/df_renut_app.h"
+#endif
+
 // As opcoes do launcher (mesmos nomes, tipos e valores por omissao do settings.cpp do Budokai 3).
 REXCVAR_DEFINE_INT32(dbz3_resolution_scale, 1, "DBZ1/Video", "Internal render scale (1x-4x of the 720p framebuffer)");
 REXCVAR_DEFINE_STRING(dbz3_present_effect, "fsr", "DBZ1/Video", "Upscaling effect: bilinear, cas, fsr");
@@ -134,7 +139,34 @@ class Dbz1App : public rex::ReXApp {
     config.input_factory = REX_INPUT_BACKEND(rex::input::CreateDefaultInputSystem);
     config.kernel_init = rex::kernel::InitializeKernel;
     rex::cvar::SetFlagByName("fullscreen", "false");
+#if defined(DF_RENUT)
+    DfRenutPreSetup(config);
+#endif
   }
+
+#if defined(DF_RENUT)
+  // A janela ja existe: o dispositivo Vulkan do Renut antes do runtime.
+  std::optional<rex::PathConfig> OnFinalizePaths(const rex::PathConfig& defaults,
+                                                 std::function<void(rex::PathConfig)> resume) override {
+    DfRenutStart(app_context(), [this] { return imgui_drawer(); });
+    return ReXApp::OnFinalizePaths(defaults, std::move(resume));
+  }
+
+  // O ImGui do SDK (menus) desenhado pelo plume, e a janela dele.
+  std::unique_ptr<rex::ui::ImmediateDrawer> OnCreateImmediateDrawer() override {
+    if (banjo::renut_gpu::Active()) return renut::gpu::CreateOverlayDrawer();
+    return ReXApp::OnCreateImmediateDrawer();
+  }
+
+  void OnWindowPixelSizeChanged(uint32_t width, uint32_t height) override {
+    ReXApp::OnWindowPixelSizeChanged(width, height);
+    if (banjo::renut_gpu::Active()) renut::gpu::OnWindowResized();
+  }
+
+  void OnShutdown() override {
+    if (banjo::renut_gpu::Active()) renut::gpu::ShutdownRenderer();
+  }
+#endif
 
   void OnPostSetup() override {
     // Como no Budokai 3: draws com fetch constants invalidas (passes de sombra) e as cvars do runtime/GPU, que so

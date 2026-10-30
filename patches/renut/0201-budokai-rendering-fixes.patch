@@ -1,0 +1,445 @@
+diff --git a/app/src/renut_engine/gpu/d3d/hooks/device.cpp b/app/src/renut_engine/gpu/d3d/hooks/device.cpp
+index a72b17d..47e5167 100644
+--- a/app/src/renut_engine/gpu/d3d/hooks/device.cpp
++++ b/app/src/renut_engine/gpu/d3d/hooks/device.cpp
+@@ -879,7 +879,21 @@ REXCVAR_DEFINE_BOOL(sa2_renut_core_layout, true, "SA2/Renderer",
+                     "core 1), so no game thread time-slices with it. Off: every guest thread on any core, as before")
+     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+ 
+-void D3DDevice_Swap_hook(u32 device_va, u32 front_buffer, u32 /*parameters*/) {
++void D3DDevice_Swap_hook(u32 device_va, u32 front_buffer, u32 parameters) {
++  {  // Dragon Fury (diagnostic): the scaler parameters (D3DVIDEO_SCALER_PARAMETERS) and the front buffer, on change
++    static u32 last[8] = {~0u};
++    u32 now[8] = {parameters, 0, 0, 0, 0, 0, 0, 0};
++    if (const auto *p = parameters ? GuestPtr<const be_u32>(parameters) : nullptr)
++      for (u32 i = 0; i < 7; ++i) now[1 + i] = p[i];
++    if (std::memcmp(now, last, sizeof(now)) != 0) {
++      std::memcpy(last, now, sizeof(now));
++      const auto *fetch = front_buffer ? GuestPtr<const be_u32>(front_buffer + 0x1C) : nullptr;  // header fetch words
++      const u32 size_word = fetch ? u32(fetch[2]) : 0;
++      RGPU_INFO("[df-swap] front {:08X} ({}x{}) scaler {:08X}: source {},{}-{},{} out {}x{} filter {:08X}", front_buffer,
++                (size_word & 0x1FFF) + 1, ((size_word >> 13) & 0x1FFF) + 1, parameters, i32(now[1]), i32(now[2]),
++                i32(now[3]), i32(now[4]), now[5], now[6], now[7]);
++    }
++  }
+   // sa2-nx (2026-10-20, sa2_renut_core_layout, the Switch): once, the guest main thread (SA2's game and drawing thread,
+   // about a core of work in City Escape) alone on core 0, the other guest threads on cores 1-2 (preferring 2: the
+   // render thread is pinned to core 1 at a higher priority). Before, every guest thread could run on any core, and at
+diff --git a/app/src/renut_engine/gpu/d3d/hooks/shader.cpp b/app/src/renut_engine/gpu/d3d/hooks/shader.cpp
+index af1cddf..444efaf 100644
+--- a/app/src/renut_engine/gpu/d3d/hooks/shader.cpp
++++ b/app/src/renut_engine/gpu/d3d/hooks/shader.cpp
+@@ -247,6 +247,8 @@ u32 WordAt(const u8 *p) { return u32(*reinterpret_cast<const be_u32 *>(p)); }
+ // instruction that writes what its own did (as the GPU, and Xenia, run the patched microcode).
+ std::mutex g_fetch_targets_mutex;
+ std::unordered_map<u32, std::vector<u32>> g_fetch_targets;
++// Dragon Fury (2026-10-30): and each element's destination swizzle as compiled (word 1's low 12 bits), same order.
++std::unordered_map<u32, std::vector<u32>> g_fetch_swizzles;
+ 
+ u32 FetchTarget(u32 w0, u32 w1) {
+   u32 mask = 0;
+@@ -291,11 +293,14 @@ static void RecordFetchTargets(u32 vs_va, const u8 *physical) {
+   const auto *object = GuestPtr<const u8>(vs_va);
+   const u8 *container = object + kVertexShaderContainer;
+   const u8 *code = physical + WordAt(container + WordAt(container + 0x18));  // Shader::physicalOffset
+-  std::vector<u32> targets(elements.size());
+-  for (size_t i = 0; i < elements.size(); ++i)
++  std::vector<u32> targets(elements.size()), swizzles(elements.size());
++  for (size_t i = 0; i < elements.size(); ++i) {
+     targets[i] = FetchTarget(WordAt(code + elements[i].address * 12), WordAt(code + elements[i].address * 12 + 4));
++    swizzles[i] = WordAt(code + elements[i].address * 12 + 4) & 0xFFF;
++  }
+   std::lock_guard lock(g_fetch_targets_mutex);
+   g_fetch_targets[vs_va] = std::move(targets);
++  g_fetch_swizzles[vs_va] = std::move(swizzles);
+ }
+ 
+ bool ReadPatchedFetchWords(u32 vs_va, std::vector<u32> &words) {
+@@ -348,6 +353,12 @@ const VertexDeclarationRecord *PatchedFetchDeclarationLocked(u32 vs_va, const u3
+     }
+   auto declaration = std::make_unique<VertexDeclarationRecord>();
+   u32 stride_of[d3d::kMaxStreams] = {};
++  std::vector<u32> compiled_swizzles;
++  {
++    std::lock_guard lock(g_fetch_targets_mutex);
++    if (auto it = g_fetch_swizzles.find(vs_va); it != g_fetch_swizzles.end() && it->second.size() == count)
++      compiled_swizzles = it->second;
++  }
+   u32 full_const = 0, full_stride = 0;
+   // Dragon Burst (2026-10-29): in element order a mini fetch may come before the full one it follows in the microcode.
+   for (u32 i = 0; i < count; ++i)
+@@ -379,6 +390,28 @@ const VertexDeclarationRecord *PatchedFetchDeclarationLocked(u32 vs_va, const u3
+     // of that type (BoundDeclType). Without it the characters' normal and uv came in swapped: grey hair.
+     if (format == 25 || format == 26 || format == 31 || format == 32)  // 16_16, 16_16_16_16 and their FLOAT
+       type |= 1u << 6;
++    // Dragon Fury (2026-10-30): the other components D3D's bind moved. The recompiled shader reads each element with
++    // the swizzle it was compiled with; the GPU with the one the bind wrote (from the declaration's type). The
++    // Budokai's colours are D3DCOLOR: compiled xyzw, bound zyxw (the swapped word holds B, G, R, A), so the host
++    // element takes the bound swizzle: the type that puts in each component the shader reads what the GPU's fetch
++    // puts there (BGRA, PassthroughFormat). Without it every vertex colour came in with red and blue swapped: the
++    // orange skies and grey water of both games.
++    else if (!compiled_swizzles.empty()) {
++      const u32 compiled = compiled_swizzles[i], bound = w1 & 0xFFF;
++      if (compiled != bound) {
++        u32 swizzle[4];
++        for (u32 k = 0; k < 4; ++k)
++          swizzle[k] = (type >> (10 + 3 * k)) & 7;
++        for (u32 c = 0; c < 4; ++c) {
++          const u32 from = (compiled >> (3 * c)) & 7, to = (bound >> (3 * c)) & 7;
++          if (from <= 3 && to <= 3)
++            swizzle[from] = to;
++        }
++        type &= ~(0xFFFu << 10);
++        for (u32 k = 0; k < 4; ++k)
++          type |= swizzle[k] << (10 + 3 * k);
++      }
++    }
+     GuestVertexElement element{};
+     element.Stream = u16(stream);
+     element.Offset = u16(u32(offset) * 4);
+diff --git a/app/src/renut_engine/gpu/render/draw.cpp b/app/src/renut_engine/gpu/render/draw.cpp
+index 9fd9364..b7b3e9f 100644
+--- a/app/src/renut_engine/gpu/render/draw.cpp
++++ b/app/src/renut_engine/gpu/render/draw.cpp
+@@ -2151,8 +2151,26 @@ bool DrawLogFrameLocked() {
+   return frame >= first_frame && frame <= first_frame + 1;
+ }
+ 
++// Dragon Fury (2026-10-30, swordman_renut_invalid_fetch): the Budokai unbind a texture (SetTexture NULL) and draw with
++// a shader that still samples it: the D3D clears only the fetch constant's type, so the GPU keeps reading the texture
++// the other words describe (B3's fight shadows: the 512x512 projected shadow resolved just before; Xenia draws them
++// with gpu_allow_invalid_fetch_constants). Here the device has no header for the slot: the last header bound with the
++// same base page stands in for it.
++REXCVAR_DEFINE_BOOL(swordman_renut_invalid_fetch, true, "SwordMan",
++                    "Renut: a texture slot the game unbound (fetch constant of type 0) samples the texture the fetch "
++                    "constant still describes, as the GPU does (Budokai shadows)");
++struct PageHeader {
++  u32 page = 0;
++  u32 va = 0;
++};
++PageHeader g_page_headers[1024];
++PageHeader &PageHeaderEntry(u32 page) {
++  return g_page_headers[(page * 0x9E3779B1u) >> 22];
++}
++
+ void FillTextures(const GuestDevice &device, u32 fetch_mask, SharedConstants &sc, BindEffects *slot_fx = nullptr,
+                   bool *all_memo = nullptr) {
++  static const bool invalid_fetch = REXCVAR_GET(swordman_renut_invalid_fetch);
+   if (all_memo)
+     *all_memo = banjo::renut_gpu::CpuMemosOn();
+   // sa2-nx (2026-10-20, sa2_renut_texture_defaults_copy): the null words as one copy of a block made once (160 stores a
+@@ -2187,8 +2205,21 @@ void FillTextures(const GuestDevice &device, u32 fetch_mask, SharedConstants &sc
+   for (u32 r = 0; r < d3d::kTextureFetchSlots; ++r) {
+     if (!(fetch_mask & (1u << r)))
+       continue;
+-    const TextureFetch fetch = DeviceTextureFetch(dev, r);
+-    const u32 texture_va = device.U32(d3d::kDeviceOffsetTextures + r * 4);
++    TextureFetch fetch = DeviceTextureFetch(dev, r);
++    u32 texture_va = device.U32(d3d::kDeviceOffsetTextures + r * 4);
++    if (invalid_fetch) {  // Dragon Fury (swordman_renut_invalid_fetch)
++      if (texture_va && fetch.IsTexture()) {
++        PageHeader &e = PageHeaderEntry(fetch.BasePage());
++        e.page = fetch.BasePage();
++        e.va = texture_va;
++      } else if (!texture_va && fetch.Type() == 0 && fetch.BasePage()) {
++        const PageHeader &e = PageHeaderEntry(fetch.BasePage());
++        if (e.page == fetch.BasePage() && e.va) {
++          texture_va = e.va;
++          fetch.dword[0] = (fetch.dword[0] & ~3u) | 2u;
++        }
++      }
++    }
+     const auto *header = texture_va ? GuestPtr<const d3d::BaseTexture>(texture_va) : nullptr;
+     TextureSlotMemo &m =
+         g_texture_slot_memo[((texture_va ^ (fetch.dword[0] * 0x85EBCA6Bu) ^ fetch.dword[1]) * 0x9E3779B1u) >> 23];
+@@ -5341,13 +5372,37 @@ bool DrawStateLocked(const u8 *device_state, const DrawCall &call, const ReplayC
+       line += fmt::format(" z {:08X} {}x{} f{}", targets.depth->guest_va, targets.depth->width,
+                           targets.depth->height, int(targets.depth->format));
+     line += fmt::format(" | dc {:08X} bl {:08X} m {:X} |", key.depth_control, key.blend_control[0], key.color_mask);
++    {  // Dragon Fury: the viewport transform, the host viewport and the VS's first constants
++      const auto &v = viewport.viewport;
++      line += fmt::format(" vte {:08X} vp {},{} {}x{} ss {} sx {} {} so {} {} |", u32(dev.m_ControlPacket.VteControl),
++                          v.x, v.y, v.width, v.height, sc.screen_space, sc.screen_scale[0], sc.screen_scale[1],
++                          sc.screen_offset[0], sc.screen_offset[1]);
++      static const u32 kRegs[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 18, 19, 20, 21};
++      for (u32 r : kRegs) {
++        if (r >= 8 && (vs->hash >> 32) != 0x7C8FE87Fu)
++          break;
++        const auto *c = reinterpret_cast<const be_f32 *>(vs_constants.Register(r));
++        line += fmt::format(" c{} {:.3g} {:.3g} {:.3g} {:.3g}", r, float(c[0]), float(c[1]), float(c[2]), float(c[3]));
++      }
++      line += " |";
++    }
+     for (u32 r = 0; r < d3d::kTextureFetchSlots; ++r) {
+       if (!(texture_mask & (1u << r)))
+         continue;
+       const u32 va = device.U32(d3d::kDeviceOffsetTextures + r * 4);
+       const HostTexture *t = va ? FindHostTextureLocked(va) : nullptr;
+-      line += t ? fmt::format(" t{} {:08X} {}x{} g{}", r, va, t->width, t->height, int(t->guest_format))
++      line += t ? fmt::format(" t{} {:08X} {}x{} g{} p{:05X}", r, va, t->width, t->height, int(t->guest_format),
++                              DeviceTextureFetch(dev, r).BasePage())
+                 : fmt::format(" t{} {:08X}", r, va);
++      line += fmt::format(" s{:X}", sc.sampler_indices[r]);
++      if (!va) {  // Dragon Fury: what the GPU's fetch constant holds for a slot the device has no texture in
++        const TextureFetch f = DeviceTextureFetch(dev, r);
++        u32 fw = 0, fh = 0, fd = 0;
++        f.Size(fw, fh, fd);
++        const PageHeader &e = PageHeaderEntry(f.BasePage());
++        line += fmt::format(" (fetch {:08X} {:08X} {:08X} type {} fmt {} {}x{} -> {:08X})", f.dword[0], f.dword[1],
++                            f.dword[2], f.Type(), u32(f.Format()), fw, fh, e.page == f.BasePage() ? e.va : 0u);
++      }
+     }
+     // Dragon Burst (2026-10-29): otherwise stream 0's first 32 bytes as the fetch constant names them.
+     if (!call.up_vertices) {
+@@ -5361,7 +5416,7 @@ bool DrawStateLocked(const u8 *device_state, const DrawCall &call, const ReplayC
+     // Dragon Burst (2026-10-29): a Begin/DrawVerticesUP draw's first two vertices, as big-endian floats.
+     if (call.up_vertices && call.up_stride >= 4 && call.up_vertex_count >= 2) {
+       line += fmt::format(" | up stride {}", call.up_stride);
+-      for (u32 v = 0; v < 2; ++v) {
++      for (u32 v = 0; v < std::min(call.up_vertex_count, 6u); ++v) {
+         line += " v:";
+         for (u32 k = 0; k < std::min(call.up_stride / 4, 12u); ++k)
+           line += fmt::format(" {:.3g}", std::bit_cast<float>(
+diff --git a/app/src/renut_engine/gpu/render/textures.cpp b/app/src/renut_engine/gpu/render/textures.cpp
+index 2cf92af..3b9daaf 100644
+--- a/app/src/renut_engine/gpu/render/textures.cpp
++++ b/app/src/renut_engine/gpu/render/textures.cpp
+@@ -1983,6 +1983,10 @@ uint32_t SamplerSlotUncached(const TextureFetch &fetch, RenderScale lod_scale) {
+   SetSamplerSlot(s, slot, sampler.get());  // Dragon Burst: and the merged draw set
+   g_sampler_objects.push_back(std::move(sampler));
+   g_samplers.emplace(key, slot);
++  if (g_samplers.size() <= 96)  // Dragon Fury (diagnostic)
++    RGPU_INFO("[df-sampler] slot {}: fetch dword0 {:08X} address {} {} {} filter {} {} border {}", slot, fetch.dword[0],
++              int(desc.addressU), int(desc.addressV), int(desc.addressW), int(desc.magFilter), int(desc.minFilter),
++              int(desc.borderColor));
+   return slot;
+ }
+ 
+diff --git a/app/src/renut_engine/gpu/shaders/host/gs_vertex.hlsli b/app/src/renut_engine/gpu/shaders/host/gs_vertex.hlsli
+new file mode 100644
+index 0000000..ff7d859
+--- /dev/null
++++ b/app/src/renut_engine/gpu/shaders/host/gs_vertex.hlsli
+@@ -0,0 +1,41 @@
++// The vertex layout XenosRecomp (RENUT_RECOMP) writes for every vertex shader and reads in every pixel shader: the
++// position, then the interpolators in this order, then the point sprite coordinate and size. SPIR-V matches stages
++// by location, which follows the order. Shared by rectangle_list_gs.hlsl and point_sprite_gs.hlsl.
++//
++// Dragon Fury (2026-10-30): one member per interpolator, as XenosRecomp declares the vertex shader's outputs (six
++// colours: mgr-nx-deko passes COLOR2..5 too). The arrays (texcoord[16], color[2]) put the normals, tangent and point
++// data at other locations than the vertex and pixel shaders, and on the Adreno 650's driver every rectangle came out
++// with the wrong texture coordinates (the Budokai's full-screen FXAA pass: the frame zoomed and cut on the diagonal).
++struct Vertex
++{
++    float4 position : SV_Position;
++    float4 texcoord0 : TEXCOORD0;
++    float4 texcoord1 : TEXCOORD1;
++    float4 texcoord2 : TEXCOORD2;
++    float4 texcoord3 : TEXCOORD3;
++    float4 texcoord4 : TEXCOORD4;
++    float4 texcoord5 : TEXCOORD5;
++    float4 texcoord6 : TEXCOORD6;
++    float4 texcoord7 : TEXCOORD7;
++    float4 texcoord8 : TEXCOORD8;
++    float4 texcoord9 : TEXCOORD9;
++    float4 texcoord10 : TEXCOORD10;
++    float4 texcoord11 : TEXCOORD11;
++    float4 texcoord12 : TEXCOORD12;
++    float4 texcoord13 : TEXCOORD13;
++    float4 texcoord14 : TEXCOORD14;
++    float4 texcoord15 : TEXCOORD15;
++    float4 color0 : COLOR0;
++    float4 color1 : COLOR1;
++    float4 color2 : COLOR2;
++    float4 color3 : COLOR3;
++    float4 color4 : COLOR4;
++    float4 color5 : COLOR5;
++    float4 normal0 : NORMAL0;
++    float4 normal1 : NORMAL1;
++    float4 normal2 : NORMAL2;
++    float4 tangent : TANGENT0;
++    float4 binormal : BINORMAL0;
++    float2 pointCoord : POINTCOORD;
++    float pointSize : POINTSIZE;
++};
+diff --git a/app/src/renut_engine/gpu/shaders/host/point_sprite_gs.hlsl b/app/src/renut_engine/gpu/shaders/host/point_sprite_gs.hlsl
+index 0a61fd0..dd51a8a 100644
+--- a/app/src/renut_engine/gpu/shaders/host/point_sprite_gs.hlsl
++++ b/app/src/renut_engine/gpu/shaders/host/point_sprite_gs.hlsl
+@@ -9,17 +9,7 @@
+ // shader and pixel shader (see rectangle_list_gs.hlsl). A vertex shader that
+ // killed its vertex exports a negative size.
+ 
+-struct Vertex
+-{
+-    float4 position : SV_Position;
+-    float4 texcoord[16] : TEXCOORD0;
+-    float4 color[2] : COLOR0;
+-    float4 normal[3] : NORMAL0;
+-    float4 tangent : TANGENT0;
+-    float4 binormal : BINORMAL0;
+-    float2 pointCoord : POINTCOORD;
+-    float pointSize : POINTSIZE;
+-};
++#include "gs_vertex.hlsli"
+ 
+ // SharedConstants (draw.cpp): at 1312 the render state's point width and
+ // height and minimum and maximum size, at 1328 the size of the host viewport
+diff --git a/app/src/renut_engine/gpu/shaders/host/rectangle_list_gs.hlsl b/app/src/renut_engine/gpu/shaders/host/rectangle_list_gs.hlsl
+index edac160..6012a0c 100644
+--- a/app/src/renut_engine/gpu/shaders/host/rectangle_list_gs.hlsl
++++ b/app/src/renut_engine/gpu/shaders/host/rectangle_list_gs.hlsl
+@@ -14,29 +14,38 @@
+ // order, then the point sprite coordinate and size (see point_sprite_gs.hlsl).
+ // SPIR-V matches stages by location, which follows the order.
+ 
+-struct Vertex
+-{
+-    float4 position : SV_Position;
+-    float4 texcoord[16] : TEXCOORD0;
+-    float4 color[2] : COLOR0;
+-    float4 normal[3] : NORMAL0;
+-    float4 tangent : TANGENT0;
+-    float4 binormal : BINORMAL0;
+-    float2 pointCoord : POINTCOORD;
+-    float pointSize : POINTSIZE;
+-};
++#include "gs_vertex.hlsli"
+ 
+ // a + b - c for every output: the corner across the diagonal a-b from c.
+ Vertex Opposite(Vertex a, Vertex b, Vertex c)
+ {
+     Vertex d;
+     d.position = a.position + b.position - c.position;
+-    [unroll] for (uint i = 0; i < 16; ++i)
+-        d.texcoord[i] = a.texcoord[i] + b.texcoord[i] - c.texcoord[i];
+-    [unroll] for (uint j = 0; j < 2; ++j)
+-        d.color[j] = a.color[j] + b.color[j] - c.color[j];
+-    [unroll] for (uint k = 0; k < 3; ++k)
+-        d.normal[k] = a.normal[k] + b.normal[k] - c.normal[k];
++    d.texcoord0 = a.texcoord0 + b.texcoord0 - c.texcoord0;
++    d.texcoord1 = a.texcoord1 + b.texcoord1 - c.texcoord1;
++    d.texcoord2 = a.texcoord2 + b.texcoord2 - c.texcoord2;
++    d.texcoord3 = a.texcoord3 + b.texcoord3 - c.texcoord3;
++    d.texcoord4 = a.texcoord4 + b.texcoord4 - c.texcoord4;
++    d.texcoord5 = a.texcoord5 + b.texcoord5 - c.texcoord5;
++    d.texcoord6 = a.texcoord6 + b.texcoord6 - c.texcoord6;
++    d.texcoord7 = a.texcoord7 + b.texcoord7 - c.texcoord7;
++    d.texcoord8 = a.texcoord8 + b.texcoord8 - c.texcoord8;
++    d.texcoord9 = a.texcoord9 + b.texcoord9 - c.texcoord9;
++    d.texcoord10 = a.texcoord10 + b.texcoord10 - c.texcoord10;
++    d.texcoord11 = a.texcoord11 + b.texcoord11 - c.texcoord11;
++    d.texcoord12 = a.texcoord12 + b.texcoord12 - c.texcoord12;
++    d.texcoord13 = a.texcoord13 + b.texcoord13 - c.texcoord13;
++    d.texcoord14 = a.texcoord14 + b.texcoord14 - c.texcoord14;
++    d.texcoord15 = a.texcoord15 + b.texcoord15 - c.texcoord15;
++    d.color0 = a.color0 + b.color0 - c.color0;
++    d.color1 = a.color1 + b.color1 - c.color1;
++    d.color2 = a.color2 + b.color2 - c.color2;
++    d.color3 = a.color3 + b.color3 - c.color3;
++    d.color4 = a.color4 + b.color4 - c.color4;
++    d.color5 = a.color5 + b.color5 - c.color5;
++    d.normal0 = a.normal0 + b.normal0 - c.normal0;
++    d.normal1 = a.normal1 + b.normal1 - c.normal1;
++    d.normal2 = a.normal2 + b.normal2 - c.normal2;
+     d.tangent = a.tangent + b.tangent - c.tangent;
+     d.binormal = a.binormal + b.binormal - c.binormal;
+     d.pointCoord = a.pointCoord + b.pointCoord - c.pointCoord;
+diff --git a/app/thirdparty/reblue-XenosRecomp/XenosRecomp/shader_recompiler.cpp b/app/thirdparty/reblue-XenosRecomp/XenosRecomp/shader_recompiler.cpp
+index bf0b50b..5665795 100644
+--- a/app/thirdparty/reblue-XenosRecomp/XenosRecomp/shader_recompiler.cpp
++++ b/app/thirdparty/reblue-XenosRecomp/XenosRecomp/shader_recompiler.cpp
+@@ -1,4 +1,6 @@
+ #include "shader_recompiler.h"
++
++#include <cstdlib>
+ #include "shader_common.h"
+ #include <stdexcept>
+ #ifdef RENUT_RECOMP
+@@ -218,6 +220,17 @@ void ShaderRecompiler::printDstSwizzle01(uint32_t dstRegister, uint32_t dstSwizz
+ void ShaderRecompiler::recompile(const VertexFetchInstruction& instr, uint32_t address)
+ {
+ #ifdef RENUT_RECOMP
++    // Dragon Fury (2026-10-30): a fetch into r0.x replaces the vertex index too (see vertexIndexOverwritten), after
++    // this fetch reads its own index. The Budokai 3's skinned shaders load the blend index into r0.x and fetch the
++    // bones (POSITION1..3) by it: taken as fetches by the vertex index, every outline and character vertex took the
++    // bone of its own index (the black spikes across the fights).
++    struct VertexIndexWrite
++    {
++        ShaderRecompiler& self;
++        bool writes;
++        ~VertexIndexWrite() { if (writes) self.vertexIndexOverwritten = true; }
++    } vertexIndexWrite{ *this, !isPixelShader && instr.dstRegister == 0 &&
++        getDestSwizzle(instr.dstSwizzle, 0) != FetchDestinationSwizzle::Keep };
+     bool readsFetch = false;
+     for (uint32_t lane = 0; lane < 4; ++lane)
+         readsFetch |= getDestSwizzle(instr.dstSwizzle, lane) <= FetchDestinationSwizzle::W;
+@@ -2520,6 +2533,55 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+ 
+     uint32_t interpolatorCount = (shader->interpolatorInfo >> 5) & 0x1F;
+ 
++    // Dragon Fury (2026-10-30, RENUT_SEMANTIC_LINKAGE=1): the Budokai's pairs are linked by semantic, as D3D9 does
++    // when it binds them (it rewrites the vertex shader's export indices to the pixel shader's interpolators): the
++    // vertex shader's exports and the pixel shader's inputs are named by the semantics in their containers, which the
++    // host stages then match by location. By register, the B3's fight shadow sampled its texture with the floor's
++    // texture coordinates (its vertex shader exports them in o0 and the shadow's in o1; the pixel shader reads
++    // TEXCOORD1 in r0): the shadow texture on every floor tile.
++    static const bool semanticLinkage = [] {
++        const char* v = std::getenv("RENUT_SEMANTIC_LINKAGE");
++        return v && *v == '1';
++    }();
++    auto semanticVariable = [](const Interpolator& interpolator, const char* prefix) -> std::string {
++        if (std::getenv("RENUT_SEMANTIC_LOG"))
++            fmt::println(stderr, "semantic {} {} {}", prefix, uint32_t(interpolator.usage), uint32_t(interpolator.usageIndex));
++        // FOG0 (the Budokai's fog factor) has no host interpolator of its own: TEXCOORD15, which they never use.
++        if (interpolator.usage == DeclUsage::Fog && interpolator.usageIndex == 0)
++            return fmt::format("{}TexCoord15", prefix);
++        for (auto& [usage, usageIndex] : INTERPOLATORS)
++            if (usage == interpolator.usage && usageIndex == interpolator.usageIndex)
++                return fmt::format("{}{}{}", prefix, USAGE_VARIABLES[uint32_t(usage)], usageIndex);
++        return {};
++    };
++    if (semanticLinkage && !isPixelShader && interpolatorCount != 0)
++    {
++        auto vertexShader = reinterpret_cast<const VertexShader*>(shader);
++        // Only the table's registers: an export elsewhere is an error (recompile(AluInstruction)) instead of a
++        // register-named output that a semantic may have taken.
++        interpolators.clear();
++        for (uint32_t i = 0; i < interpolatorCount; i++)
++        {
++            union
++            {
++                Interpolator interpolator;
++                uint32_t value;
++            };
++            value = vertexShader->vertexElementsAndInterpolators[vertexShader->field18 + vertexShader->vertexElementCount + i];
++            std::string name = semanticVariable(interpolator, "o");
++            if (name.empty())
++                fmt::println(stderr, "vertex shader interpolator {} usage {} index {}: no host interpolator",
++                    uint32_t(interpolator.reg), uint32_t(interpolator.usage), uint32_t(interpolator.usageIndex));
++            else
++                interpolators[interpolator.reg] = std::move(name);
++        }
++        // A register outside the table keeps oTexCoord<register>, which a semantic may have taken too.
++        for (auto& [reg, name] : interpolators)
++            for (auto& [otherReg, otherName] : interpolators)
++                if (reg < otherReg && name == otherName)
++                    fmt::println(stderr, "vertex shader exports {} and {} both go to {}", reg, otherReg, name);
++    }
++
+     for (uint32_t i = 0; i < interpolatorCount; i++)
+     {
+         union
+@@ -2531,7 +2593,11 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+         if (isPixelShader)
+         {
+             value = reinterpret_cast<const PixelShader*>(shader)->interpolators[i];
+-            println("\tfloat4 r{0} = iTexCoord{0};", uint32_t(interpolator.reg));
++            const std::string name = semanticLinkage ? semanticVariable(interpolator, "i") : std::string();
++            if (!name.empty())
++                println("\tfloat4 r{} = {};", uint32_t(interpolator.reg), name);
++            else
++                println("\tfloat4 r{0} = iTexCoord{0};", uint32_t(interpolator.reg));
+             printedRegisters[interpolator.reg] = true;
+         }
+         else

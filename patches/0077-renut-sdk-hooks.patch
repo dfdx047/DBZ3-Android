@@ -1,0 +1,158 @@
+DBZ3-Android 0077: what the Renut renderer needs from the SDK (from the Dragon Burst SDK 0100/0175/0185)
+
+rex_vdswap_hook, rex::graphics::GetGuestVblankRate, rex::perf::RecordGpuFrame/RecordMainThreadFrame,
+PresentStats::shown and the debug overlay's upscaler override.
+
+--- a/include/rex/perf/frame_rate.h
++++ b/include/rex/perf/frame_rate.h
+@@ -27,6 +27,23 @@
+ // Guest frontbuffer size (before resolution scaling) of the latest swap.
+ void RecordGuestFrontbuffer(uint32_t width, uint32_t height);
+ 
++// DBZ3-Android (0077, from Dragon Burst 0185/0175): for the Renut renderer, which presents without the Xenia GPU.
++// GPU: the GPU time of one drawn frame; main thread: the time the game's main thread worked on one frame. Totals since
++// startup; readers take differences.
++void RecordGpuFrame(double ms);
++void RecordMainThreadFrame(double ms);
++struct FrameCostTotals {
++  uint64_t gpu_frames = 0;
++  uint64_t gpu_us = 0;
++  uint64_t cpu_frames = 0;
++  uint64_t cpu_us = 0;
++};
++FrameCostTotals GetFrameCostTotals();
++// What the debug overlay shows as "Upscaler" when the app draws the frame itself (no presenter, e.g. the Renut
++// renderer): empty = the presenter's settings (default).
++void SetUpscalerOverride(std::string text);
++std::string GetUpscalerOverride();
++
+ // Draw resolution scale the GPU backend renders with, and the one the config
+ // asked for (higher when an upscaler quality mode renders below it).
+ void SetDrawResolutionScale(uint32_t x, uint32_t y, uint32_t requested_x, uint32_t requested_y);
+@@ -45,6 +62,8 @@
+ // differences (the perf line every 5 s). Written by the presenter.
+ struct PresentStats {
+   std::atomic<uint64_t> presents{0};          // host presents: real + generated frames
++  // DBZ3-Android (0077): frames that reach the screen, each once (the Renut counts them).
++  std::atomic<uint64_t> shown{0};
+   std::atomic<uint64_t> generated{0};         // generated (interpolated) frames presented
+   std::atomic<uint64_t> not_generated{0};     // new guest frames shown without one (no history,
+                                               // size change) while frame generation is on
+--- a/src/core/perf/frame_rate.cpp
++++ b/src/core/perf/frame_rate.cpp
+@@ -132,4 +132,40 @@
+   }
+ }
+ 
++// DBZ3-Android (0077): the Renut renderer's frame costs and upscaler text.
++namespace {
++std::atomic<uint64_t> g_gpu_frames{0}, g_gpu_us{0}, g_cpu_frames{0}, g_cpu_us{0};
++std::mutex g_upscaler_override_mutex;
++std::string g_upscaler_override;
++}  // namespace
++
++void RecordGpuFrame(double ms) {
++  g_gpu_us.fetch_add(uint64_t(std::max(ms, 0.0) * 1000.0), std::memory_order_relaxed);
++  g_gpu_frames.fetch_add(1, std::memory_order_release);
++}
++
++void RecordMainThreadFrame(double ms) {
++  g_cpu_us.fetch_add(uint64_t(std::max(ms, 0.0) * 1000.0), std::memory_order_relaxed);
++  g_cpu_frames.fetch_add(1, std::memory_order_release);
++}
++
++FrameCostTotals GetFrameCostTotals() {
++  FrameCostTotals t;
++  t.gpu_frames = g_gpu_frames.load(std::memory_order_acquire);
++  t.gpu_us = g_gpu_us.load(std::memory_order_relaxed);
++  t.cpu_frames = g_cpu_frames.load(std::memory_order_acquire);
++  t.cpu_us = g_cpu_us.load(std::memory_order_relaxed);
++  return t;
++}
++
++void SetUpscalerOverride(std::string text) {
++  std::lock_guard lock(g_upscaler_override_mutex);
++  g_upscaler_override = std::move(text);
++}
++
++std::string GetUpscalerOverride() {
++  std::lock_guard lock(g_upscaler_override_mutex);
++  return g_upscaler_override;
++}
++
+ }  // namespace rex::perf
+--- a/src/ui/overlay/debug_overlay.cpp
++++ b/src/ui/overlay/debug_overlay.cpp
+@@ -38,6 +38,10 @@
+ 
+ // The upscaler shown in the overlay, from the presenter settings.
+ std::string UpscalerText() {
++  // DBZ3-Android (0077): an app that presents itself (the Renut) says what it does.
++  if (std::string override_text = rex::perf::GetUpscalerOverride(); !override_text.empty()) {
++    return override_text;
++  }
+   if (!rex::cvar::GetFlagInfo("present_effect")) {
+     return {};
+   }
+--- a/src/kernel/xboxkrnl/xboxkrnl_video.cpp
++++ b/src/kernel/xboxkrnl/xboxkrnl_video.cpp
+@@ -17,6 +17,7 @@
+ #include <string>
+ 
+ #include <rex/cvar.h>
++#include <rex/graphics/frame_pacing.h>
+ #include <rex/graphics/pipeline/texture/info.h>
+ #include <rex/graphics/register_file.h>
+ #include <rex/graphics/video_mode_util.h>
+@@ -437,6 +438,26 @@
+   return 0;
+ }
+ 
++}  // namespace rex::kernel::xboxkrnl
++
++// DBZ3-Android (0077, the Dragon Burst SDK's 0100): called at the start of each VdSwap, on the game thread that
++// presents (the app's pause point and frame counter). Generic: no game addresses. nullptr by default.
++extern "C" {
++void (*rex_vdswap_hook)(void) = nullptr;
++}
++
++// DBZ3-Android (0077): the guest vblank rate (the video mode's refresh rate), for renderers without the Xenia GPU's
++// vblank timer (the Renut paces its frames by it).
++namespace rex::graphics {
++double GetGuestVblankRate() {
++  system::X_VIDEO_MODE video_mode;
++  kernel::xboxkrnl::VdQueryVideoMode(&video_mode);
++  return std::max(1.0, double(float(video_mode.refresh_rate)));
++}
++}  // namespace rex::graphics
++
++namespace rex::kernel::xboxkrnl {
++
+ void VdSwap_entry(mapped_void buffer_ptr,      // ptr into primary ringbuffer
+                   mapped_void fetch_ptr,       // frontbuffer Direct3D 9 texture header fetch
+                   mapped_void unk2,            // system writeback ptr
+@@ -445,6 +466,9 @@
+                   mapped_u32 frontbuffer_ptr,  // ptr to frontbuffer address
+                   mapped_u32 texture_format_ptr, mapped_u32 color_space_ptr, mapped_u32 width,
+                   mapped_u32 height) {
++  if (rex_vdswap_hook) {
++    rex_vdswap_hook();
++  }
+   // All of these parameters are REQUIRED.
+   assert(buffer_ptr);
+   assert(fetch_ptr);
+--- /dev/null
++++ b/include/rex/graphics/frame_pacing.h
+@@ -0,0 +1,12 @@
++/**
++ * @file        graphics/frame_pacing.h
++ * @brief       DBZ3-Android (0077): the guest vblank rate, for renderers without the Xenia GPU (the Renut).
++ */
++#pragma once
++
++namespace rex::graphics {
++
++// The guest video mode's refresh rate in Hz (the rate of the Xenia GPU's vblank timer). At least 1.
++double GetGuestVblankRate();
++
++}  // namespace rex::graphics
