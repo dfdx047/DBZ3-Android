@@ -1,17 +1,11 @@
+diff --git a/src/ingame/online_panel.cpp b/src/ingame/online_panel.cpp
+index 0453162..97933f1 100644
 --- a/src/ingame/online_panel.cpp
 +++ b/src/ingame/online_panel.cpp
-@@ -6,6 +6,7 @@
- #include <cfloat>
- #include <chrono>
- #include <cstdio>
-+#include <cstdlib>
- #include <cstring>
- #include <string>
- #include <vector>
-@@ -455,8 +456,23 @@
-       admission_reason = T::T("Online: solo con la version US del juego.", "Online: US version of the game only.");
-       return false;
-     }
+@@ -740,8 +740,23 @@ void OnlinePanel::DrawScreen(ImGuiIO& io, uint16_t pressed) {
+   // comparan aparte en el HELLO. 1 contra 1: Tag Team online sigue sin autorizar (falta el relevo guest).
+   std::string admission_reason;
+   auto admission_ready = [&admission_reason]() {
 +#if defined(__ANDROID__)
 +    // DBZ3-Android: o "executavel" e o app_process do sistema (muda de aparelho para
 +    // aparelho). A identidade sao as bibliotecas do APK (REX_NATIVE_LIB_DIR, definido

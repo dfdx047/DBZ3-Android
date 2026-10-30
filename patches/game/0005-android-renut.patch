@@ -2,10 +2,10 @@ Dragon Fury (2026-10-30): the Renut on the app phases (as the Dragon Burst's pat
 
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -62,6 +62,11 @@
- #include "ingame/menu.h"
+@@ -67,6 +67,11 @@
  #include "ingame/online_panel.h"
  #include "ingame/tagteam_panel.h"
+ #include "net/room.h"
 +
 +// Dragon Fury: o Renut (swordman_renderer = renut), app/src/main/cpp/renut/df_renut_app.h.
 +#if defined(DF_RENUT)
@@ -14,7 +14,7 @@ Dragon Fury (2026-10-30): the Renut on the app phases (as the Dragon Burst's pat
  #include <rex/audio/sdl/sdl_audio_system.h>
  #include <rex/input/input_system.h>
  #include <rex/kernel/init.h>
-@@ -292,8 +297,32 @@
+@@ -412,8 +417,32 @@
          } catch (...) {
              REXLOG_ERROR("dbz3: settings apply failed (unknown error), continuing with defaults");
          }
@@ -47,7 +47,7 @@ Dragon Fury (2026-10-30): the Renut on the app phases (as the Dragon Burst's pat
      // Called after runtime is fully initialized, before window creation
      void OnPostSetup() override {
          PhaseLog("OnPostSetup");
-@@ -753,6 +782,9 @@
+@@ -922,6 +951,9 @@
      // Called before cleanup begins
      void OnShutdown() override {
          REXLOG_INFO("OnShutdown called");

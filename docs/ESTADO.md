@@ -62,7 +62,7 @@ texturas, drivers, controles por toque e atualizador. Fase 1 (jogo a arrancar e 
 Os patches do jogo são escritos contra o projeto original **v1.4.5.1** (origin/master,
 47ada97). O `apply-sdk-patches.sh` e o CMake recusam um `external/dbz3` sem `src/stage_ext.cpp`.
 
-### Atualizar o external/dbz3 (v1.4.5.1)
+### Atualizar o external/dbz3 (v1.5.5.5)
 
 O codegen não mudou entre 41f03b2 (v1.4.4.5) e 47ada97 (`dbz3_config.toml` e
 `dbz3_manifest.toml` iguais): o `generated/` de uma cópia v1.4.4.5 serve. Se a cópia for mais
