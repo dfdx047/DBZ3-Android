@@ -215,7 +215,7 @@
     <string name="settings_aspect_mode">Image</string>
     <string name="aspect_original">Original 16:9</string>
     <string name="aspect_stretch">Stretch to fill</string>
-    <string name="settings_widescreen_note">The game is already 16:9. A real full-screen mode for 20:9 phones (wider camera and HUD, no stretching) needs a patch that is still being researched.</string>
+    <string name="settings_widescreen_note">Widescreen (Renut): on screens wider than 16:9 the camera shows more to the sides and the HUD goes to the edges, nothing stretched. On a 16:9 screen it looks like Original.</string>
     <string name="settings_audio">Audio</string>
     <string name="settings_volume">Volume</string>
     <string name="settings_mute">Mute</string>
@@ -563,4 +563,5 @@
     <string name="settings_ps2_pick">Choose .iso</string>
     <string name="msg_ps2_ok">%1$s copied. Open it in HUB → Gateway.</string>
     <string name="msg_ps2_failed">Could not copy the ISO: %1$s</string>
+    <string name="aspect_wide">Widescreen</string>
 </resources>

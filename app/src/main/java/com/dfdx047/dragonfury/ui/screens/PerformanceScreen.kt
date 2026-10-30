@@ -128,7 +128,7 @@ fun PerformanceScreen(vm: LauncherViewModel) {
                 subtitle = stringResource(R.string.perf_resolution_sub),
                 options = listOf(
                     (1 to GameConfig.SCREEN_PERCENT) to stringResource(R.string.perf_resolution_screen,
-                        if (c.useRenut) ScreenFit.renutHeight(c.letterbox) else ScreenFit.xeniaPercent(c.letterbox) * 720 / 100),
+                        if (c.useRenut) ScreenFit.renutHeight(c.letterbox && !c.wideOn) else ScreenFit.xeniaPercent(c.letterbox) * 720 / 100),
                     (1 to 50) to "360p (50%)",
                     (1 to 75) to "540p (75%)",
                     (1 to 100) to "720p (1x)",
@@ -252,9 +252,10 @@ fun PerformanceScreen(vm: LauncherViewModel) {
         SectionCard(stringResource(R.string.settings_aspect), Icons.Filled.PhotoSizeSelectLarge) {
             SettingSegmented(
                 title = stringResource(R.string.settings_aspect_mode),
-                options = listOf(true to stringResource(R.string.aspect_original), false to stringResource(R.string.aspect_stretch)),
-                selected = c.letterbox,
-                onSelect = { v -> vm.updateConfig { it.copy(letterbox = v) } },
+                options = listOf(0 to stringResource(R.string.aspect_original), 1 to stringResource(R.string.aspect_stretch)) +
+                    (if (c.wideAvailable) listOf(2 to stringResource(R.string.aspect_wide)) else emptyList()),
+                selected = c.imageMode,
+                onSelect = { v -> vm.updateConfig { it.withImageMode(v) } },
             )
             StatusLine(stringResource(R.string.settings_widescreen_note), Level.INFO)
         }

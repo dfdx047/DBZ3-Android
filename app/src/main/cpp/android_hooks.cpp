@@ -52,7 +52,10 @@ std::condition_variable g_dragonfury_pause_cv;
 
 // A base da memoria e o ponto de pausa, em todos os frames: aqui (Xenia) e no Swap do Renut (renut_glue.cpp), onde
 // esta espera nao corre (o BlockOnFence do Renut espera pela thread de render, sem CBlocker).
+void DragonFuryWideUpdate();  // widescreen.cpp
+
 void DragonFuryFramePoint(uint8_t* base) {
+  DragonFuryWideUpdate();
   if (g_dragonfury_guest_base.load(std::memory_order_relaxed) != base) {
     g_dragonfury_guest_base.store(base, std::memory_order_release);
   }

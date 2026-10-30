@@ -256,9 +256,15 @@ private fun GameMenuPanel(prefs: LauncherPrefs, actions: InGameActions, nav: Men
             add(
                 MItem.Choice(
                     stringResource(R.string.settings_aspect_mode),
-                    listOf(stringResource(R.string.aspect_original), stringResource(R.string.aspect_stretch)),
-                    if (c.letterbox) 0 else 1,
-                ) { set(c.copy(letterbox = it == 0), mapOf("present_letterbox" to (it == 0).toString(), "swordman_aspect" to if (it == 0) "original" else "stretch")) },
+                    listOf(stringResource(R.string.aspect_original), stringResource(R.string.aspect_stretch)) +
+                        (if (c.wideAvailable) listOf(stringResource(R.string.aspect_wide)) else emptyList()),
+                    c.imageMode,
+                ) {
+                    // Ao vivo: present_letterbox, swordman_aspect e dbz3_widescreen sao lidos a cada quadro.
+                    val n = c.withImageMode(it)
+                    set(n, mapOf("present_letterbox" to n.letterbox.toString(), "swordman_aspect" to if (n.letterbox) "original" else "stretch",
+                        "dbz3_widescreen" to n.wideOn.toString()))
+                },
             )
             // FPS como no launcher (PerformanceScreen): 30, 60 e, so em telas de 110 Hz ou mais, 120 interpolado. Ao
             // vivo: o present le dbz3_frame_interpolation a cada frame e a tela muda de taxa aqui.

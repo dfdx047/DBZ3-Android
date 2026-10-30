@@ -225,6 +225,8 @@ target_sources(game_b3 PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/android_hooks.cpp"
     # Estado do combate para os controles por toque (JNI, ver NativeGameState.kt).
     "${CMAKE_CURRENT_LIST_DIR}/game_state_jni.cpp"
+    # Widescreen nas telas mais largas que 16:9 (Renut).
+    "${CMAKE_CURRENT_LIST_DIR}/widescreen.cpp"
 )
 
 # Rastreio das funcoes D3D candidatas (tools/d3d_map.py + tools/d3d_trace_gen.py).
@@ -287,6 +289,7 @@ add_library(game_b1 SHARED
     "${CMAKE_CURRENT_LIST_DIR}/b1/dbz1_app.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/android_hooks.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/game_state_jni.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/widescreen.cpp"
     ${DBZ1_GENERATED_SOURCES})
 target_compile_definitions(game_b1 PRIVATE DF_GAME_B1=1)
 target_include_directories(game_b1 PRIVATE

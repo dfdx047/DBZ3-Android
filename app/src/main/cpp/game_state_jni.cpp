@@ -291,6 +291,13 @@ Java_com_dfdx047_dragonfury_game_NativeGameState_nativeForceResume(JNIEnv*, jcla
 // junta histerese (fica no layout de luta uns segundos depois de ir a 0, para
 // nao trocar entre assaltos). -1 = ainda nao ha memoria do jogo.
 // ---------------------------------------------------------------------------
+// Em luta (o mesmo sinal, sem histerese), para o HUD do widescreen (widescreen.cpp).
+bool DragonFuryFightNow() {
+  const uint8_t* base = g_dragonfury_guest_base.load(std::memory_order_acquire);
+  if (!base || MapFlying(500)) return false;
+  return (kFightFlag != 0 && LoadU32(base, kFightFlag) != 0) || ReadFight(base).active;
+}
+
 extern "C" JNIEXPORT jint JNICALL
 Java_com_dfdx047_dragonfury_game_NativeGameState_nativeFightFlag(JNIEnv*, jclass) {
   const uint8_t* base = g_dragonfury_guest_base.load(std::memory_order_acquire);

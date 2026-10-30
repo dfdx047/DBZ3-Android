@@ -37,6 +37,7 @@ data class GameConfig(
     val frameInterp: Boolean = false,         // dbz3_frame_interpolation
     val showFps: Boolean = false,             // dbz3_show_fps
     val letterbox: Boolean = true,            // present_letterbox (16:9 com barras / esticar)
+    val widescreen: Boolean = false,          // dbz3_widescreen (Renut: vista e HUD mais largos, widescreen.cpp)
     // Jogo
     val gameLanguage: Int = 1,                // dbz3_language 1 EN, 2 JP, 3 DE, 4 FR, 5 ES, 6 IT
     val tagTeam: Boolean = true,              // dbz3_tag_team_enabled
@@ -78,7 +79,7 @@ data class GameConfig(
      */
     val renutHeight: Int get() = when {
         resolutionScale > 1 -> 720 * resolutionScale.coerceAtMost(MAX_RESOLUTION_SCALE)
-        screenRes -> ScreenFit.renutHeight(letterbox)
+        screenRes -> ScreenFit.renutHeight(letterbox && !wideOn)
         else -> 720 * effectivePercent / 100
     }
 
@@ -140,7 +141,21 @@ data class GameConfig(
         "swordman_resolution_choice" to if (screenRes && resolutionScale == 1) "screen" else "",
         // A proporcao no Renut (present.cpp): a mesma escolha do present_letterbox do Xenia.
         "swordman_aspect" to if (letterbox) "original" else "stretch",
+        "dbz3_widescreen" to wideOn,
     )
+
+    /** O widescreen so no B3 (widescreen.cpp), com o Renut e a escolha Widescreen (que guarda letterbox = true). */
+    val wideOn: Boolean get() = widescreen && wideAvailable && letterbox
+    val wideAvailable: Boolean get() = useRenut && AppPaths.game == Game.B3
+
+    /** Imagem: 0 Original 16:9, 1 Esticar, 2 Widescreen. */
+    val imageMode: Int get() = when {
+        !letterbox -> 1
+        widescreen && wideAvailable -> 2
+        else -> 0
+    }
+
+    fun withImageMode(mode: Int): GameConfig = copy(letterbox = mode != 1, widescreen = mode == 2)
 
     /** Percentagem que o jogo usa: abaixo de 100 so a 1x. */
     val effectivePercent: Int
@@ -224,6 +239,7 @@ data class GameConfig(
                 frameInterp = bool("dbz3_frame_interpolation", d.frameInterp),
                 showFps = bool("dbz3_show_fps", d.showFps),
                 letterbox = bool("present_letterbox", d.letterbox),
+                widescreen = bool("dbz3_widescreen", d.widescreen),
                 gameLanguage = int("dbz3_language", d.gameLanguage),
                 tagTeam = bool("dbz3_tag_team_enabled", d.tagTeam),
                 online = bool("dbz3_online_enabled", d.online),
