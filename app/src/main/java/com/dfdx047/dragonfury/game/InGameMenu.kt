@@ -260,6 +260,32 @@ private fun GameMenuPanel(prefs: LauncherPrefs, actions: InGameActions, nav: Men
                     if (c.letterbox) 0 else 1,
                 ) { set(c.copy(letterbox = it == 0), mapOf("present_letterbox" to (it == 0).toString(), "swordman_aspect" to if (it == 0) "original" else "stretch")) },
             )
+            // FPS como no launcher (PerformanceScreen): 30, 60 e, so em telas de 110 Hz ou mais, 120 interpolado. Ao
+            // vivo: o present le dbz3_frame_interpolation a cada frame e a tela muda de taxa aqui.
+            val has120 = remember { com.dfdx047.dragonfury.data.DisplayRates.maxRefreshHz(context) >=
+                com.dfdx047.dragonfury.data.DisplayRates.MIN_120_HZ }
+            val fpsValues = if (has120) listOf(30, 60, 120) else listOf(30, 60)
+            val fps = when {
+                c.frameInterp && has120 -> 120
+                c.frameCap == 30 -> 30
+                else -> 60
+            }
+            add(
+                MItem.Choice(
+                    stringResource(R.string.perf_fps_title),
+                    fpsValues.map { if (it == 120) stringResource(R.string.perf_fps_120_interp) else "$it FPS" },
+                    fpsValues.indexOf(fps).let { if (it < 0) 1 else it },
+                ) {
+                    val v = fpsValues[it]
+                    val next = c.copy(frameCap = if (v == 30) 30 else 60, frameInterp = v == 120)
+                    set(next, mapOf(
+                        "dbz3_frame_cap" to (if (v == 30) 30 else 60).toString(),
+                        "dbz3_frameskip" to (if (v == 30) 1 else 0).toString(),
+                        "dbz3_frame_interpolation" to (v == 120).toString(),
+                    ))
+                    (context as? GameActivity)?.requestDisplayRate(next.outputHz)
+                },
+            )
             add(
                 MItem.Slider(stringResource(R.string.settings_rim_light), c.rimLight.toFloat(), 0f..1f, 0.05f, ::pct) {
                     set(c.copy(rimLight = it.toDouble()), mapOf("dbz3_hd_rim_light" to TomlNum.d(it.toDouble())))

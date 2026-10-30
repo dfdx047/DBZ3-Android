@@ -182,3 +182,19 @@ Base: o Renut do mgr-nx-deko (`ba1a837`) com os patches do Dragon Burst `patches
   luta 13:39:36, sair -> menus 13:43:09 (`tr_b1_story.png`). B3 igual ao que era (`tr_b3_touch.png`: menu -> luta
   13:45:41, seleção 13:46:27, revanche 13:46:49). Ficam no layout de luta a pausa do jogo e o "Continue?/Exit?"
   (são da cena da luta; os botões A e o direcional estão lá).
+- Item 6, 120 FPS no Renut (30/10 13:48-14:07, Cube, B1).
+  - 120 interpolado: já existia nos dois renderizadores (Xenia 0057, Renut 0025) e no launcher, só em telas de
+    110 Hz ou mais. Agora também no menu do jogo (Vídeo -> Taxa de quadros: 30 / 60 / 120 interpolado, este só nessas
+    telas; muda ao vivo e guarda no toml; a tela muda de taxa com `requestDisplayRate`). Prova no Cube (60 Hz): só
+    30/60 aparecem; 60 -> 30 ao vivo dá `presented_fps=29.97` com o jogo a 60, e 30 -> 60 volta a 60,01.
+  - Prova da interpolação numa tela de 60 Hz: o Renut não lia a cvar de taxa da tela (`dbz3_frame_interpolation_display_hz`,
+    a do Xenia); a `renut/0206` passa a lê-la. Com `dbz3_frame_interpolation = true` e a taxa a 120 no Cube:
+    `presented: game_fps=20.01 presented_fps=40.01 (402 shown, 201 of them generated)`, metade dos quadros gerados.
+    (No Cube a GPU não aguenta os passes da interpolação a 720p: 20 fps; numa tela de 120 Hz mostra-se 60+60.)
+  - 120 nativo: não sai. Três tentativas no Cube (B1, abertura gravada a 60 e a 120): vblank do jogo a 120
+    (`video_mode_refresh_rate`, a pacing do Renut segue-o: "0.00 ms a frame paced; 601 frames late"), e o mesmo com
+    `renut_vsync = false`. O jogo fica nos 60 (16,7 ms de Swap a Swap) e a abertura corta nas mesmas horas; numa tela
+    de 60 Hz o present trava-o. O port de PC diz que a lógica do Budokai anda por frame (subir o vblank acelera o
+    jogo), por isso o 120 nativo pede um passo fixo de 60 Hz na lógica, como o `burstlimit_patches` do Burst Limit,
+    e uma tela de 120 Hz para medir. Fica por fazer (estimativa: 6-10 h com o Odin 3). Desbloqueado: o Android não o
+    oferece (já visto no Dragon Burst, B3), fica de fora.

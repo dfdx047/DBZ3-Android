@@ -1,0 +1,21 @@
+Dragon Fury renut/0206: dbz3_frame_interpolation_display_hz also sets the display rate for Renut's 120 FPS
+interpolation (as in the Xenia presenter), to prove the generated frames on a 60 Hz display.
+
+diff --git a/app/src/renut_engine/gpu/backend/present.cpp b/app/src/renut_engine/gpu/backend/present.cpp
+index f0bb7d7..8fda983 100644
+--- a/app/src/renut_engine/gpu/backend/present.cpp
++++ b/app/src/renut_engine/gpu/backend/present.cpp
+@@ -621,7 +621,12 @@ bool InterpOn() {
+   const std::string skip = rex::cvar::GetFlagByName("dbz3_frameskip");
+   if (!skip.empty() && std::atoi(skip.c_str()) > 0)
+     return false;
+-  return rex::perf::GetDisplayRefreshRate() >= 100.0f;
++  // Dragon Fury (renut/0206): dbz3_frame_interpolation_display_hz (the emulated GPU's cvar, 0 = the display's own
++  // rate) stands in for the display's rate, as in the Xenia presenter: on a 60 Hz display it proves the generated
++  // frames (the presented line counts them) without a 120 Hz screen.
++  const std::string hz = rex::cvar::GetFlagByName("dbz3_frame_interpolation_display_hz");
++  const int display_override = hz.empty() ? 0 : std::atoi(hz.c_str());
++  return (display_override > 0 ? float(display_override) : rex::perf::GetDisplayRefreshRate()) >= 100.0f;
+ }
+ 
+ std::unique_ptr<plume::RenderPipeline> InterpPipeline(VideoState &s, plume::RenderFormat format, uint32_t targets,
