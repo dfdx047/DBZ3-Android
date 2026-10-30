@@ -538,4 +538,18 @@
     <string name="shortcut_b1_short">Budokai 1</string>
     <string name="shortcut_b1_long">Jogar Budokai 1 HD</string>
     <string name="log_game_selected">Jogo escolhido: %1$s</string>
+    <string name="perf_renderer">Renderizador</string>
+    <string name="perf_renderer_sub">O Renut desenha o Direct3D do jogo de forma nativa (mais leve na GPU); o Xenia emula a GPU do Xbox 360. Vale no próximo arranque. Cada jogo guarda a sua escolha.</string>
+    <string name="perf_renderer_auto">Auto</string>
+    <string name="perf_renderer_uses_renut">Arranca no Renut. Se faltar ao driver algo que o Renut precisa, o jogo fecha e o launcher diz porquê.</string>
+    <string name="perf_renderer_uses_xenia">Arranca no Xenia (GPU emulada).</string>
+    <string name="renut_crash_title">O %1$s fechou</string>
+    <string name="renut_crash_text">O jogo fechou. Envie os logs para corrigirmos: Exportar logs guarda-os em Download/, e as issues são onde os mandar.</string>
+    <string name="renut_crash_reason">O driver não tem o que o Renut precisa: %1$s.</string>
+    <string name="renut_crash_ask">Fechou %1$d vezes seguidas. Usar o modo emulado (Xenia) por agora? Dá para voltar ao Renut em Desempenho > Renderizador.</string>
+    <string name="renut_crash_issues">Abrir as issues</string>
+    <string name="renut_crash_close">Fechar</string>
+    <string name="renut_crash_use_xenia">Usar o Xenia</string>
+    <string name="renut_crash_keep">Continuar no Renut</string>
+    <string name="menu_renderer">Renderizador (próximo arranque)</string>
 </resources>

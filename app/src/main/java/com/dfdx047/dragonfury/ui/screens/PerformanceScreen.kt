@@ -69,6 +69,23 @@ fun PerformanceScreen(vm: LauncherViewModel) {
             }
             Text(stringResource(R.string.settings_api_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             HorizontalDivider()
+            // Renderizador (30/10, decisao do dono): Auto = o Renut em todas as GPUs; o Xenia so por escolha do jogador.
+            SettingSegmented(
+                title = stringResource(R.string.perf_renderer),
+                subtitle = stringResource(R.string.perf_renderer_sub),
+                options = listOf(
+                    "auto" to stringResource(R.string.perf_renderer_auto),
+                    "renut" to "Renut",
+                    "xenos" to "Xenia",
+                ),
+                selected = c.renderer,
+                onSelect = { v -> vm.updateConfig { it.copy(renderer = v) } },
+            )
+            StatusLine(
+                stringResource(if (c.useRenut) R.string.perf_renderer_uses_renut else R.string.perf_renderer_uses_xenia),
+                Level.INFO,
+            )
+            HorizontalDivider()
             // 30 grava dbz3_frame_cap = 30 e dbz3_frameskip = 1; 120 (interpolado, patch 0057) grava
             // dbz3_frame_interpolation e a tela passa a 120 Hz. As opcoes de 120 so aparecem em
             // telas de 110 Hz ou mais (DisplayRates).

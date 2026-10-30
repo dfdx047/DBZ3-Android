@@ -206,6 +206,21 @@ private fun GameMenuPanel(prefs: LauncherPrefs, actions: InGameActions, nav: Men
             MItem.Note(stringResource(R.string.ingame_restart_note)),
         )
         MenuTab.VIDEO -> buildList {
+            // Renderizador (30/10): a escolha vale no proximo arranque (Auto = Renut; o Xenia so por escolha).
+            val renderers = GameConfig.RENDERERS
+            add(
+                MItem.Choice(
+                    stringResource(R.string.menu_renderer),
+                    listOf(stringResource(R.string.perf_renderer_auto), "Renut", "Xenia"),
+                    renderers.indexOf(c.renderer).coerceAtLeast(0),
+                ) {
+                    val v = renderers[it]
+                    set(c.copy(renderer = v), mapOf(
+                        "swordman_renderer_choice" to v,
+                        "swordman_renderer" to if (v == "xenos") "xenos" else "renut",
+                    ))
+                },
+            )
             val effects = listOf("bilinear", "cas", "fsr")
             add(
                 MItem.Choice(

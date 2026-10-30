@@ -34,7 +34,13 @@ REXCVAR_DEFINE_STRING(swordman_renderer, "xenos", "SwordMan",
                       "Renderizador, escolhido no arranque. xenos = GPU do Xbox emulada (Xenia, plugin xenos). "
                       "renut = Direct3D do jogo nativo no Renut do mgr-nx-deko (plume, Vulkan)")
     .allowed({"xenos", "renut"})
-    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+    // Lido uma vez no arranque (banjo::renut_gpu::Active, latched); o menu do jogo muda-o para o proximo arranque e o
+    // SaveConfig grava-o (com kInitOnly a mudanca era recusada e o SaveConfig voltava a escrever o valor antigo).
+    .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
+// A escolha do jogador (auto|renut|xenos), do launcher (GameConfig.renderer) e do menu do jogo: so guardada.
+REXCVAR_DEFINE_STRING(swordman_renderer_choice, "auto", "SwordMan",
+                      "Renderizador escolhido pelo jogador (auto = Renut); o launcher tira dele o swordman_renderer")
+    .allowed({"auto", "renut", "xenos"});
 
 REXCVAR_DEFINE_BOOL(mgr_renut_diag_original_draw, false, "MGR/Diagnostics",
                     "Renut: corre tambem o Draw original do jogo antes do do Renut (diagnostico)");

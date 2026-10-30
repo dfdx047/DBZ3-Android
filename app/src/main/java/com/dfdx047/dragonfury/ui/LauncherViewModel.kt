@@ -213,6 +213,41 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) { GameConfig.save(next) }
     }
 
+    /**
+     * O Renut fechou o jogo (RenutCrash): quantos crashes seguidos (0 = sem aviso) e em que jogo. Do 2.o em diante o
+     * aviso pergunta se o jogador quer o Xenia por agora; e o jogador que escolhe.
+     */
+    var renutCrashes by mutableStateOf(0)
+        private set
+    var renutCrashGame by mutableStateOf(com.dfdx047.dragonfury.data.Game.B3)
+        private set
+    /** O motivo que o jogo deu (o driver sem o que o Renut precisa), ou "". */
+    var renutCrashReason by mutableStateOf("")
+        private set
+
+    private suspend fun checkRenutCrash() {
+        val (n, game) = com.dfdx047.dragonfury.data.RenutCrash.check()
+        if (n == 0) return
+        val reason = com.dfdx047.dragonfury.data.RenutCrash.missing()
+        withContext(Dispatchers.Main) {
+            renutCrashReason = reason
+            renutCrashGame = game
+            renutCrashes = n
+        }
+    }
+
+    /** Fecha o aviso; useXenia = o jogador aceitou o modo emulado nesse jogo (Desempenho > Renderizador volta). */
+    fun answerRenutCrash(useXenia: Boolean) {
+        renutCrashes = 0
+        if (!useXenia) return
+        if (renutCrashGame == com.dfdx047.dragonfury.data.AppPaths.game) {
+            updateConfig { it.copy(renderer = "xenos") }
+        } else {
+            val file = java.io.File(com.dfdx047.dragonfury.data.AppPaths.appDir, renutCrashGame.tomlName)
+            viewModelScope.launch(Dispatchers.IO) { GameConfig.save(GameConfig.load(file).copy(renderer = "xenos"), file) }
+        }
+    }
+
     var busy by mutableStateOf<Busy?>(null)
         private set
     var message by mutableStateOf<UiMessage?>(null)
@@ -250,6 +285,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     /** Ao voltar ao launcher: o menu rapido do jogo pode ter mudado o toml. */
     fun reloadAfterGame() {
         viewModelScope.launch(Dispatchers.IO) {
+            checkRenutCrash()
             val c = GameConfig.load()
             withContext(Dispatchers.Main) { config = c }
             runtimeTextureLog = TexturePacks.runtimeLog()
@@ -909,6 +945,8 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
                 if (cpu.supported) "ok" else "NO (${cpu.coresWithoutAtomics}/${cpu.cores})",
                 SystemCheck.ram().let { "${it.totalMb} MB (${it.availableMb} MB / avail)" },
             )
+            // O Renut fechou o jogo da ultima vez (o launcher foi aberto de novo)?
+            checkRenutCrash()
             var c = GameConfig.load()
             // Render targets diretos: caminho principal de desempenho (e os interruptores
             // dos efeitos so funcionam com ele). Religa-se uma vez para quem o desligou.

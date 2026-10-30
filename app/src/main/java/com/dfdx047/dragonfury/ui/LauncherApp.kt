@@ -143,6 +143,7 @@ fun LauncherApp(vm: LauncherViewModel) {
 
     if (vm.showGpuNotice) GpuNotice(vm, openTab = { tab = it })
     if (vm.showUpdateDialog) UpdateDialog(vm)
+    else if (vm.renutCrashes > 0) RenutCrashDialog(vm)
     vm.error?.let { ErrorDialog(vm, it) }
 }
 
@@ -419,6 +420,55 @@ private fun UpdateDialog(vm: LauncherViewModel) {
                 TextButton(onClick = { vm.skipUpdate() }) { Text(stringResource(R.string.update_skip)) }
                 TextButton(onClick = { vm.showUpdateDialog = false }) { Text(stringResource(R.string.later)) }
             }
+        },
+    )
+}
+
+/**
+ * O Renut fechou o jogo (RenutCrash): pede os logs (Exportar logs, issues) e, do 2.o crash seguido em diante, pergunta se
+ * o jogador quer o Xenia por agora nesse jogo. Nunca troca sozinho.
+ */
+@Composable
+private fun RenutCrashDialog(vm: LauncherViewModel) {
+    val context = LocalContext.current
+    val ask = vm.renutCrashes >= 2
+    val issues = DragonFuryApp.GITHUB_URL + "/issues"
+    AlertDialog(
+        onDismissRequest = { vm.answerRenutCrash(false) },
+        icon = { Icon(Icons.Filled.Memory, null) },
+        title = { Text(stringResource(R.string.renut_crash_title, stringResource(vm.renutCrashGame.nameRes))) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Em paisagem o aviso nao cabe: a pergunta primeiro.
+                if (ask) {
+                    Text(stringResource(R.string.renut_crash_ask, vm.renutCrashes), fontWeight = FontWeight.SemiBold)
+                }
+                Text(stringResource(R.string.renut_crash_text))
+                if (vm.renutCrashReason.isNotEmpty()) Text(stringResource(R.string.renut_crash_reason, vm.renutCrashReason))
+                androidx.compose.foundation.text.selection.SelectionContainer {
+                    Text(issues, style = MaterialTheme.typography.bodySmall)
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    androidx.compose.material3.OutlinedButton(onClick = { vm.exportLogs(context) }, enabled = vm.busy == null) {
+                        Text(stringResource(R.string.export_logs))
+                    }
+                    androidx.compose.material3.OutlinedButton(onClick = {
+                        try {
+                            context.startActivity(
+                                android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(issues)),
+                            )
+                        } catch (_: Exception) {
+                        }
+                    }) { Text(stringResource(R.string.renut_crash_issues)) }
+                }
+            }
+        },
+        confirmButton = {
+            if (ask) TextButton(onClick = { vm.answerRenutCrash(true) }) { Text(stringResource(R.string.renut_crash_use_xenia)) }
+            else TextButton(onClick = { vm.answerRenutCrash(false) }) { Text(stringResource(R.string.renut_crash_close)) }
+        },
+        dismissButton = {
+            if (ask) TextButton(onClick = { vm.answerRenutCrash(false) }) { Text(stringResource(R.string.renut_crash_keep)) }
         },
     )
 }

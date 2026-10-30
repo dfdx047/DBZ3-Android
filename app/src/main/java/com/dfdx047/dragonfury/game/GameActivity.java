@@ -93,6 +93,7 @@ public class GameActivity extends SDLActivity {
         applyCvarOverrides(new File(appDir, "cvars.txt"));
         installCustomVulkanDriver(appDir);
         prepareLogFile(appDir);
+        markRenutRun(appDir);
 
         Log.i(TAG, "Jogo: " + mGame.getDirName() + ", pasta " + appDir.getAbsolutePath() + "/" + mGame.getDirName());
         com.dfdx047.dragonfury.data.AppLog.info(com.dfdx047.dragonfury.R.string.log_game_open,
@@ -162,6 +163,9 @@ public class GameActivity extends SDLActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (mRenut) {
+            markRenutPending();
+        }
         if (mOverlay != null) {
             mOverlay.onResume();
         }
@@ -169,10 +173,44 @@ public class GameActivity extends SDLActivity {
 
     @Override
     protected void onPause() {
+        if (mRenut) {  // saiu normalmente: nao e crash, e a contagem de crashes seguidos volta a zero
+            //noinspection ResultOfMethodCallIgnored
+            new File(getExternalFilesDir(null), "renut_run.pending").delete();
+            //noinspection ResultOfMethodCallIgnored
+            new File(getExternalFilesDir(null), "renut_crashes.txt").delete();
+        }
         if (mOverlay != null) {
             mOverlay.onPause();
         }
         super.onPause();
+    }
+
+    /** Esta sessao corre no Renut (o toml do jogo, swordman_renderer = "renut"; markRenutRun). */
+    private boolean mRenut;
+
+    /**
+     * O jogo no Renut: renut_run.pending (com o id do jogo) enquanto esta em primeiro plano (do arranque ao onPause, e
+     * de novo no onResume). Se o processo cair, fica la: o launcher encontra-o (RenutCrash.check), mostra o aviso e
+     * conta os crashes seguidos; sair normalmente apaga-o e zera a contagem.
+     */
+    private void markRenutRun(File appDir) {
+        try {
+            String toml = new String(java.nio.file.Files.readAllBytes(new File(appDir, mGame.getTomlName()).toPath()));
+            mRenut = toml.contains("swordman_renderer = \"renut\"");
+            if (mRenut) {
+                markRenutPending();
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "renut_run", e);
+        }
+    }
+
+    private void markRenutPending() {
+        try (java.io.FileWriter w = new java.io.FileWriter(new File(getExternalFilesDir(null), "renut_run.pending"))) {
+            w.write(mGame.getId());
+        } catch (java.io.IOException e) {
+            Log.w(TAG, "renut_run", e);
+        }
     }
 
     @Override

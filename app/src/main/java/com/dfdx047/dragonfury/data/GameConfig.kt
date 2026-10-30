@@ -60,7 +60,21 @@ data class GameConfig(
     val fxBloom: Boolean = true,              // dbz3_fx_bloom
     val fxDof: Boolean = true,                // dbz3_fx_dof (profundidade de campo)
     val fxFxaa: Boolean = true,               // dbz3_fx_fxaa (FXAA do proprio jogo, nao o dbz3_fxaa)
+    // Renderizador (30/10, decisao do dono, como no Dragon Burst): auto (por omissao) = o Renut (o Direct3D do jogo
+    // nativo, docs/renut) em todas as GPUs; o Xenia so quando o jogador o escolhe ("xenos"). Nunca troca sozinho: se o
+    // Renut fechar o jogo, o launcher mostra o aviso e, do 2.o crash seguido em diante, pergunta (RenutCrash).
+    val renderer: String = "auto",            // swordman_renderer_choice auto|renut|xenos
 ) {
+    /** O jogo arranca no Renut com estas opcoes. */
+    val useRenut: Boolean get() = renderer != "xenos"
+
+    /**
+     * sa2_render_height_handheld: a altura que o Renut desenha (render_scale.h: 360, 480, 540, 720, 1080, 1440, 2160).
+     * A mesma escolha de resolucao do Xenia (720p x escala, ou 50/75% de 720p).
+     */
+    val renutHeight: Int get() = if (resolutionScale > 1) 720 * resolutionScale.coerceAtMost(MAX_RESOLUTION_SCALE)
+        else 720 * effectivePercent / 100
+
     fun toToml(): Map<String, Any> = linkedMapOf(
         // "manual": o preset "auto" do PC reescreveria estas opcoes no arranque.
         "dbz3_quality_preset" to "manual",
@@ -111,6 +125,9 @@ data class GameConfig(
         // Memoria do jogo num buffer normal (sem sparse binding): o RB2-Android e o
         // Skate3-Mobile desligam-no nos Adreno; menos um caminho com bugs de driver.
         "vulkan_sparse_shared_memory" to false,
+        "swordman_renderer" to if (useRenut) "renut" else "xenos",
+        "swordman_renderer_choice" to renderer,
+        "sa2_render_height_handheld" to renutHeight,
     )
 
     /** Percentagem que o jogo usa: abaixo de 100 so a 1x. */
@@ -146,6 +163,7 @@ data class GameConfig(
         val FSR_RENDER = listOf("native", "quality", "balanced", "performance", "ultra_performance")
         val FXAA = listOf("none", "fxaa", "fxaa_extreme")
         const val MAX_RESOLUTION_SCALE = 3
+        val RENDERERS = listOf("auto", "renut", "xenos")
 
         fun load(file: File = AppPaths.userToml): GameConfig {
             val m = try {
@@ -203,11 +221,55 @@ data class GameConfig(
                 fxBloom = bool("dbz3_fx_bloom", d.fxBloom),
                 fxDof = bool("dbz3_fx_dof", d.fxDof),
                 fxFxaa = bool("dbz3_fx_fxaa", d.fxFxaa),
+                renderer = str("swordman_renderer_choice", d.renderer).let { if (it in RENDERERS) it else "auto" },
             )
         }
 
         fun save(config: GameConfig, file: File = AppPaths.userToml) {
             TomlLite.merge(file, config.toToml())
         }
+    }
+}
+
+/**
+ * O Renut fechou o jogo (30/10, decisao do dono: o Xenia nao e muleta; como no Dragon Burst). O GameActivity deixa
+ * renut_run.pending (com o id do jogo) enquanto o jogo do Renut esta em primeiro plano e zera a contagem ao sair
+ * normalmente. Se o launcher encontra o marcador, o jogo fechou: mais um crash seguido e o aviso (Exportar logs, issues);
+ * do 2.o seguido em diante pergunta se o jogador quer o Xenia por agora (nesse jogo). Nunca troca sozinho. O motivo,
+ * quando o jogo o sabe (o driver sem o que o Renut precisa), vem do renut_support.txt.
+ */
+object RenutCrash {
+    private val pending get() = File(AppPaths.appDir, "renut_run.pending")
+    private val count get() = File(AppPaths.appDir, "renut_crashes.txt")
+
+    /** Crashes seguidos ate agora (0 = a ultima sessao do Renut saiu normalmente). */
+    fun consecutive(): Int = try {
+        count.takeIf { it.isFile }?.readText()?.trim()?.toIntOrNull() ?: 0
+    } catch (_: Exception) {
+        0
+    }
+
+    /**
+     * Com o jogo fechado: a ultima sessao do Renut caiu? Conta-a e devolve os crashes seguidos e o jogo que caiu
+     * (0 = nao caiu).
+     */
+    fun check(): Pair<Int, Game> = try {
+        if (!pending.exists()) 0 to Game.B3 else {
+            val game = Game.byId(pending.readText().trim())
+            pending.delete()
+            val n = consecutive() + 1
+            count.writeText("$n\n")
+            n to game
+        }
+    } catch (_: Exception) {
+        0 to Game.B3
+    }
+
+    /** O que o jogo disse do driver na ultima tentativa (renut_support.txt "no" + a lista), ou "". */
+    fun missing(): String = try {
+        val lines = File(AppPaths.appDir, "renut_support.txt").takeIf { it.isFile }?.readLines().orEmpty()
+        if (lines.firstOrNull()?.trim() == "no") lines.getOrNull(1)?.trim().orEmpty() else ""
+    } catch (_: Exception) {
+        ""
     }
 }

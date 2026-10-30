@@ -93,3 +93,11 @@ Base: o Renut do mgr-nx-deko (`ba1a837`) com os patches do Dragon Burst `patches
   imagem quando a resolução ficou no hand-over), `swordman_renut_depth_restore`. Prova: `cmp_b3_mapfix.png`
   (Xenia | Renut iguais); lutas dos dois jogos e abertura do B1 sem mudança (`reg_k.png`, `cmp_b1_story_k.png`).
 - Por resolver: opção do renderizador no launcher e no menu do jogo; o Renut ainda não é o padrão.
+- Renderizador no launcher e no menu do jogo (30/10 05:55-06:15): Desempenho > Renderizador (Auto | Renut | Xenia,
+  por jogo; Auto = Renut em todas as GPUs) e Vídeo > Renderizador (próximo arranque) no menu do jogo
+  (`swordman_renderer` passa a `kRequiresRestart` para o SaveConfig gravar a escolha; `swordman_renderer_choice`).
+  Aviso de crash como no Dragon Burst: `renut_run.pending` (com o id do jogo) enquanto o jogo do Renut está em
+  primeiro plano; o launcher mostra "O Budokai N fechou" com Exportar logs e as issues, e só do 2.º crash seguido em
+  diante pergunta se quer o Xenia nesse jogo. Prova (RP5): aviso com 2 crashes simulados do B1 → "Usar o Xenia" mudou
+  só o `dbz1_user.toml`; no menu do B3 Xenia → `swordman_renderer = "xenos"`, Auto → `"renut"`. Nota de teste: um
+  `am force-stop` com o jogo à frente conta como crash (não passa pelo onPause); os scripts de teste apagam o marcador.
