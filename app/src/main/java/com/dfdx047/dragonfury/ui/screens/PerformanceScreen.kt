@@ -151,21 +151,21 @@ fun PerformanceScreen(vm: LauncherViewModel) {
                 stringResource(R.string.fx_bloom),
                 stringResource(R.string.fx_bloom_sub),
                 checked = c.fxBloom,
-                enabled = c.rtDirect,
+                enabled = c.rtDirect || c.useRenut,
             ) { on -> vm.updateConfig { it.copy(fxBloom = on) } }
             SettingSwitch(
                 stringResource(R.string.fx_dof),
                 stringResource(R.string.fx_dof_sub),
                 checked = c.fxDof,
-                enabled = c.rtDirect,
+                enabled = c.rtDirect || c.useRenut,
             ) { on -> vm.updateConfig { it.copy(fxDof = on) } }
             SettingSwitch(
                 stringResource(R.string.fx_fxaa),
                 stringResource(R.string.fx_fxaa_sub),
                 checked = c.fxFxaa,
-                enabled = c.rtDirect,
+                enabled = c.rtDirect || c.useRenut,
             ) { on -> vm.updateConfig { it.copy(fxFxaa = on) } }
-            if (!c.rtDirect) StatusLine(stringResource(R.string.fx_needs_rt_direct), Level.WARN)
+            if (!c.rtDirect && !c.useRenut) StatusLine(stringResource(R.string.fx_needs_rt_direct), Level.WARN)
         }
 
         // ---------------------------------------------------------------- imagem

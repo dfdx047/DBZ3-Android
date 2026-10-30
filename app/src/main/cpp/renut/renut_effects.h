@@ -30,4 +30,18 @@ bool IsShadowAtlas(uint32_t texture_va);
 // Um pixel shader da cadeia do brilho.
 bool IsBloomShader(uint64_t ps_hash);
 
+// Dragon Fury (2026-10-30): os efeitos dos Budokai no Renut, pelas opções do launcher (dbz3_fx_fxaa, dbz3_fx_dof,
+// dbz3_fx_bloom; as mesmas do caminho Xenia, command_processor.cpp, e pelos mesmos hashes de ucode).
+// - FXAA e profundidade de campo: o jogo resolve o ecrã para uma textura, limpa-o (o resolve com limpeza) e volta a
+//   desenhá-lo pelo efeito. Desligados: o par resolve -> efeito é aprendido no 1.º frame (o efeito desenha-se); dali
+//   em diante a limpeza desse resolve sai e o draw do efeito é saltado (o ecrã fica com a cena).
+// - Brilho: a cadeia (555EBAAE…), as fontes de brilho no alvo de 320 (CB0605B4… com 320 de largura) e a composição
+//   (6E57A6E3… com mistura, a ler a resolução de um alvo de 160 ou menos) saltadas.
+// Cada resolve (antes da limpeza): devolve se a limpeza da cor sai.
+bool BudokaiResolveDropsClear(uint64_t frame, const void* surface, uint32_t surface_width, uint32_t dest_va,
+                              bool clears);
+// Um draw: devolve se é saltado. textures: as texturas que o PS lê (VA do fetch), count delas.
+bool BudokaiSkipDraw(uint64_t frame, uint64_t ucode_hash, bool opaque, const void* target, uint32_t target_width,
+                     const uint32_t* textures, uint32_t count);
+
 }  // namespace swordman::renut_effects

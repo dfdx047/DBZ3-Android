@@ -113,3 +113,12 @@ Base: o Renut do mgr-nx-deko (`ba1a837`) com os patches do Dragon Burst `patches
   abertura, Raditz), B3 (luta, mapa do Dragon Universe), FATAL=0. Fotos `out/shots/reg_0203.png`,
   `reg_cube_b1.png`, `g3c_2_s.png`, `g3r_map_s.png`. Diagnóstico: `swordman_renut_pipeline_log` (cada pipeline
   antes de compilar).
+- Efeitos pelas opções no Renut (`0204` + `app/src/main/cpp/renut/renut_effects.cpp`, 30/10 07:15-07:45): FXAA,
+  profundidade de campo e brilho seguem `dbz3_fx_*` (launcher Desempenho > Efeitos e menu do jogo > Efeitos, ao vivo;
+  antes só ativos com o Xenia + RT diretos), pelos mesmos hashes de ucode e regras do caminho Xenia: FXAA/DOF
+  aprendem o resolve com limpeza que os alimenta (1.º frame desenhado), depois a limpeza e o draw saem; o brilho
+  salta a cadeia 555EBAAE, as fontes CB0605B4 no alvo de 320 e a composição 6E57A6E3 misturada que lê um alvo
+  ≤ 160. Prova: frame dump (luta B3: 6 draws da cadeia, 5 fontes, composição, FXAA e DOF saltados, 1 limpeza
+  tirada); ligar/desligar ao vivo na pausa: desligado = fundo nítido, ligado = desfoque, desligado de novo igual ao
+  1.º (diferença 0) (`cmp_fx_b3.png`, `cmp_fx_crop.png`). B1: o FXAA tem o mesmo hash e sai igual (Raditz,
+  `fx1_fight2_s.png`). GPU da luta do B3: RP5 7,9 → 5,6 ms; Cube 22 → 17 ms (40 → 46 fps a 720p).

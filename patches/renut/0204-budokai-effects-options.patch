@@ -1,0 +1,45 @@
+diff --git a/app/src/renut_engine/gpu/render/draw.cpp b/app/src/renut_engine/gpu/render/draw.cpp
+index aedb46d..f71f63e 100644
+--- a/app/src/renut_engine/gpu/render/draw.cpp
++++ b/app/src/renut_engine/gpu/render/draw.cpp
+@@ -4695,6 +4695,25 @@ bool DrawStateLocked(const u8 *device_state, const DrawCall &call, const ReplayC
+       return true;
+     }
+   }
++  // Dragon Fury (2026-10-30): the Budokai's effects by the launcher's options (dbz3_fx_*), as on the emulated path and
++  // by the same ucode hashes (src/renut_effects.h).
++  if (ps && ps->entry && ps->ucode_hash) {
++    u32 textures[d3d::kTextureFetchSlots];
++    u32 count = 0;
++    for (u32 bits = ps->entry->textureFetchMask; bits; bits &= bits - 1) {
++      const u32 r = u32(__builtin_ctz(bits));
++      if (r < d3d::kTextureFetchSlots)
++        textures[count++] = device.U32(d3d::kDeviceOffsetTextures + r * 4);
++    }
++    const HostSurface *target = GetHostSurfaceLocked(device.U32(d3d::kDeviceOffsetRenderTargets));
++    const bool opaque = (u32(device.dev().m_ControlPacket.BlendControl0) & 0x1FFF1FFF) == 0x00010001;
++    if (swordman::renut_effects::BudokaiSkipDraw(TextureFrameLocked(), ps->ucode_hash, opaque, target,
++                                                 target ? target->width : 0, textures, count)) {
++      if (swordman::frame_dump::On() && swordman::frame_dump::Active(TextureFrameLocked()))
++        swordman::frame_dump::Line(fmt::format("S ps {:016X} u {:016X} (effect off)", ps->hash, ps->ucode_hash));
++      return true;
++    }
++  }
+   if (declaration_va) {
+     if (declaration_va != g_last_declaration_va) {
+       g_last_declaration =
+@@ -6819,6 +6838,14 @@ void ResolveStateLocked(const u8 *device_state, u32 flags, const ClearRect *sour
+     }
+   }
+ 
++  // Dragon Fury (2026-10-30): the clear of a resolve feeding an effect the options leave off (src/renut_effects.h).
++  if (surface && !surface->depth &&
++      swordman::renut_effects::BudokaiResolveDropsClear(TextureFrameLocked(), surface, surface->width,
++                                                        dest_texture_va, (flags & 0x100) != 0)) {
++    flags &= ~0x100u;
++    if (swordman::frame_dump::On() && swordman::frame_dump::Active(TextureFrameLocked()))
++      swordman::frame_dump::Line("S resolve clear (effect off)");
++  }
+   // Resolve-and-clear.
+   if ((flags & 0x300) && surface) {
+     Targets t;

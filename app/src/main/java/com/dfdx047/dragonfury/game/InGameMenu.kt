@@ -276,16 +276,16 @@ private fun GameMenuPanel(prefs: LauncherPrefs, actions: InGameActions, nav: Men
             })
         }
         MenuTab.EFFECTS -> listOf(
-            MItem.Toggle(stringResource(R.string.fx_bloom), c.fxBloom, enabled = c.rtDirect) {
+            MItem.Toggle(stringResource(R.string.fx_bloom), c.fxBloom, enabled = c.rtDirect || c.useRenut) {
                 set(c.copy(fxBloom = it), mapOf("dbz3_fx_bloom" to it.toString()))
             },
-            MItem.Toggle(stringResource(R.string.fx_dof), c.fxDof, enabled = c.rtDirect) {
+            MItem.Toggle(stringResource(R.string.fx_dof), c.fxDof, enabled = c.rtDirect || c.useRenut) {
                 set(c.copy(fxDof = it), mapOf("dbz3_fx_dof" to it.toString()))
             },
-            MItem.Toggle(stringResource(R.string.fx_fxaa), c.fxFxaa, enabled = c.rtDirect) {
+            MItem.Toggle(stringResource(R.string.fx_fxaa), c.fxFxaa, enabled = c.rtDirect || c.useRenut) {
                 set(c.copy(fxFxaa = it), mapOf("dbz3_fx_fxaa" to it.toString()))
             },
-            MItem.Note(stringResource(if (c.rtDirect) R.string.ingame_effects_note else R.string.fx_needs_rt_direct)),
+            MItem.Note(stringResource(if (c.rtDirect || c.useRenut) R.string.ingame_effects_note else R.string.fx_needs_rt_direct)),
         )
         MenuTab.AUDIO -> listOf(
             MItem.Slider(stringResource(R.string.settings_volume), c.masterVolume.toFloat(), 0f..1f, 0.05f, ::pct) {
