@@ -122,3 +122,13 @@ Base: o Renut do mgr-nx-deko (`ba1a837`) com os patches do Dragon Burst `patches
   tirada); ligar/desligar ao vivo na pausa: desligado = fundo nítido, ligado = desfoque, desligado de novo igual ao
   1.º (diferença 0) (`cmp_fx_b3.png`, `cmp_fx_crop.png`). B1: o FXAA tem o mesmo hash e sai igual (Raditz,
   `fx1_fight2_s.png`). GPU da luta do B3: RP5 7,9 → 5,6 ms; Cube 22 → 17 ms (40 → 46 fps a 720p).
+- Resolução "Tela" (30/10 07:45-08:10, como no Dragon Burst d552361): a altura que a imagem ocupa na tela
+  (`ScreenFit`: com barras min(altura, largura × 9/16), esticada a altura toda); o Renut usa a mais perto das suas
+  alturas até 720 (360/480/540/720, empate para baixo), o Xenia a mais perto de 360/540/720
+  (`swordman_resolution_choice = "screen"`, refeita a cada gravação). A predefinição Mali usa-a numa tela pequena.
+  O Renut passa a seguir a proporção do launcher (`swordman_aspect` = original | stretch, também no menu do jogo).
+  Prova (Cube 720x720): com barras "Tela (360p)" → `sa2_render_height_handheld = 360`, `draw_resolution_percent = 50`;
+  esticada "Tela (720p)". Luta do B3 no Renut a 360p, efeitos desligados: 60,00 fps, GPU 8,6-9,2 ms
+  (`ctela_1_s.png`). O FSR até 720p (`0114`) já vem na série do Dragon Burst. O boot guard do Burst (o "auto" passa
+  ao Xenia sozinho) não entra: contraria a decisão do dono (só o aviso, e a pergunta depois de 2 crashes, já feitos).
+- Nota: o contador do overlay mostra "Render 1280x720" também no Renut (é o do Xenia); para o item 10.

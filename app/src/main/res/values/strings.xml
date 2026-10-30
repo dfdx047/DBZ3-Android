@@ -553,4 +553,5 @@
     <string name="renut_crash_use_xenia">Use Xenia</string>
     <string name="renut_crash_keep">Keep the Renut</string>
     <string name="menu_renderer">Renderer (next start)</string>
+    <string name="perf_resolution_screen">Screen (%1$dp)</string>
 </resources>

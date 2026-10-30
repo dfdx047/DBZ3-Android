@@ -30,6 +30,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.dfdx047.dragonfury.R
 import com.dfdx047.dragonfury.data.DisplayRates
+import com.dfdx047.dragonfury.data.GameConfig
+import com.dfdx047.dragonfury.data.ScreenFit
 import com.dfdx047.dragonfury.ui.LauncherViewModel
 import com.dfdx047.dragonfury.ui.components.Level
 import com.dfdx047.dragonfury.ui.components.SectionCard
@@ -125,6 +127,8 @@ fun PerformanceScreen(vm: LauncherViewModel) {
                 title = stringResource(R.string.settings_resolution),
                 subtitle = stringResource(R.string.perf_resolution_sub),
                 options = listOf(
+                    (1 to GameConfig.SCREEN_PERCENT) to stringResource(R.string.perf_resolution_screen,
+                        if (c.useRenut) ScreenFit.renutHeight(c.letterbox) else ScreenFit.xeniaPercent(c.letterbox) * 720 / 100),
                     (1 to 50) to "360p (50%)",
                     (1 to 75) to "540p (75%)",
                     (1 to 100) to "720p (1x)",

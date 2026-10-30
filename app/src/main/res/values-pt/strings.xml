@@ -552,4 +552,5 @@
     <string name="renut_crash_use_xenia">Usar o Xenia</string>
     <string name="renut_crash_keep">Continuar no Renut</string>
     <string name="menu_renderer">Renderizador (próximo arranque)</string>
+    <string name="perf_resolution_screen">Tela (%1$dp)</string>
 </resources>

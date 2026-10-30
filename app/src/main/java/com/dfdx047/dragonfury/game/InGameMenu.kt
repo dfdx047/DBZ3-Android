@@ -258,7 +258,7 @@ private fun GameMenuPanel(prefs: LauncherPrefs, actions: InGameActions, nav: Men
                     stringResource(R.string.settings_aspect_mode),
                     listOf(stringResource(R.string.aspect_original), stringResource(R.string.aspect_stretch)),
                     if (c.letterbox) 0 else 1,
-                ) { set(c.copy(letterbox = it == 0), mapOf("present_letterbox" to (it == 0).toString())) },
+                ) { set(c.copy(letterbox = it == 0), mapOf("present_letterbox" to (it == 0).toString(), "swordman_aspect" to if (it == 0) "original" else "stretch")) },
             )
             add(
                 MItem.Slider(stringResource(R.string.settings_rim_light), c.rimLight.toFloat(), 0f..1f, 0.05f, ::pct) {

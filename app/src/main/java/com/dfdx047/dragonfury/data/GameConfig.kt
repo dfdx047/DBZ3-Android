@@ -20,6 +20,8 @@ data class GameConfig(
     // Abaixo de 720p (patches 0055: draw_resolution_percent no Vulkan + atalhos exatos): 100, 75
     // (540p, todos os tamanhos do Budokai 3 exatos) ou 50 (360p). So com resolutionScale = 1.
     val resolutionPercent: Int = 100,         // draw_resolution_percent
+    // "Tela" (30/10, como no Dragon Burst): a altura que a imagem ocupa na tela (ScreenFit), refeita a cada gravacao.
+    val screenRes: Boolean = false,           // swordman_resolution_choice = "screen"
     val presentEffect: String = "bilinear",        // dbz3_present_effect bilinear|cas|fsr
     val fsrRender: String = "native",         // dbz3_fsr_render native|quality|balanced|performance|ultra_performance
     val fsrSharpness: Double = 0.2,           // dbz3_fsr_sharpness 0-2 (0 = mais nitido)
@@ -72,8 +74,11 @@ data class GameConfig(
      * sa2_render_height_handheld: a altura que o Renut desenha (render_scale.h: 360, 480, 540, 720, 1080, 1440, 2160).
      * A mesma escolha de resolucao do Xenia (720p x escala, ou 50/75% de 720p).
      */
-    val renutHeight: Int get() = if (resolutionScale > 1) 720 * resolutionScale.coerceAtMost(MAX_RESOLUTION_SCALE)
-        else 720 * effectivePercent / 100
+    val renutHeight: Int get() = when {
+        resolutionScale > 1 -> 720 * resolutionScale.coerceAtMost(MAX_RESOLUTION_SCALE)
+        screenRes -> ScreenFit.renutHeight(letterbox)
+        else -> 720 * effectivePercent / 100
+    }
 
     fun toToml(): Map<String, Any> = linkedMapOf(
         // "manual": o preset "auto" do PC reescreveria estas opcoes no arranque.
@@ -128,17 +133,25 @@ data class GameConfig(
         "swordman_renderer" to if (useRenut) "renut" else "xenos",
         "swordman_renderer_choice" to renderer,
         "sa2_render_height_handheld" to renutHeight,
+        "swordman_resolution_choice" to if (screenRes && resolutionScale == 1) "screen" else "",
+        // A proporcao no Renut (present.cpp): a mesma escolha do present_letterbox do Xenia.
+        "swordman_aspect" to if (letterbox) "original" else "stretch",
     )
 
     /** Percentagem que o jogo usa: abaixo de 100 so a 1x. */
     val effectivePercent: Int
-        get() = if (resolutionScale > 1) 100 else resolutionPercent.let { if (it in PERCENTS) it else 100 }
+        get() = when {
+            resolutionScale > 1 -> 100
+            screenRes -> ScreenFit.xeniaPercent(letterbox)
+            else -> resolutionPercent.let { if (it in PERCENTS) it else 100 }
+        }
 
     /** Taxa de saida que esta config pede a tela (120 com a interpolacao, senao 60). */
     val outputHz: Int get() = if (frameInterp) 120 else 60
 
     /** Resolucao escolhida como uma so lista: (escala, percentagem). */
-    val resolutionChoice: Pair<Int, Int> get() = resolutionScale to effectivePercent
+    val resolutionChoice: Pair<Int, Int> get() = if (screenRes && resolutionScale == 1) 1 to SCREEN_PERCENT
+        else resolutionScale to effectivePercent
 
     /**
      * Predefinicao das GPUs Mali (RG Cube, 17/10): 540p e os efeitos do jogo desligados dao 60 FPS
@@ -147,18 +160,23 @@ data class GameConfig(
      */
     fun withMaliPreset(): GameConfig = copy(
         resolutionPercent = if (resolutionScale == 1 && resolutionPercent == 100) 75 else resolutionPercent,
+        // Tela pequena (RG Cube, 720x720: a imagem tem 405 linhas): a "Tela" (30/10).
+        screenRes = screenRes || (resolutionScale == 1 && resolutionPercent == 100 && ScreenFit.small()),
         fxBloom = false,
         fxDof = false,
         fxFxaa = false,
     )
 
     fun withResolution(choice: Pair<Int, Int>): GameConfig =
-        copy(resolutionScale = choice.first.coerceIn(1, MAX_RESOLUTION_SCALE),
-            resolutionPercent = if (choice.first > 1) 100 else choice.second)
+        if (choice.second == SCREEN_PERCENT) copy(resolutionScale = 1, resolutionPercent = 100, screenRes = true)
+        else copy(resolutionScale = choice.first.coerceIn(1, MAX_RESOLUTION_SCALE),
+            resolutionPercent = if (choice.first > 1) 100 else choice.second, screenRes = false)
 
     companion object {
         /** Abaixo de 720p: 75% (960x540) e 50% (640x360) dao os tamanhos do jogo sem arredondar. */
         val PERCENTS = listOf(50, 75, 100)
+        /** A "Tela" na lista de resolucoes (resolutionChoice = 1 to SCREEN_PERCENT). */
+        const val SCREEN_PERCENT = 0
         val EFFECTS = listOf("bilinear", "cas", "fsr")
         val FSR_RENDER = listOf("native", "quality", "balanced", "performance", "ultra_performance")
         val FXAA = listOf("none", "fxaa", "fxaa_extreme")
@@ -187,6 +205,7 @@ data class GameConfig(
             return GameConfig(
                 resolutionScale = int("dbz3_resolution_scale", d.resolutionScale).coerceIn(1, MAX_RESOLUTION_SCALE),
                 resolutionPercent = int("draw_resolution_percent", d.resolutionPercent).let { if (it in PERCENTS) it else 100 },
+                screenRes = str("swordman_resolution_choice", "") == "screen",
                 // fsr3/dlss vindos do PC caem para o FSR 1, que funciona no Vulkan.
                 presentEffect = str("dbz3_present_effect", d.presentEffect).let { if (it in EFFECTS) it else "bilinear" },
                 fsrRender = str("dbz3_fsr_render", d.fsrRender).let { if (it in FSR_RENDER) it else "native" },
@@ -272,4 +291,34 @@ object RenutCrash {
     } catch (_: Exception) {
         ""
     }
+}
+
+/**
+ * A altura que a imagem do jogo ocupa na tela (deitada), como no Dragon Burst: com barras (16:9) min(altura,
+ * largura * 9 / 16); esticada, a altura toda. Pela tela fisica: no RG Cube (720x720) 405, no RP5 (1920x1080) 1080.
+ */
+object ScreenFit {
+    fun height(letterbox: Boolean): Int {
+        val m = android.content.res.Resources.getSystem().displayMetrics
+        val w = maxOf(m.widthPixels, m.heightPixels)
+        val h = minOf(m.widthPixels, m.heightPixels)
+        val fit = if (letterbox) minOf(h, w * 9 / 16) else h
+        return (fit and 1.inv()).coerceIn(360, 2160)
+    }
+
+    // A mais perto da tela, no empate a menor.
+    private fun nearest(heights: IntArray, fit: Int): Int =
+        heights.minByOrNull { kotlin.math.abs(it - fit) * 2 + (if (it > fit) 1 else 0) } ?: 720
+
+    /**
+     * As alturas que o Renut desenha (render_scale.h: 1/2, 2/3, 3/4, 1, 3/2, 2, 3 de 720p; 405 nao e uma delas e mexer
+     * na tabela recompila a cache de shaders). Ate 720 (a escala 1, como as outras opcoes de 1x).
+     */
+    fun renutHeight(letterbox: Boolean): Int = nearest(intArrayOf(360, 480, 540, 720), height(letterbox))
+
+    /** O Xenia so tem os tamanhos exatos de GameConfig.PERCENTS (360, 540, 720). */
+    fun xeniaPercent(letterbox: Boolean): Int = nearest(intArrayOf(360, 540, 720), height(letterbox)) * 100 / 720
+
+    /** Tela pequena: a imagem ocupa menos de 540 linhas. */
+    fun small(): Boolean = height(true) < 540
 }

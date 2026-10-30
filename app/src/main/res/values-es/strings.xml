@@ -552,4 +552,5 @@
     <string name="renut_crash_use_xenia">Usar Xenia</string>
     <string name="renut_crash_keep">Seguir con el Renut</string>
     <string name="menu_renderer">Renderizador (próximo inicio)</string>
+    <string name="perf_resolution_screen">Pantalla (%1$dp)</string>
 </resources>
