@@ -24,7 +24,9 @@ and a GPU path rewritten for mobile GPUs.
   driver. Started at ~37 fps; the gain came from rewriting how the Xbox 360 GPU work maps onto
   mobile tiler GPUs (see [Performance](#performance)).
 - Runs with the **system driver** on Adreno and Mali. **Turnip** also works well (optional).
-- **Tag Team** mode and **online** Duel (1P vs 2P) from the PC version.
+- **Tag Team** mode and **online** Duel (1P vs 2P) from the PC version, and its **Dragon HUB** (v1.5.5.5): quick battle,
+  tower, survival, kumite, Hero Mode and the **Gateway** to the Budokai 2 / Infinite World stories with your own PS2 ISO.
+- **Widescreen** in Budokai 3 on screens wider than 16:9 (Renut): wider camera, fight HUD at the edges.
 - Launcher with **mods**, **HD texture packs**, **cheats**, driver manager, per-device performance
   options, touch controls editor and log export.
 - English, Portuguese (Brazil) and Spanish — picked from the phone's language automatically.
@@ -44,7 +46,7 @@ and a GPU path rewritten for mobile GPUs.
 | Device | SoC / GPU | Result |
 |---|---|---|
 | Retroid Pocket 5 | Snapdragon 865 / Adreno 650 | Renut: 60 FPS in fights and campaign, both games (system driver and Turnip) |
-| AYN Odin 3 | Snapdragon 8 Elite | Runs (first device the port booted on) |
+| AYN Odin 3 | Snapdragon 8 Elite | Renut at 1440p: 60 FPS, 120 interpolated on its 120 Hz screen |
 | Anbernic RG Cube | Unisoc T770 / Mali-G57 | Renut: 60 FPS in fights and on the Dragon Universe map ("Screen" resolution) |
 
 Other Snapdragon 865-class chips and newer (Snapdragon 8 Gen 1/2/3, Dimensity 1100+, recent
@@ -167,7 +169,7 @@ Details in [`docs/ESTADO.md`](docs/ESTADO.md).
 
 - More optimization for Mali GPUs (own shaders for the game's ~33 shaders, native renderer).
 - Fix the occasional black flash in menus on Mali.
-- More cheats (capsules, Zeni, stages) and widescreen patch.
+- More cheats (capsules, Zeni, stages) and widescreen in Budokai 1.
 
 ## Credits
 

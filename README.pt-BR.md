@@ -24,7 +24,9 @@ e um caminho de GPU reescrito para as GPUs de celular.
   Qualcomm do próprio sistema. Começou em ~37 fps; o ganho veio de reescrever como o trabalho da
   GPU do Xbox 360 é feito nas GPUs tiler de celular (veja [Desempenho](#desempenho)).
 - Roda com o **driver do sistema** em Adreno e Mali. O **Turnip** também funciona bem (opcional).
-- Modo **Tag Team** e Duelo **online** (1P vs 2P) da versão de PC.
+- Modo **Tag Team** e Duelo **online** (1P vs 2P) da versão de PC, e o **Dragon HUB** dela (v1.5.5.5): batalha rápida,
+  torre, sobrevivência, kumite, Modo Herói e o **Gateway** para as histórias do Budokai 2 / Infinite World com a sua ISO de PS2.
+- **Widescreen** no Budokai 3 em telas mais largas que 16:9 (Renut): câmera mais larga, HUD da luta nas pontas.
 - Launcher com **mods**, **packs de texturas HD**, **cheats**, gerenciador de drivers, opções de
   desempenho por aparelho, editor dos controles por toque e exportação de logs.
 - Inglês, português (Brasil) e espanhol — escolhido automaticamente pelo idioma do celular.
@@ -44,7 +46,7 @@ e um caminho de GPU reescrito para as GPUs de celular.
 | Aparelho | SoC / GPU | Resultado |
 |---|---|---|
 | Retroid Pocket 5 | Snapdragon 865 / Adreno 650 | Renut: 60 FPS na luta e na campanha, nos dois jogos (driver do sistema e Turnip) |
-| AYN Odin 3 | Snapdragon 8 Elite | Roda (primeiro aparelho em que o port deu boot) |
+| AYN Odin 3 | Snapdragon 8 Elite | Renut a 1440p: 60 FPS, 120 interpolado na tela de 120 Hz |
 | Anbernic RG Cube | Unisoc T770 / Mali-G57 | Renut: 60 FPS na luta e no mapa do Dragon Universe (resolução "Tela") |
 
 Outros chips da classe do Snapdragon 865 para cima (Snapdragon 8 Gen 1/2/3, Dimensity 1100+,
@@ -167,7 +169,7 @@ Detalhes em [`docs/ESTADO.md`](docs/ESTADO.md).
 
 - Mais otimização para GPUs Mali (shaders próprios para os ~33 shaders do jogo, renderizador nativo).
 - Corrigir a piscada preta ocasional nos menus no Mali.
-- Mais cheats (cápsulas, Zeni, cenários) e patch de widescreen.
+- Mais cheats (cápsulas, Zeni, cenários) e widescreen no Budokai 1.
 
 ## Créditos
 

@@ -24,7 +24,9 @@ online y una ruta de GPU reescrita para las GPU móviles.
   de Qualcomm del sistema. Empezó en ~37 fps; la mejora vino de reescribir cómo se ejecuta el
   trabajo de la GPU de Xbox 360 en las GPU tiler móviles (ver [Rendimiento](#rendimiento)).
 - Funciona con el **driver del sistema** en Adreno y Mali. **Turnip** también va bien (opcional).
-- Modo **Tag Team** y Duelo **online** (1P vs 2P) de la versión de PC.
+- Modo **Tag Team** y Duelo **online** (1P vs 2P) de la versión de PC, y su **Dragon HUB** (v1.5.5.5): batalla rápida,
+  torre, supervivencia, kumite, Modo Héroe y el **Gateway** a las historias de Budokai 2 / Infinite World con tu ISO de PS2.
+- **Widescreen** en Budokai 3 en pantallas más anchas que 16:9 (Renut): cámara más ancha, HUD del combate en los bordes.
 - Launcher con **mods**, **packs de texturas HD**, **trucos**, gestor de drivers, opciones de
   rendimiento por dispositivo, editor de controles táctiles y exportación de logs.
 - Inglés, portugués (Brasil) y español — se elige automáticamente según el idioma del teléfono.
@@ -44,7 +46,7 @@ online y una ruta de GPU reescrita para las GPU móviles.
 | Dispositivo | SoC / GPU | Resultado |
 |---|---|---|
 | Retroid Pocket 5 | Snapdragon 865 / Adreno 650 | Renut: 60 FPS en combate y campaña, en los dos juegos (driver del sistema y Turnip) |
-| AYN Odin 3 | Snapdragon 8 Elite | Funciona (primer dispositivo donde arrancó el port) |
+| AYN Odin 3 | Snapdragon 8 Elite | Renut a 1440p: 60 FPS, 120 interpolado en su pantalla de 120 Hz |
 | Anbernic RG Cube | Unisoc T770 / Mali-G57 | Renut: 60 FPS en combate y en el mapa del Dragon Universe (resolución "Pantalla") |
 
 Otros chips de la clase del Snapdragon 865 o superiores (Snapdragon 8 Gen 1/2/3, Dimensity 1100+,
@@ -169,7 +171,7 @@ Detalles en [`docs/ESTADO.md`](docs/ESTADO.md).
 
 - Más optimización para GPU Mali (shaders propios para los ~33 shaders del juego, renderizador nativo).
 - Corregir el parpadeo negro ocasional en los menús en Mali.
-- Más trucos (cápsulas, Zeni, escenarios) y parche widescreen.
+- Más trucos (cápsulas, Zeni, escenarios) y widescreen en Budokai 1.
 
 ## Créditos
 

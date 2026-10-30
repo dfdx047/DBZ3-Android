@@ -237,3 +237,50 @@ Base: o Renut do mgr-nx-deko (`ba1a837`) com os patches do Dragon Burst `patches
   renderizador em Auto, sem `cvars.txt` nem driver alternativo, perfil 480+ do RP5 desfeito ("no profile active"),
   Cube com os controlos de toque em Automático e o B3 escolhido. Fica no RP5 o nível de compatibilidade do Turnip R6
   subido pelos testes (volta a 0 em Drivers -> "Voltar ao modo 0" com o R6 ativo).
+
+## Segunda volta (30/10, 19:40-22:30 Lisboa): Odin 3, port de PC, widescreen, 120
+
+O Odin 3 voltou por USB e passou para o adb por Wi-Fi (`adb tcpip 5555`, 192.168.1.134; tela de 120 Hz). Tinha a
+0.6.13 e só o B3: backup em `out/device-backup-20261030/192.168.1.134/`, APK novo por cima e a pasta DBZ1 copiada
+do RP5. Testes curtos a pedido do dono (ver que funciona e seguir; a abertura saltada com Start).
+
+- Item 6, 120 FPS no Odin 3: interpolado no B3 a 1440p `game_fps=60.00 presented_fps=120.00 (1202 shown, 601 of them
+  generated)`, tela a 120 Hz (`mActiveRenderFrameRate=120`). Nativo: com o vblank do guest a 120 (`video_mode_refresh_rate`,
+  B1) o jogo continua nos 60 (`game_fps=60.12`) e a abertura anda igual à de 60 (frames lado a lado, `odin_hz.png`): a
+  lógica do Budokai é de 60 por quadro. O port de PC também não tem 120 nativo (o `dbz3_frame_cap` só limita o
+  apresentador e repete quadros). Fica o 120 interpolado; o nativo pedia reescrever a lógica (fora de alcance).
+- Item 9, port de PC: `external/dbz3` na v1.5.5.5 (b5bff8a; ramo `android-v1.4.5.1` guarda a anterior). O codegen não
+  mudou (config e manifest iguais). Patches: 0001/0002 aplicam; 0003 (identidade do online) e 0004 (entrada do
+  Dragon Universe) refeitos à mão (o código mudou de sítio; 0004 agora em `DBZ3_HOOK_EU`); 0005 (Renut) com o
+  include no sítio novo. O CMake do Android compila as 67 fontes do PC (eram 29) e gera o `escenarios_sel_gen.inc`.
+  Compila sem erros e corre: HUB no menu principal (Tag Team, Online, Quick Battle, Torre, Sobrevivência, Kumite,
+  Ranking, Laboratório; página 2: Gateway, Lenda do Mr. Satan, Missão 100, Modo Herói), tutoriais, Quick Battle a 60.
+  Trazido vs. deixado:
+
+  | do PC v1.5.5.5 | no Android |
+  |---|---|
+  | Dragon HUB, Tag Team com IA, modos novos (torre, sobrevivência, kumite, ranking, laboratório, missão 100, herói) | trazido (código do jogo) |
+  | Gateway: Budokai 2, Infinite World, Lenda do Mr. Satan (ISOs de PS2) | trazido + importação de ISO no launcher (Configurações -> Gateway); o jogo procura em `ps2_games/` |
+  | online lockstep v1.5.5 (relatório de dessincronia, revanche) | trazido (o patch 0003 mantém a identidade Android) |
+  | opções HUB e tutoriais | no launcher (Configurações -> Jogo) |
+  | câmara livre (teclado/rato) | compilada, sem botão (é de testes no PC) |
+  | vídeos SFD do IW (FFmpeg só no Windows) | deixado: fora do Windows o PC também não os toca |
+  | launcher do PC, atualizador, pack HD, opção 480p, D3D12 | deixado: o Android tem o seu launcher, a "Tela" e o Renut |
+  | `res/datos`, `res/heroe` (dados medidos) | não vêm no repositório público; o código usa os valores de origem |
+
+  Regressão (Odin): título, menus, HUB, Quick Battle, Dragon Universe (cutscene, cartas, mapa, voo), B1. RP5 480+ com o
+  código novo: B3 luta 59,9 / GPU 14,1-14,5 ms (antes 13,9-14,3), B3 mapa 60,0 / 11,4 ms (antes 12,1). Odin a 1440p:
+  B3 luta 60,0 / 11,8 ms; B1 abertura 60,0 / 3,5-5,5 ms.
+- Item 7, widescreen (B3, Renut): `app/src/main/cpp/widescreen.cpp`. A vista 3D do B3 passa pelo frustum
+  `sub_8224F768` (l, r, b, t, zn, zf; achado pelo padrão `fsubs f12,f2,f1 / fsubs f10,f5,f6`; l/r = ±0,78125,
+  b/t = ±0,4395, 16:9): l e r × aspeto/(16/9) dá Hor+ (com 0,7 a vista aperta, foto `w_cmp`). O present mostra o
+  quadro nesse aspeto (`SetGuestDisplayAspect`) e a callback de overlay do Renut (renut 0118 do Dragon Burst) põe o 2D
+  na forma certa: o 2D do jogo é o shader com c0.x = 1/400 e c1.y = -1/225 (espaço 800x450; os contornos das
+  personagens sem teste de profundidade também chegam lá e ficam de fora). Por cima de uma cena 3D o que cobre a
+  largura toda estica até às pontas e, em luta, o HUD de cima e de baixo vai para as pontas; os ecrãs só de 2D (sem
+  frustum no quadro, ou a roda de personagens) ficam inteiros ao centro com faixas, como no PC. Imagem passa a
+  Original 16:9 / Esticar / Widescreen no launcher e no menu do jogo (ao vivo; só no B3 com o Renut). Testado com
+  `dbz3_widescreen_aspect = 2.2` no Odin e no RP5 (16:9 com faixas em cima e em baixo): Practice, Quick Battle,
+  título, menu principal, roda, cutscenes e cartas do Dragon Universe, mapa. B1: três tentativas sem efeito na
+  vista 3D (as funções de frustum não são as da luta; a matriz da câmara em 0x8231F460 não muda nada; escrever a
+  constante 0x82024B2C deixa o ecrã preto, porque também decide o modo de vídeo). Fica pendente no B1.
