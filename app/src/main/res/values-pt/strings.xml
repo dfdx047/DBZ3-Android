@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="header_subtitle">Budokai 3 HD · port nativo para Android</string>
+    <string name="header_subtitle">Budokai HD Collection · port nativo para Android</string>
     <string name="tab_home">Início</string>
     <string name="tab_mods">Mods</string>
     <string name="tab_textures">Texturas</string>
@@ -34,7 +34,7 @@
     <string name="status_eu">Cópia EU: este port precisa do executável USA</string>
     <string name="game_files_title">Arquivos do jogo</string>
     <string name="game_files_subtitle">Sua própria cópia, nada é baixado</string>
-    <string name="game_files_help">Escolha o .iso do seu disco de Xbox 360 (Budokai 3 HD Collection, USA): só o executável do Budokai 3 e os dados dele são extraídos (cerca de 2,5 GB), direto da imagem. Também dá para escolher uma pasta já extraída com o yae3_xenon.xex (ou default.xex) e a pasta us/. O executável é conferido por SHA-256 na hora; \"Verificar arquivos\" confere também cada arquivo .afs (leva alguns minutos).</string>
+    <string name="game_files_help">Escolha o .iso do seu disco de Xbox 360 (Dragon Ball Z Budokai HD Collection, USA): uma importação traz os dois jogos, o Budokai 3 (cerca de 2,2 GB) e o Budokai 1 (cerca de 1,4 GB), direto da imagem. Também dá para escolher a pasta do disco extraído (com DBZ3/ e DBZ1/) ou a pasta de um jogo (o .xex e a us/). Os executáveis são conferidos por SHA-256 na hora; \"Verificar arquivos\" confere também cada arquivo do jogo escolhido (leva alguns minutos).</string>
     <string name="import_game">Importar jogo</string>
     <string name="reimport">Importar de novo</string>
     <string name="file_ok">OK</string>
@@ -70,10 +70,10 @@
     <string name="msg_not_installed">Importe o jogo primeiro (aba Início).</string>
     <string name="msg_shortcut_requested">Atalho pedido: confirme na tela inicial.</string>
     <string name="msg_shortcut_unsupported">O seu launcher não suporta atalhos fixados.</string>
-    <string name="err_import_no_xex">Não há yae3_xenon.xex nem default.xex nessa pasta.</string>
+    <string name="err_import_no_xex">Não há yae3_xenon.xex nem yae1_xenon.xex (nem as pastas DBZ3/ ou DBZ1/) nessa pasta.</string>
     <string name="err_import_no_us">A pasta us/ não foi encontrada junto do executável.</string>
     <string name="err_import_eu">Este é o executável EU (PAL). O port é recompilado a partir do USA.</string>
-    <string name="err_import_bad_xex">O executável não é o arquivo esperado do Budokai 3 HD (%1$s).</string>
+    <string name="err_import_bad_xex">O executável não é o arquivo esperado da HD Collection (%1$s).</string>
     <string name="err_import_missing">Faltam arquivos obrigatórios em us/: %1$s</string>
     <string name="err_import_io">A cópia falhou: %1$s. Verifique o espaço livre.</string>
     <string name="mods_title">Mods</string>
@@ -383,9 +383,9 @@
     <string name="reimport_iso">Importar .iso de novo</string>
     <string name="import_folder">Pasta extraída</string>
     <string name="busy_reading_iso">Lendo a imagem do disco</string>
-    <string name="msg_import_ok_time">Jogo importado em %1$d s. Pronto para jogar!</string>
+    <string name="msg_import_ok_time">Importado em %1$d s: %2$s. Pronto para jogar!</string>
     <string name="err_import_not_iso">Esse arquivo não é uma imagem de disco de Xbox 360 (.iso XGD2/XGD3 ou XISO).</string>
-    <string name="err_import_iso_no_game">Os arquivos do Budokai 3 não foram encontrados nessa imagem (%1$s). É o disco Budokai 3 HD Collection USA?</string>
+    <string name="err_import_iso_no_game">Os arquivos do Budokai 3 e do Budokai 1 não foram encontrados nessa imagem (%1$s). É o disco Budokai HD Collection USA?</string>
     <string name="err_import_no_space">Espaço livre insuficiente: %1$s necessários / livres.</string>
     <string name="tab_debug">Depuração</string>
     <string name="social_title">Comunidade</string>
@@ -524,4 +524,18 @@
     <string name="log_turnip_a6xx_system">Turnip em Adreno 6xx está desligado neste port: usando o driver do sistema (%1$s continua instalado)</string>
     <string name="turnip_a6xx_notice">Adreno 6xx (Snapdragon 865, 855, 480+…): o Turnip desenha este jogo com texturas erradas e trava a GPU, em todas as versões testadas. O jogo usa o driver do sistema, que nesses chips desenha certo a 60 fps.</string>
     <string name="turnip_a6xx_allow">Usar o Turnip mesmo assim (Adreno 6xx)</string>
+    <string name="game_b3_name">Budokai 3</string>
+    <string name="game_b1_name">Budokai 1</string>
+    <string name="game_b3_title">Dragon Ball Z: Budokai 3 HD</string>
+    <string name="game_b1_title">Dragon Ball Z: Budokai HD</string>
+    <string name="game_choose_title">Jogo</string>
+    <string name="game_choose_hint">Opções, presets, controles e saves seguem o jogo escolhido.</string>
+    <string name="game_selected">Escolhido</string>
+    <string name="game_select">Escolher</string>
+    <string name="busy_unpacking">Preparando o código do jogo</string>
+    <string name="busy_reading_xex">Lendo o disco</string>
+    <string name="err_import_unsupported">Este %1$s não é a versão para a qual a app foi feita (%2$s). Importe de novo o disco da HD Collection USA.</string>
+    <string name="shortcut_b1_short">Budokai 1</string>
+    <string name="shortcut_b1_long">Jogar Budokai 1 HD</string>
+    <string name="log_game_selected">Jogo escolhido: %1$s</string>
 </resources>

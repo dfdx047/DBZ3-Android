@@ -45,8 +45,8 @@ android {
         // estao todos disponiveis no bionic.
         minSdk = 30
         targetSdk = 35
-        versionCode = 34
-        versionName = "0.6.18"
+        versionCode = 35
+        versionName = "0.7.0"
 
         ndk {
             abiFilters += listOf("arm64-v8a")
@@ -89,6 +89,8 @@ android {
             // Classes Java do SDL (SDLActivity e companhia), direto do submodulo
             // do SDK, para ficarem sempre na mesma versao que o libSDL3.so.
             java.srcDir("../external/rexglue-sdk-0.10/thirdparty/sdl3/android-project/app/src/main/java")
+            // libgame_b3/b1.zdat + .json: o codigo de cada jogo encriptado (tools/pack-libgame.py, chamado pelo CMake).
+            assets.srcDir("build/dragonfury-assets")
         }
     }
 
@@ -97,6 +99,9 @@ android {
             // As .so ficam extraidas em nativeLibraryDir: o SDL abre libmain.so
             // por caminho e o runtime carrega o plugin da GPU de la.
             useLegacyPackaging = true
+            // O codigo dos jogos so vai encriptado (assets/libgame_*.zdat), nunca como .so.
+            excludes += "**/libgame_b3.so"
+            excludes += "**/libgame_b1.so"
         }
     }
 
@@ -142,4 +147,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
+}
+
+// Os assets juntam-se depois do CMake (que escreve os libgame_*.zdat).
+tasks.configureEach {
+    val m = Regex("merge(\\w+)Assets").matchEntire(name)
+    if (m != null && !uiOnly) dependsOn("externalNativeBuild" + m.groupValues[1])
 }

@@ -1,0 +1,45 @@
+[functions]
+# Alvos de chamadas indiretas que a analise nao separou (tools/b1-missing-funcs.py): thunks de ajuste das
+# vtables (addi r3,r3,-N; b; ou lwz/mtctr/bctr) e entradas da .pdata. As tabelas de excecao (0x8206xxxx) ficam de fora.
+0x820A1A10 = { name = "rex_sub_820A1A10" }
+0x821925C0 = { name = "rex_sub_821925C0" }
+0x82214EE0 = { name = "rex_sub_82214EE0" }
+0x8221C220 = { name = "rex_sub_8221C220" }
+0x8221C228 = { name = "rex_sub_8221C228" }
+0x8221C230 = { name = "rex_sub_8221C230" }
+0x8221C238 = { name = "rex_sub_8221C238" }
+0x8221C248 = { name = "rex_sub_8221C248" }
+0x82221830 = { name = "rex_sub_82221830" }
+0x82221838 = { name = "rex_sub_82221838" }
+0x82221848 = { name = "rex_sub_82221848" }
+0x82221850 = { name = "rex_sub_82221850" }
+0x82221858 = { name = "rex_sub_82221858" }
+0x82221860 = { name = "rex_sub_82221860" }
+0x82221868 = { name = "rex_sub_82221868" }
+0x82222C00 = { name = "rex_sub_82222C00" }
+0x82222C10 = { name = "rex_sub_82222C10" }
+0x82222C18 = { name = "rex_sub_82222C18" }
+0x82222C20 = { name = "rex_sub_82222C20" }
+0x82222C28 = { name = "rex_sub_82222C28" }
+0x82222C30 = { name = "rex_sub_82222C30" }
+0x82222C38 = { name = "rex_sub_82222C38" }
+0x82223F50 = { name = "rex_sub_82223F50" }
+0x82224BB8 = { name = "rex_sub_82224BB8" }
+0x822279F0 = { name = "rex_sub_822279F0" }
+0x82227C80 = { name = "rex_sub_82227C80" }
+0x822363B8 = { name = "rex_sub_822363B8" }
+0x822368C8 = { name = "rex_sub_822368C8" }
+0x822368D0 = { name = "rex_sub_822368D0" }
+0x822845F0 = { name = "rex_sub_822845F0" }
+0x82284640 = { name = "rex_sub_82284640" }
+0x82285620 = { name = "rex_sub_82285620" }
+0x8228566C = { name = "rex_sub_8228566C" }
+0x82287D20 = { name = "rex_sub_82287D20" }
+0x82287FB8 = { name = "rex_sub_82287FB8" }
+0x8221C2A0 = { name = "rex_sub_8221C2A0" }
+0x82223390 = { name = "rex_sub_82223390" }
+0x822380B0 = { name = "rex_sub_822380B0" }
+# Alvos de chamadas nao resolvidas na primeira analise.
+0x8218BF90 = { name = "rex_sub_8218BF90" }
+0x82097668 = { name = "rex_sub_82097668" }
+0x8218CAC0 = { name = "rex_sub_8218CAC0" }

@@ -50,8 +50,15 @@ public class GameActivity extends SDLActivity {
     /** Driver Vulkan desta sessao (para o log do app). */
     private String mDriverName = null;
 
+    /** O jogo desta sessao (Intent do JOGAR ou do atalho; sem extra = o ultimo escolhido no launcher). */
+    private com.dfdx047.dragonfury.data.Game mGame = com.dfdx047.dragonfury.data.Game.B3;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        String gameId = getIntent() != null ? getIntent().getStringExtra(com.dfdx047.dragonfury.data.Game.EXTRA) : null;
+        mGame = gameId != null ? com.dfdx047.dragonfury.data.Game.Companion.byId(gameId)
+                : new com.dfdx047.dragonfury.data.LauncherPrefs(this).getGame();
+        com.dfdx047.dragonfury.data.AppPaths.INSTANCE.setGame(mGame);
         applyOrientation();
 
         File appDir = getExternalFilesDir(null);
@@ -70,20 +77,24 @@ public class GameActivity extends SDLActivity {
         // de cada vez que um pipeline faltava (travadinhas), e a sincrona custa
         // menos de 1 ms por frame com a cache do driver. O cvars.txt pode mudar.
         setEnv("REX_DBZ3_ASYNC_SHADERS", "false");
-        // 0.6.16: o "Clear 4x direto em 1x" (dbz3_clear_to_1x) fica desligado. No mapa do
-        // Dragon Universe ele estragava o ceu (manchas pretas, nuvens escuras): no autoteste do
-        // mapa (RP5, 18/10 21:55) o ceu so saia certo sem ele ou com o pre-passo 4x saltado, e
-        // saltar o pre-passo (0.6.15) deixou os menus pretos. Nas lutas com o driver do sistema
-        // desligado da a mesma imagem. No Turnip dos Adreno 6xx continua ligado (ali desliga-lo
-        // deixava riscos nas lutas) - ver applyTurnipCompat. O cvars.txt pode mudar.
-        setEnv("REX_DBZ3_CLEAR_TO_1X", "false");
+        // 0.6.16: o "Clear 4x direto em 1x" (dbz3_clear_to_1x) no mapa do Dragon Universe
+        // estragava o ceu (manchas pretas, nuvens escuras): no autoteste do mapa (RP5, 18/10
+        // 21:55) o ceu so saia certo sem ele ou com o pre-passo 4x saltado, e saltar o pre-passo
+        // (0.6.15) deixou os menus pretos. A 0.6.16 desligava-o sempre, mas fora do mapa ele poupa
+        // muita GPU no Mali (Cube, menus e abertura: 60 fps com ele, 35-45 sem, 30/10). 0.7.0:
+        // ligado, e o GameOverlay desliga-o so enquanto o jogo voa pelo mapa (DF_CLEAR_TO_1X_MAP
+        // = "auto"; sinal do jogo, NativeGameState.mapFlag). No Turnip dos Adreno 6xx fica sempre
+        // ligado (desliga-lo deixava riscos nas lutas) - ver applyTurnipCompat. O cvars.txt pode
+        // fixa-lo (dbz3_clear_to_1x = ...).
+        setEnv("REX_DBZ3_CLEAR_TO_1X", "true");
+        setEnv("DF_CLEAR_TO_1X_MAP", "auto");
         applyLowRamLimits();
         applyTurnipCompat();
         applyCvarOverrides(new File(appDir, "cvars.txt"));
         installCustomVulkanDriver(appDir);
         prepareLogFile(appDir);
 
-        Log.i(TAG, "Pasta do jogo: " + appDir.getAbsolutePath() + "/DBZ3");
+        Log.i(TAG, "Jogo: " + mGame.getDirName() + ", pasta " + appDir.getAbsolutePath() + "/" + mGame.getDirName());
         com.dfdx047.dragonfury.data.AppLog.info(com.dfdx047.dragonfury.R.string.log_game_open,
                 mDriverName != null ? mDriverName : "system");
         super.onCreate(savedInstanceState);
@@ -449,9 +460,39 @@ public class GameActivity extends SDLActivity {
 
     @Override
     protected String[] getLibraries() {
-        // libmain.so depende de librexruntime.so, librexgpu-xenos.so e
-        // libc++_shared.so, que o linker do Android carrega sozinho.
+        // libmain.so: so o leitor do executavel (GameLib). O jogo (libgame_b3/b1.so) nao vem no APK: loadLibraries.
         return new String[] {"SDL3", "main"};
+    }
+
+    /**
+     * Depois do SDL3 e do libmain.so, o libgame do jogo desencriptado em getFilesDir() (GameLib.kt; refeito aqui se o
+     * APK mudou, ex. atalho do jogo sem passar pelo launcher). Por System.load: os nativos (NativeGameState) ficam
+     * visiveis ao Java. Ele depende de librexruntime.so, librexgpu-xenos.so e libc++_shared.so do APK.
+     */
+    @Override
+    public void loadLibraries() {
+        super.loadLibraries();
+        try {
+            com.dfdx047.dragonfury.data.GameLib.install(this, mGame);
+        } catch (Exception e) {
+            // O SDL mostra esta mensagem num dialogo (atalho do jogo sem passar pelo launcher).
+            String msg = mGame.getLibName() + ".so: " + e.getMessage();
+            if (e instanceof com.dfdx047.dragonfury.data.ImportException) {
+                com.dfdx047.dragonfury.data.ImportException ie = (com.dfdx047.dragonfury.data.ImportException) e;
+                msg = ie.getReason() == com.dfdx047.dragonfury.data.ImportException.Reason.NO_XEX
+                        ? getString(com.dfdx047.dragonfury.R.string.msg_not_installed)
+                        : getString(com.dfdx047.dragonfury.R.string.err_import_unsupported, mGame.getXexName(), ie.getDetail());
+            }
+            UnsatisfiedLinkError err = new UnsatisfiedLinkError(msg);
+            err.initCause(e);
+            throw err;
+        }
+        System.load(com.dfdx047.dragonfury.data.GameLib.INSTANCE.file(this, mGame).getAbsolutePath());
+    }
+
+    @Override
+    protected String getMainSharedObject() {
+        return com.dfdx047.dragonfury.data.GameLib.INSTANCE.file(this, mGame).getAbsolutePath();
     }
 
     /**
@@ -614,7 +655,7 @@ public class GameActivity extends SDLActivity {
         // ate a GPU cair, como antes).
         boolean a6xx = driver != null && isAdreno6xx();
         if (a6xx) {
-            setEnv("REX_DBZ3_CLEAR_TO_1X", "true");
+            setEnv("DF_CLEAR_TO_1X_MAP", "fixed");
         }
         if (driver != null && (autoLevel > 0 || a6xx)) {
             flags |= a6xx ? turnipAutoFlags(autoLevel) : turnipAutoFlagsOther(autoLevel);
@@ -686,6 +727,9 @@ public class GameActivity extends SDLActivity {
                     continue;
                 }
                 setEnv("REX_" + name.toUpperCase(Locale.ROOT), value);
+                if (name.equals("dbz3_clear_to_1x")) {
+                    setEnv("DF_CLEAR_TO_1X_MAP", "fixed");
+                }
                 Log.i(TAG, "cvar " + name + " = " + value);
             }
         } catch (IOException e) {

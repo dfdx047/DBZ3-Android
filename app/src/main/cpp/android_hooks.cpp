@@ -20,7 +20,16 @@
 
 #include <rex/hook.h>
 
-REX_EXTERN(__imp__sub_82235918);
+// CBlocker::Check de cada jogo (mapa do Optxbox, maps/dbz-budokai-hd/): Budokai 3 82235918,
+// Budokai 1 821C4A58.
+#if defined(DF_GAME_B3)
+#define DF_CBLOCKER_CHECK sub_82235918
+#define DF_CBLOCKER_CHECK_IMP __imp__sub_82235918
+#else
+#define DF_CBLOCKER_CHECK sub_821C4A58
+#define DF_CBLOCKER_CHECK_IMP __imp__sub_821C4A58
+#endif
+REX_EXTERN(DF_CBLOCKER_CHECK_IMP);
 
 // Base da memoria do jogo, para o game_state_jni.cpp (controles por toque) ler
 // o estado do combate fora das funcoes do jogo. Guardada aqui porque este hook
@@ -36,7 +45,7 @@ std::atomic<bool> g_dragonfury_pause{false};
 std::mutex g_dragonfury_pause_mu;
 std::condition_variable g_dragonfury_pause_cv;
 
-REX_HOOK_RAW(sub_82235918) {
+REX_HOOK_RAW(DF_CBLOCKER_CHECK) {
   using clock = std::chrono::steady_clock;
   thread_local clock::time_point last_call{};
   thread_local uint32_t spins = 0;
@@ -62,5 +71,5 @@ REX_HOOK_RAW(sub_82235918) {
     std::this_thread::sleep_for(std::chrono::microseconds(50));
   }
 
-  __imp__sub_82235918(ctx, base);
+  DF_CBLOCKER_CHECK_IMP(ctx, base);
 }

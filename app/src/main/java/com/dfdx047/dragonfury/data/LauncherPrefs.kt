@@ -42,6 +42,11 @@ class LauncherPrefs(context: Context) {
     private val prefs: SharedPreferences
         get() = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_MULTI_PROCESS)
 
+    /** Jogo escolhido no cartao da aba Inicio (as opcoes, os presets e os controles das outras abas sao os dele). */
+    var game: Game
+        get() = Game.byId(prefs.getString(KEY_GAME, null))
+        set(v) = prefs.edit().putString(KEY_GAME, v.id).apply()
+
     var themeMode: ThemeMode
         get() = enumByKey(prefs.getString(KEY_THEME, null), ThemeMode.DRAGON) { it.key }
         set(v) = prefs.edit().putString(KEY_THEME, v.key).apply()
@@ -144,6 +149,7 @@ class LauncherPrefs(context: Context) {
 
     companion object {
         const val PREFS_NAME = "dragonfury"
+        const val KEY_GAME = "game"
         const val KEY_THEME = "theme"
         const val KEY_DARK = "dark_mode"
         const val KEY_ORIENTATION = "game_orientation"

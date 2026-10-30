@@ -17,7 +17,7 @@ import java.util.zip.ZipOutputStream
 /**
  * Junta num .zip tudo o que ajuda a depurar: logcat da app (o jogo corre no mesmo
  * processo, por isso inclui as linhas `dbz3` do runtime), o log da ultima sessao,
- * o dbz3_user.toml, o cvars.txt, o driver ativo e as propriedades do aparelho.
+ * o dbz3_user.toml e o dbz1_user.toml, o cvars.txt, o driver ativo e as propriedades do aparelho.
  * Grava em Download/ (visivel no PC por adb ou MTP).
  */
 object LogExporter {
@@ -88,7 +88,7 @@ object LogExporter {
             // Tempos por draw de cada captura (pequenos): todos.
             File(AppPaths.logsDir, "capture").listFiles { f -> f.name.endsWith(".timing.txt") }
                 ?.forEach { putFile("logs/capture/${it.name}", it) }
-            putFile("dbz3_user.toml", AppPaths.userToml)
+            for (g in Game.entries) putFile(g.tomlName, java.io.File(AppPaths.appDir, g.tomlName))
             putFile("cvars.txt", File(AppPaths.appDir, "cvars.txt"))
             File(AppPaths.appDir, "cache").takeIf { it.isDirectory }?.walkTopDown()
                 ?.filter { it.isFile && it.extension == "log" }

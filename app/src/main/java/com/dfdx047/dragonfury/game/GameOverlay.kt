@@ -75,6 +75,42 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
     private val attachRunnable = Runnable { attachPad() }
     private var gpuStats: GpuStatsSampler? = null
 
+    /**
+     * Testes por adb: carrega botoes no comando virtual (o mesmo dos controles da tela), em qualquer aparelho e
+     * com ou sem comando fisico. So o adb e o sistema podem mandar (permissao DUMP). Exemplo:
+     *   adb shell am broadcast -a com.dfdx047.dragonfury.TEST_PAD --es seq "start w:60 a down:12 a+x"
+     *   adb shell am broadcast -a com.dfdx047.dragonfury.TEST_PAD --es cvar "dbz3_clear_to_1x=false"
+     * Cada passo: entradas separadas por "+" e ":frames" (60 Hz, 6 por omissao), com 6 frames soltos depois;
+     * "w:N" espera N frames.
+     */
+    private val testPad = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: android.content.Intent) {
+            // --es cvar "nome=valor;nome=valor": muda cvars do runtime ao vivo (A/B de imagem e de GPU).
+            intent.getStringExtra("cvar")?.let { c ->
+                val m = c.split(';').filter { '=' in it }.associate { it.substringBefore('=').trim() to it.substringAfter('=').trim() }
+                val ok = NativeGameState.setCvarsLive(m)
+                engine.diag?.invoke("test_pad cvar $c -> $ok")
+                android.util.Log.i("DragonFury", "test_pad cvar $c -> $ok")
+            }
+            val seq = intent.getStringExtra("seq") ?: return
+            val steps = ArrayList<MacroStep>()
+            for (tok in seq.trim().split(Regex("\\s+"))) {
+                val name = tok.substringBefore(':')
+                val frames = tok.substringAfter(':', "6").toIntOrNull() ?: 6
+                if (name == "w") {
+                    steps += MacroStep(emptySet(), frames)
+                    continue
+                }
+                val inputs = name.split('+').mapNotNull { n -> PadInput.entries.firstOrNull { it.name.equals(n, true) } }.toSet()
+                steps += MacroStep(inputs, frames)
+                steps += MacroStep(emptySet(), 6)
+            }
+            ensurePad()
+            engine.press("test_pad", ControlAction.Sequence(steps, holdLast = false))
+            engine.diag?.invoke("test_pad $seq")
+        }
+    }
+
     fun onCreate() {
         AppPaths.init(activity)
         if (GameConfig.load().perfLogging) {
@@ -104,6 +140,11 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
         }
         engine.onMapChanged = { map ->
             onMap = map
+            // O clear 4x direto em 1x so sai do caminho no mapa do Dragon Universe (GameActivity).
+            if (android.system.Os.getenv("DF_CLEAR_TO_1X_MAP") == "auto") {
+                NativeGameState.setCvarsLive(mapOf("dbz3_clear_to_1x" to if (map) "false" else "true"))
+                engine.diag?.invoke("clear_to_1x " + if (map) "desligado (mapa)" else "ligado")
+            }
             view?.let {
                 it.releaseAll()
                 it.layout = currentLayout()
@@ -111,6 +152,10 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
         }
         // O motor corre sempre (pausa, luta/menus), mesmo com os controles desligados.
         main.postDelayed(attachRunnable, 2500)
+        androidx.core.content.ContextCompat.registerReceiver(
+            activity, testPad, android.content.IntentFilter(TEST_PAD_ACTION), android.Manifest.permission.DUMP, null,
+            androidx.core.content.ContextCompat.RECEIVER_EXPORTED,
+        )
         val density = activity.resources.displayMetrics.density
 
         val v = TouchControlsView(activity).apply {
@@ -431,6 +476,10 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
         gpuStats?.stop()
         NativeGameState.forceResume()
         main.removeCallbacks(attachRunnable)
+        try {
+            activity.unregisterReceiver(testPad)
+        } catch (_: IllegalArgumentException) {
+        }
         inputManager.unregisterInputDeviceListener(this)
         engine.release()
         DragonFuryPad.detach()
@@ -492,6 +541,7 @@ class GameOverlay(private val activity: Activity) : InputManager.InputDeviceList
     override fun onInputDeviceChanged(deviceId: Int) = updateVisibility()
 
     private companion object {
+        const val TEST_PAD_ACTION = "com.dfdx047.dragonfury.TEST_PAD"
         val STICK_AXES = intArrayOf(
             MotionEvent.AXIS_X, MotionEvent.AXIS_Y, MotionEvent.AXIS_Z, MotionEvent.AXIS_RZ,
             MotionEvent.AXIS_HAT_X, MotionEvent.AXIS_HAT_Y, MotionEvent.AXIS_LTRIGGER,

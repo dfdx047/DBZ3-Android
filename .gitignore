@@ -27,3 +27,7 @@ captures/
 # Perfis do simpleperf
 /perf/
 /app/src/main/cpp/d3d_trace_hooks.cpp
+
+# Saidas locais (builds de ferramentas, shaders do Renut, backups dos aparelhos, medicoes)
+/out/
+__pycache__/

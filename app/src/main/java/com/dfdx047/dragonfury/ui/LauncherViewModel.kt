@@ -25,8 +25,11 @@ import com.dfdx047.dragonfury.data.ControlStyle
 import com.dfdx047.dragonfury.data.DarkMode
 import com.dfdx047.dragonfury.data.FileStatus
 import com.dfdx047.dragonfury.data.GameConfig
+import com.dfdx047.dragonfury.data.AppPaths
+import com.dfdx047.dragonfury.data.Game
 import com.dfdx047.dragonfury.data.GameFiles
 import com.dfdx047.dragonfury.data.GameInstall
+import com.dfdx047.dragonfury.data.GameLib
 import com.dfdx047.dragonfury.data.GameOrientation
 import com.dfdx047.dragonfury.data.ImportException
 import com.dfdx047.dragonfury.data.ImportProgress
@@ -75,6 +78,34 @@ enum class UpdateState { IDLE, CHECKING, UP_TO_DATE, AVAILABLE, FAILED }
 
 class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = LauncherPrefs(app)
+
+    // ------------------------------------------------------------------ jogo
+    /** O jogo escolhido no cartao da aba Inicio: o toml, a pasta e os saves das outras abas sao os dele. */
+    var game by mutableStateOf(prefs.game.also { AppPaths.game = it })
+        private set
+
+    /** Estado dos dois jogos (cartoes da aba Inicio). */
+    var installs by mutableStateOf<Map<Game, GameInstall>>(emptyMap())
+        private set
+
+    fun selectGame(g: Game) {
+        if (g == game) return
+        viewModelScope.launch(Dispatchers.IO) {
+            GameConfig.save(config)
+            // Primeira vez neste jogo: comeca com as opcoes do outro (o mesmo aparelho, o mesmo runtime).
+            val firstTime = !java.io.File(AppPaths.appDir, g.tomlName).exists()
+            AppPaths.game = g
+            prefs.game = g
+            val c = if (firstTime) config else GameConfig.load()
+            if (firstTime) GameConfig.save(c)
+            AppLog.i(R.string.log_game_selected, g.dirName)
+            withContext(Dispatchers.Main) {
+                game = g
+                config = c
+                install = installs[g]
+            }
+        }
+    }
 
     // ------------------------------------------------------------- aparencia
     var themeMode by mutableStateOf(prefs.themeMode)
@@ -288,8 +319,9 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshInstall(fullHash: Boolean) {
         viewModelScope.launch(Dispatchers.IO) {
             if (fullHash) busy = Busy(R.string.busy_verifying)
+            val g = game
             val result = try {
-                GameFiles.check(fullHash) { p ->
+                GameFiles.check(fullHash, g) { p ->
                     if (p is ImportProgress.Hashing && fullHash) {
                         busy = Busy(R.string.busy_verifying, p.file, p.done.toFloat() / p.total.coerceAtLeast(1))
                     }
@@ -297,6 +329,8 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
             } finally {
                 if (fullHash) busy = null
             }
+            // O outro jogo so pelo tamanho (o cartao dele diz se esta pronto).
+            installs = Game.entries.associateWith { if (it == g) result else GameFiles.check(false, it) }
             install = result
             if (fullHash) AppLog.i(R.string.log_verify, "true")
             AppLog.i(R.string.log_verify_result, result.checks.joinToString { "${it.name}=${it.status}" })
@@ -309,10 +343,35 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
 
     fun importGame(uri: Uri) = runImport(uri) { ctx, progress -> GameFiles.import(ctx, uri, progress) }
 
-    /** Importa direto do .iso do disco de Xbox 360. */
+    /** Importa direto do .iso do disco de Xbox 360 (os dois jogos de uma vez). */
     fun importIso(uri: Uri) = runImport(uri) { ctx, progress -> GameFiles.importIso(ctx, uri, progress) }
 
-    private fun runImport(source: Uri, work: (Context, (ImportProgress) -> Unit) -> Unit) {
+    private fun progressBusy(p: ImportProgress): Busy = when (p) {
+        is ImportProgress.Copying -> Busy(R.string.busy_importing, p.file, p.done.toFloat() / p.total.coerceAtLeast(1))
+        is ImportProgress.Hashing -> Busy(R.string.busy_checking_xex, p.file, p.done.toFloat() / p.total.coerceAtLeast(1))
+        ImportProgress.ReadingIso -> Busy(R.string.busy_reading_iso)
+        is ImportProgress.Reading -> Busy(R.string.busy_reading_xex, p.file)
+        is ImportProgress.Unpacking -> Busy(
+            R.string.busy_unpacking,
+            "%d / %d MB".format(p.done shr 20, p.total shr 20),
+            p.done.toFloat() / p.total.coerceAtLeast(1),
+        )
+    }
+
+    private fun importErrorRes(reason: ImportException.Reason) = when (reason) {
+        ImportException.Reason.NO_XEX -> R.string.err_import_no_xex
+        ImportException.Reason.NO_US_FOLDER -> R.string.err_import_no_us
+        ImportException.Reason.EU_XEX -> R.string.err_import_eu
+        ImportException.Reason.BAD_XEX -> R.string.err_import_bad_xex
+        ImportException.Reason.MISSING_REQUIRED -> R.string.err_import_missing
+        ImportException.Reason.IO -> R.string.err_import_io
+        ImportException.Reason.NOT_ISO -> R.string.err_import_not_iso
+        ImportException.Reason.ISO_NO_GAME -> R.string.err_import_iso_no_game
+        ImportException.Reason.NO_SPACE -> R.string.err_import_no_space
+        ImportException.Reason.UNSUPPORTED_VERSION -> R.string.err_import_unsupported
+    }
+
+    private fun runImport(source: Uri, work: (Context, (ImportProgress) -> Unit) -> List<Game>) {
         val ctx = getApplication<Application>()
         viewModelScope.launch(Dispatchers.IO) {
             busy = Busy(R.string.busy_importing)
@@ -320,41 +379,39 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
             AppLog.i(R.string.log_import_start, source.toString())
             var lastFile = ""
             try {
-                work(ctx) { p ->
+                val progress: (ImportProgress) -> Unit = { p ->
                     val file = when (p) {
                         is ImportProgress.Copying -> p.file
                         is ImportProgress.Hashing -> p.file
                         ImportProgress.ReadingIso -> "ISO"
+                        is ImportProgress.Reading -> p.file
+                        is ImportProgress.Unpacking -> "libgame"
                     }
                     if (file != lastFile) {
                         lastFile = file
                         AppLog.i(R.string.log_import_file, file)
                     }
-                    busy = when (p) {
-                        is ImportProgress.Copying -> Busy(R.string.busy_importing, p.file, p.done.toFloat() / p.total.coerceAtLeast(1))
-                        is ImportProgress.Hashing -> Busy(R.string.busy_checking_xex, p.file, p.done.toFloat() / p.total.coerceAtLeast(1))
-                        ImportProgress.ReadingIso -> Busy(R.string.busy_reading_iso)
-                    }
+                    busy = progressBusy(p)
                 }
+                val games = work(ctx, progress)
+                // O codigo de cada jogo importado, desencriptado ja com a chave do executavel acabado de copiar.
+                for (g in games) GameLib.install(ctx, g, progress)
                 val seconds = ((System.nanoTime() - started) / 1_000_000_000L).toInt()
                 AppLog.i(R.string.log_import_ok, seconds)
-                say(R.string.msg_import_ok_time, seconds)
+                say(R.string.msg_import_ok_time, seconds, games.joinToString(" + ") { ctx.getString(it.nameRes) })
+                if (game !in games) {
+                    withContext(Dispatchers.Main) { selectGame(games.first()) }
+                }
             } catch (e: ImportException) {
                 AppLog.e(R.string.log_import_failed, e, e.reason.name, e.detail)
                 fail(
                     R.string.err_title_import,
-                    when (e.reason) {
-                        ImportException.Reason.NO_XEX -> R.string.err_import_no_xex
-                        ImportException.Reason.NO_US_FOLDER -> R.string.err_import_no_us
-                        ImportException.Reason.EU_XEX -> R.string.err_import_eu
-                        ImportException.Reason.BAD_XEX -> R.string.err_import_bad_xex
-                        ImportException.Reason.MISSING_REQUIRED -> R.string.err_import_missing
-                        ImportException.Reason.IO -> R.string.err_import_io
-                        ImportException.Reason.NOT_ISO -> R.string.err_import_not_iso
-                        ImportException.Reason.ISO_NO_GAME -> R.string.err_import_iso_no_game
-                        ImportException.Reason.NO_SPACE -> R.string.err_import_no_space
-                    },
-                    e.detail.ifEmpty { "-" },
+                    importErrorRes(e.reason),
+                    *(if (e.reason == ImportException.Reason.UNSUPPORTED_VERSION) {
+                        arrayOf(e.detail.substringBefore(':'), e.detail.substringAfter(": ", e.detail))
+                    } else {
+                        arrayOf(e.detail.ifEmpty { "-" })
+                    }),
                     detail = "${e.reason} · $lastFile",
                 )
             } catch (e: Exception) {
@@ -363,7 +420,8 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
             } finally {
                 busy = null
             }
-            install = GameFiles.check(false)
+            installs = Game.entries.associateWith { GameFiles.check(false, it) }
+            install = installs[game]
         }
     }
 
@@ -400,9 +458,33 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
                 "driver=${activeDriver ?: "system"}",
         )
         if (prefs.lastGameExitSeen == 0L) prefs.lastGameExitSeen = System.currentTimeMillis()
+        val g = game
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { GameConfig.save(config) }
-            context.startActivity(Intent(context, GameActivity::class.java).setAction(PLAY_ACTION))
+            try {
+                withContext(Dispatchers.IO) {
+                    GameConfig.save(config)
+                    // O codigo do jogo: ja pronto, ou refeito agora (APK novo por cima de outro).
+                    GameLib.install(context, g) { p -> busy = progressBusy(p) }
+                }
+            } catch (e: ImportException) {
+                AppLog.e(R.string.log_import_failed, e, e.reason.name, e.detail)
+                fail(
+                    R.string.err_title_files,
+                    importErrorRes(e.reason),
+                    *(if (e.reason == ImportException.Reason.UNSUPPORTED_VERSION) {
+                        arrayOf(e.detail.substringBefore(':'), e.detail.substringAfter(": ", e.detail))
+                    } else {
+                        arrayOf(e.detail.ifEmpty { "-" })
+                    }),
+                    detail = "${e.reason} · ${g.xexName}",
+                )
+                return@launch
+            } finally {
+                busy = null
+            }
+            context.startActivity(
+                Intent(context, GameActivity::class.java).setAction(PLAY_ACTION).putExtra(Game.EXTRA, g.id),
+            )
         }
     }
 
@@ -411,11 +493,12 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
             say(R.string.msg_shortcut_unsupported)
             return
         }
-        val info = ShortcutInfoCompat.Builder(context, "play_dbz3")
-            .setShortLabel(context.getString(R.string.shortcut_short))
-            .setLongLabel(context.getString(R.string.shortcut_long))
+        val b1 = game == Game.B1
+        val info = ShortcutInfoCompat.Builder(context, if (b1) "play_dbz1" else "play_dbz3")
+            .setShortLabel(context.getString(if (b1) R.string.shortcut_b1_short else R.string.shortcut_short))
+            .setLongLabel(context.getString(if (b1) R.string.shortcut_b1_long else R.string.shortcut_long))
             .setIcon(IconCompat.createWithResource(context, R.mipmap.ic_launcher))
-            .setIntent(Intent(context, GameActivity::class.java).setAction(PLAY_ACTION))
+            .setIntent(Intent(context, GameActivity::class.java).setAction(PLAY_ACTION).putExtra(Game.EXTRA, game.id))
             .build()
         if (ShortcutManagerCompat.requestPinShortcut(context, info, null)) say(R.string.msg_shortcut_requested)
         else say(R.string.msg_shortcut_unsupported)

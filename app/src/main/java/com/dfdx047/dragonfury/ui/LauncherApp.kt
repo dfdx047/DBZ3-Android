@@ -94,6 +94,11 @@ enum class LauncherTab(@StringRes val title: Int, val icon: ImageVector) {
     SETTINGS(R.string.tab_settings, Icons.Filled.Settings),
     DEBUG(R.string.tab_debug, Icons.Filled.BugReport),
     ABOUT(R.string.tab_about, Icons.Filled.Info),
+    ;
+
+    /** Mods, texturas e cheats sao do codigo do Budokai 3 (port de PC): no Budokai 1 a aba nao aparece. */
+    fun availableFor(game: com.dfdx047.dragonfury.data.Game): Boolean =
+        game == com.dfdx047.dragonfury.data.Game.B3 || this !in setOf(MODS, TEXTURES, CHEATS)
 }
 
 @Composable
@@ -126,10 +131,13 @@ fun LauncherApp(vm: LauncherViewModel) {
         ) {
             Header()
             BusyBar(vm.busy)
+            // Trocar para o Budokai 1 numa aba so do Budokai 3: volta ao Inicio.
+            if (!tab.availableFor(vm.game)) tab = LauncherTab.HOME
+            val tabs = LauncherTab.entries.filter { it.availableFor(vm.game) }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 TabContent(tab, vm) { tab = it }
             }
-            BottomTabs(tab) { tab = it }
+            BottomTabs(tabs, tab) { tab = it }
         }
     }
 
@@ -167,14 +175,14 @@ private fun Header() {
  * (dourado -> laranja -> azul) corre por cima da barra. Rola na horizontal quando nao cabem.
  */
 @Composable
-private fun BottomTabs(selected: LauncherTab, onSelect: (LauncherTab) -> Unit) {
+private fun BottomTabs(tabs: List<LauncherTab>, selected: LauncherTab, onSelect: (LauncherTab) -> Unit) {
     val scroll = rememberScrollState()
     val density = androidx.compose.ui.platform.LocalDensity.current
     val itemWidth = 78.dp
     // Mantem a aba atual a vista (ex.: aberta por um atalho de outra aba).
     LaunchedEffect(selected) {
         val px = with(density) { itemWidth.toPx() }
-        val target = (selected.ordinal * px - px * 1.5f).toInt().coerceIn(0, scroll.maxValue)
+        val target = (tabs.indexOf(selected) * px - px * 1.5f).toInt().coerceIn(0, scroll.maxValue)
         scroll.animateScrollTo(target)
     }
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp) {
@@ -192,7 +200,7 @@ private fun BottomTabs(selected: LauncherTab, onSelect: (LauncherTab) -> Unit) {
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            LauncherTab.entries.forEach { t ->
+            tabs.forEach { t ->
                 val on = t == selected
                 val pill by androidx.compose.animation.core.animateFloatAsState(if (on) 1f else 0f, label = "tab")
                 Column(

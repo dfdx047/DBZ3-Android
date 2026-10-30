@@ -1,0 +1,10 @@
+[project]
+sdk_version = "0.10.0"
+name = "dbz1"
+
+[entrypoint]
+file_path = "yae1_xenon.xex"
+out_directory_path = "generated"
+includes = [
+  "dbz1_config.toml",
+]

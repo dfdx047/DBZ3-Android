@@ -28,13 +28,25 @@
 std::atomic<uint8_t*> g_dragonfury_guest_base{nullptr};
 
 // Ultima vez (ms do steady_clock) que o jogo correu o estado "voar pelo mapa" do Dragon
-// Universe (sub_821C4DA0). Definido no campaigns.cpp do jogo (patches/game/0004).
+// Universe (sub_821C4DA0). Definido no campaigns.cpp do jogo (patches/game/0004). O Budokai 1
+// nao tem mapa: fica sempre a 0.
+#if defined(DF_GAME_B3)
 extern std::atomic<int64_t> g_dbz3_map_fly_ms;
+#else
+std::atomic<int64_t> g_dbz3_map_fly_ms{0};
+#endif
 
 namespace {
 
+// Enderecos do Budokai 3 (US). No Budokai 1 ainda nao ha: kBattleCfgPtr = 0 desliga a leitura
+// (sem luta, P1 a esquerda) ate os sinais dele serem achados.
+#if defined(DF_GAME_B3)
 constexpr uint32_t kBattleCfgPtr = 0x823D6CF4;
 constexpr uint32_t kFightFlag = 0x823F39A0;
+#else
+constexpr uint32_t kBattleCfgPtr = 0;
+constexpr uint32_t kFightFlag = 0;
+#endif
 
 uint32_t LoadU32(const uint8_t* base, uint32_t addr) {
   uint32_t v;
@@ -63,6 +75,7 @@ struct FightPositions {
 
 FightPositions ReadFight(const uint8_t* base) {
   FightPositions f;
+  if (kBattleCfgPtr == 0) return f;
   const uint32_t cfg = LoadU32(base, kBattleCfgPtr);
   if (cfg == 0 || cfg >= 0xF0000000u) return f;
   const uint32_t p1 = cfg + 2096;
@@ -230,7 +243,7 @@ Java_com_dfdx047_dragonfury_game_NativeGameState_nativeFightFlag(JNIEnv*, jclass
   // No mapa do Dragon Universe nao ha luta, mesmo que o bloco da ultima batalha ainda
   // tenha posicoes (ponteiro velho depois de um combate da historia).
   if (MapFlying(500)) return 0;
-  return (LoadU32(base, kFightFlag) != 0 || ReadFight(base).active) ? 1 : 0;
+  return ((kFightFlag != 0 && LoadU32(base, kFightFlag) != 0) || ReadFight(base).active) ? 1 : 0;
 }
 
 // Voo livre pelo mapa do Dragon Universe: 1 = a voar, 0 = nao, -1 = sem jogo. Os
@@ -276,6 +289,7 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_com_dfdx047_dragonfury_game_NativeGameState_nativeBattleDebug(JNIEnv* env, jclass) {
   const uint8_t* base = g_dragonfury_guest_base.load(std::memory_order_acquire);
   if (!base) return env->NewStringUTF("sem jogo");
+  if (kBattleCfgPtr == 0) return env->NewStringUTF("sem enderecos de luta neste jogo");
   const uint32_t flag = LoadU32(base, kFightFlag);
   const uint32_t cfg = LoadU32(base, kBattleCfgPtr);
   char text[160];
@@ -300,7 +314,11 @@ Java_com_dfdx047_dragonfury_game_NativeGameState_nativeBattleDebug(JNIEnv* env, 
 
 #include <rex/cvar.h>
 
+#if defined(DF_GAME_B3)
 #include "src/launcher/settings.h"
+#else
+#include "b1/dbz1_app.h"
+#endif
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_dfdx047_dragonfury_game_NativeGameState_nativeSetCvars(JNIEnv* env, jclass, jobjectArray names,
@@ -319,8 +337,12 @@ Java_com_dfdx047_dragonfury_game_NativeGameState_nativeSetCvars(JNIEnv* env, jcl
     env->DeleteLocalRef(jn);
     env->DeleteLocalRef(jv);
   }
+#if defined(DF_GAME_B3)
   dbz3::settings::ApplyRuntimeSettingsToSdk(true);
   dbz3::settings::SaveUserSettings();
+#else
+  dbz1::SaveUserSettings();
+#endif
   return ok ? JNI_TRUE : JNI_FALSE;
 }
 

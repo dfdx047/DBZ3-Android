@@ -37,6 +37,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dfdx047.dragonfury.R
 import com.dfdx047.dragonfury.data.FileStatus
+import com.dfdx047.dragonfury.data.Game
+import com.dfdx047.dragonfury.data.GameInstall
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import com.dfdx047.dragonfury.ui.LauncherTab
 import com.dfdx047.dragonfury.ui.LauncherViewModel
 import com.dfdx047.dragonfury.ui.components.GroundBurstAnimation
@@ -88,7 +94,7 @@ fun HomeScreen(vm: LauncherViewModel, goTo: (LauncherTab) -> Unit) {
                 ) {
                     Text("DRAGON FURY", style = LogoStyle, color = DfColors.Gold)
                     Text(
-                        stringResource(R.string.game_title),
+                        stringResource(vm.game.titleRes),
                         style = MaterialTheme.typography.labelMedium,
                         color = Color.White.copy(alpha = 0.85f),
                     )
@@ -100,6 +106,27 @@ fun HomeScreen(vm: LauncherViewModel, goTo: (LauncherTab) -> Unit) {
                     .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                // A escolha do jogo: um cartao por jogo. As outras abas (opcoes, presets, controles) seguem a escolha.
+                Row(
+                    Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    for (g in listOf(Game.B3, Game.B1)) {
+                        GameCard(
+                            game = g,
+                            install = vm.installs[g],
+                            selected = vm.game == g,
+                            enabled = vm.busy == null,
+                            onClick = { vm.selectGame(g) },
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                        )
+                    }
+                }
+                Text(
+                    stringResource(R.string.game_choose_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.7f),
+                )
                 val (statusText, level) = when {
                     install == null -> stringResource(R.string.status_checking) to Level.INFO
                     install.xex?.status == FileStatus.EU_REGION -> stringResource(R.string.status_eu) to Level.ERROR
@@ -191,5 +218,52 @@ fun HomeScreen(vm: LauncherViewModel, goTo: (LauncherTab) -> Unit) {
         TextButton(onClick = { vm.createShortcut(context) }) {
             Text(stringResource(R.string.create_shortcut))
         }
+    }
+}
+
+@Composable
+private fun installStatus(install: GameInstall?): Pair<String, Level> = when {
+    install == null -> stringResource(R.string.status_checking) to Level.INFO
+    install.xex?.status == FileStatus.EU_REGION -> stringResource(R.string.status_eu) to Level.ERROR
+    install.playable -> stringResource(R.string.status_ready) to Level.OK
+    install.installed -> stringResource(R.string.status_incomplete) to Level.WARN
+    else -> stringResource(R.string.status_not_installed) to Level.WARN
+}
+
+/** Cartao de um jogo: nome, estado da instalacao e se e o escolhido. Tocar escolhe-o. */
+@Composable
+private fun GameCard(
+    game: Game,
+    install: GameInstall?,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(10.dp)
+    val border = if (selected) DfColors.Orange else Color.White.copy(alpha = 0.18f)
+    Column(
+        modifier
+            .clip(shape)
+            .background(if (selected) DfColors.Orange.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.05f))
+            .border(if (selected) 2.dp else 1.dp, border, shape)
+            .clickable(enabled = enabled && !selected, onClick = onClick)
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            stringResource(game.nameRes).uppercase(),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Black,
+            fontStyle = FontStyle.Italic,
+            color = if (selected) DfColors.Gold else Color.White,
+        )
+        val (text, level) = installStatus(install)
+        StatusLine(text, level)
+        Text(
+            stringResource(if (selected) R.string.game_selected else R.string.game_select),
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) DfColors.Orange else Color.White.copy(alpha = 0.7f),
+        )
     }
 }
