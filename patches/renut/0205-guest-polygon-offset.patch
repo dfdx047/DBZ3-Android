@@ -1,0 +1,136 @@
+diff --git a/app/src/renut_engine/gpu/render/draw.cpp b/app/src/renut_engine/gpu/render/draw.cpp
+index f71f63e..9411665 100644
+--- a/app/src/renut_engine/gpu/render/draw.cpp
++++ b/app/src/renut_engine/gpu/render/draw.cpp
+@@ -3552,6 +3552,38 @@ PipelineKey MakeKey(const GuestDevice &device, const ShaderRecord *vs, const Sha
+   key.stencil_ref_mask = t.depth ? u32(dev.m_ValuesPacket.StencilRefMask) & 0xFFFFFF : 0;
+   key.stencil_ref_mask_bf = t.depth ? u32(dev.m_ValuesPacket.StencilRefMaskBF) & 0xFFFFFF : 0;
+   key.mode_control = u32(cp.ModeControl) & 0x7;
++  // Dragon Fury (2026-10-30): the guest's polygon offset, as Xenia's host render target path takes it
++  // (GetPreferredFacePolygonOffset): PA_SU_SC_MODE_CNTL poly_offset_front_enable (bit 11) unless front faces are
++  // culled, else poly_offset_back_enable (bit 12); poly_offset_para_enable (bit 13) for points and lines. The values are
++  // the device's copies of PA_SU_POLY_OFFSET_FRONT/BACK_SCALE/OFFSET at 0x2A50 (D3DRS_SLOPESCALEDEPTHBIAS * 16,
++  // D3DRS_DEPTHBIAS). The constant is in units of 24-bit depth (2^24 - 1 a unit, Xenia's
++  // kD3D10PolygonOffsetFactorUnorm24, also for its float24 emulated as float32); the slope in 1/16 pixel, times the
++  // resolution scale when that is above 1 (more bias rather than less). The Budokai 1 shadow pass lays its depth with
++  // it: without it the lit side of every model failed its own shadow test, a triangle at a time (Raditz's face).
++  if (t.depth) {
++    const u32 mode = u32(cp.ModeControl);
++    const bool polygonal = primitive != kPointList && primitive != kLineList && primitive != kLineStrip &&
++                           primitive != kLineLoop;
++    float scale = 0.0f, offset = 0.0f;
++    if (polygonal) {
++      if ((mode & (1u << 11)) && !(mode & 1u)) {
++        scale = device.F32(0x2A50);
++        offset = device.F32(0x2A54);
++      }
++      if ((mode & (1u << 12)) && !(mode & 2u) && scale == 0.0f && offset == 0.0f) {
++        scale = device.F32(0x2A58);
++        offset = device.F32(0x2A5C);
++      }
++    } else if (mode & (1u << 13)) {
++      scale = device.F32(0x2A50);
++      offset = device.F32(0x2A54);
++    }
++    if (std::isfinite(scale) && std::isfinite(offset) && (scale != 0.0f || offset != 0.0f)) {
++      const float units = offset * float((1u << 24) - 1);
++      key.depth_bias = int32_t(std::clamp(units < 0.0f ? std::floor(units) : std::ceil(units), -1.0e9f, 1.0e9f));
++      key.depth_bias_slope = scale * (1.0f / 16.0f) * std::max(1.0f, t.scale.Factor());
++    }
++  }
+   const u32 raster_override = REXCVAR_GET(mgr_renut_diag_raster_override);
+   if (raster_override & 1) key.depth_control &= ~6u;
+   if (raster_override & 2) key.mode_control &= ~3u;
+@@ -5653,6 +5685,8 @@ bool DrawStateLocked(const u8 *device_state, const DrawCall &call, const ReplayC
+       line += fmt::format(" z {:08X} {}x{} f{}", targets.depth->guest_va, targets.depth->width,
+                           targets.depth->height, int(targets.depth->format));
+     line += fmt::format(" | dc {:08X} bl {:08X} m {:X} |", key.depth_control, key.blend_control[0], key.color_mask);
++    if (key.depth_bias || key.depth_bias_slope != 0.0f)
++      line += fmt::format(" po {} {:.3g} |", key.depth_bias, key.depth_bias_slope);
+     {  // Dragon Fury: the viewport transform, the host viewport and the VS's first constants
+       const auto &v = viewport.viewport;
+       line += fmt::format(" vte {:08X} vp {},{} {}x{} ss {} sx {} {} so {} {} |", u32(dev.m_ControlPacket.VteControl),
+diff --git a/app/src/renut_engine/gpu/render/pipeline.cpp b/app/src/renut_engine/gpu/render/pipeline.cpp
+index 7542574..ff715e1 100644
+--- a/app/src/renut_engine/gpu/render/pipeline.cpp
++++ b/app/src/renut_engine/gpu/render/pipeline.cpp
+@@ -340,6 +340,13 @@ std::unique_ptr<plume::RenderPipeline> Build(const PipelineKey &key, const Pipel
+       desc.depthBias = diag;
+   }
+ 
++  // Dragon Fury (2026-10-30): the guest's polygon offset (key.depth_bias, MakeKey).
++  if (key.depth_bias || key.depth_bias_slope != 0.0f) {
++    desc.depthBias = key.depth_bias;
++    desc.slopeScaledDepthBias = key.depth_bias_slope;
++    desc.depthBiasClamp = 0.0f;
++  }
++
+   // RB_DEPTHCONTROL.
+   const u32 dc = key.depth_control;
+   if (key.depth_format != plume::RenderFormat::UNKNOWN) {
+@@ -507,9 +514,10 @@ std::unique_ptr<plume::RenderPipeline> Build(const PipelineKey &key, const Pipel
+ 
+ constexpr char kListMagic[4] = {'R', 'N', 'P', 'L'};
+ // banjo-nx: 2, the key's bool words (banjo_gpu_bool_spec); 3, output_trim; 4, alpha_func (a version 3 list is kept,
+-// LoadList).
+-constexpr u32 kListVersion = 4;
++// LoadList). Dragon Fury: 5, depth_bias (a version 3 or 4 list is kept).
++constexpr u32 kListVersion = 5;
+ constexpr u32 kListV3KeySize = 184;  // the key up to output_trim
++constexpr u32 kListV4KeySize = u32(offsetof(PipelineKey, depth_bias));  // the key up to reserved
+ 
+ struct ListHeader {
+   char magic[4];
+@@ -757,7 +765,10 @@ std::vector<std::unique_ptr<Job>> LoadList() {
+   // banjo-nx (2026-10-18): a version 3 list (before alpha_func): its keys get the fields after output_trim as 0 (the
+   // generic pipelines, which the specialised ones draw with until they are built), and the file is written again as
+   // version 4.
+-  const bool v3 = header_ok && header.version == 3 && header.key_size == kListV3KeySize;
++  // Dragon Fury: a version 4 list (before depth_bias) the same way.
++  const bool v3 = header_ok && ((header.version == 3 && header.key_size == kListV3KeySize) ||
++                                (header.version == 4 && header.key_size == kListV4KeySize));
++  const u32 old_key_size = header.key_size;
+   if (!valid && !v3) {
+     std::error_code ec;
+     std::filesystem::remove(path, ec);
+@@ -783,11 +794,11 @@ std::vector<std::unique_ptr<Job>> LoadList() {
+     const char *data = bytes.data() + at;
+     u32 data_size = size;
+     if (v3) {
+-      if (size < kListV3KeySize)
++      if (size < old_key_size)
+         break;
+-      record.assign(data, data + kListV3KeySize);
++      record.assign(data, data + old_key_size);
+       record.resize(sizeof(PipelineKey), 0);
+-      record.insert(record.end(), data + kListV3KeySize, data + size);
++      record.insert(record.end(), data + old_key_size, data + size);
+       data = record.data();
+       data_size = u32(record.size());
+       const size_t o = converted.size();
+@@ -804,8 +815,8 @@ std::vector<std::unique_ptr<Job>> LoadList() {
+     std::ofstream rewrite(path, std::ios::binary | std::ios::trunc);
+     if (rewrite)
+       rewrite.write(converted.data(), std::streamsize(converted.size()));
+-    RGPU_INFO("Pipeline list {}: version 3, {} pipelines kept as version 4 (generic alpha test)", path.string(),
+-              jobs.size());
++    RGPU_INFO("Pipeline list {}: version {}, {} pipelines kept as version {}", path.string(), header.version,
++              jobs.size(), kListVersion);
+   }
+   // Records of shaders this build lacks stay out of 'listed': a later build
+   // that has them lists the pipelines again.
+diff --git a/app/src/renut_engine/gpu/render/pipeline.h b/app/src/renut_engine/gpu/render/pipeline.h
+index 8ac240b..cd43c81 100644
+--- a/app/src/renut_engine/gpu/render/pipeline.h
++++ b/app/src/renut_engine/gpu/render/pipeline.h
+@@ -100,6 +100,10 @@ struct PipelineKey {
+   // pass alpha); 0 = read at run time. Like the bools: a key with it not built yet draws with the generic one (0).
+   uint32_t alpha_func;
+   uint32_t reserved;  // 0 (the key is compared and hashed as bytes)
++  // Dragon Fury (2026-10-30): the guest's polygon offset (MakeKey), as the host's constant depth bias units and slope
++  // factor. The Budokai shadow passes lay their depth with it.
++  int32_t depth_bias;
++  float depth_bias_slope;
+ };
+ 
+ // banjo-nx (banjo_gpu_blend_skip): for the key's other fields, 1 when its one target keeps its value for a source alpha

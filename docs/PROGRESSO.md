@@ -141,3 +141,25 @@ Base: o Renut do mgr-nx-deko (`ba1a837`) com os patches do Dragon Burst `patches
   jogo: RP5 Renut 12% de CPU (GPU 0-3%), Xenia 12% (era 37% só com a porta), Cube Renut 5,8%; o que resta é a thread
   de timers do SDK (`rex::thread::TimerQueue`, timers periódicos do jogo). Volta: o mesmo processo, a imagem e o som
   voltam, 60 fps, FATAL=0, nos dois jogos (`bgr2_back_s.png`, `bgx2_back_s.png`, `bgc_back_s.png`, `cmp_bg_b1.png`).
+- M3 (30/10 08:20-09:55): a mesma cena com os dois renderizadores, RP5 no perfil Snapdragon 480+ (`device-profile.sh
+  limit sd480p`), 720p, efeitos ligados, 40 s em cada; luta no Practice (o boneco não ataca, a luta não acaba:
+  `out/nav_practice_b3.sh`, `nav_practice_b1.sh`), campanha no mapa do Dragon Universe e na história do B1 (Raditz).
+
+  | Cena (RP5, 480+) | Renut fps / GPU ms | Xenia fps / gpu_ms |
+  |---|---|---|
+  | B3 luta (Goku × Goku, World Tournament) | 60,00 / 13,9-14,3 | 33,4 / 29,1 |
+  | B3 campanha (mapa DU, casa do Goku) | 60,00 / 12,1 | 32,7 / 29,9 |
+  | B1 luta (Goku × Krillin, Grassland) | 60,00 / 12,2-12,5 | 44,4 / 21,9 |
+  | B1 história (Raditz, cena) | 60,00 / 10,8-11,2 | 48,8-50,2 / 19,2-19,7 |
+
+  Cube (Mali-G57, Renut, efeitos desligados, opções do dono): luta B3 "Tela" 60,00 fps / GPU 8,7-9,1 ms; luta B1
+  720p esticada 60,00 / 12,2. Fotos Xenia|Renut: `out/shots/m3_b3_fight.png`, `m3_b3_camp.png`, `m3_b1_fight.png`,
+  `m3_b1_story.png`; números em `out/m3/*.txt`.
+- `0205` (30/10 09:20-09:50): defeito de imagem visto no M3: no Renut a pele do Raditz (B1, história) saía às manchas
+  por triângulo, no Xenia lisa. O passe de sombra do B1 (mapa 1024x1024 24_8, só profundidade) usa o polygon offset do
+  Xenos (PA_SU_SC_MODE_CNTL bits 11/12/13, valores do device em 0x2A50: 168 unidades, inclinação 2 no frame dump),
+  que o Renut ignorava: o lado iluminado de cada modelo falhava o próprio teste de sombra triângulo a triângulo.
+  Agora a chave do pipeline leva o depth bias (como o caminho de alvos do host do Xenia: unidades de 24 bits,
+  inclinação /16 × escala ≥ 1); lista de pipelines versão 5 (a 3 e a 4 são mantidas, com bias 0). Prova:
+  `raditz_neck.png` (lisa), B3 Practice igual ao de antes (3% dos píxeis, a animação; GPU 14,3 ms igual),
+  Cube B3/B1 a 60 fps (`m3_cube_b3_fight_Renut.png`, `m3_cube_b1_fight_Renut.png`).
