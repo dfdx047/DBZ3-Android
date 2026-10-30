@@ -49,6 +49,7 @@ REXCVAR_DEFINE_BOOL(mgr_renut_diag_original_draw, false, "MGR/Diagnostics",
 std::atomic<uint64_t> g_sa2_game_frames{0};
 
 void DragonFuryFramePoint(uint8_t* base);  // android_hooks.cpp: base da memoria e ponto de pausa dos menus do app
+bool DragonFuryWaitForeground();           // android_hooks.cpp: para enquanto o jogo esta fora da tela
 void SwordManRenutShotOnSwap();          // abaixo
 void SwordManRenutOverlayStatsOnSwap();  // abaixo
 void SwordManRenutPlaceMainThreadOnSwap();  // abaixo
@@ -63,6 +64,7 @@ REX_HOOK_RAW(RENUT_SUB_SWAP) {  // D3DDevice_Swap (MGR sub_826B3510)
   if (banjo::renut_gpu::Active()) {
     // No Renut o CBlocker::Check (android_hooks.cpp) nao corre a cada frame: a pausa e a base ficam aqui.
     DragonFuryFramePoint(base);
+    DragonFuryWaitForeground();
     SwordManRenutShotOnSwap();
     SwordManRenutOverlayStatsOnSwap();
     SwordManRenutPlaceMainThreadOnSwap();

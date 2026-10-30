@@ -182,6 +182,7 @@ Java_com_dfdx047_dragonfury_game_NativeGameState_nativeP1Side(JNIEnv*, jclass) {
 #include <condition_variable>
 
 #include <rex/audio/audio_system.h>
+#include <rex/logging.h>
 #include <rex/runtime.h>
 #include <rex/ui/overlay/quick_menu.h>
 
@@ -189,22 +190,23 @@ extern std::atomic<bool> g_dragonfury_pause;
 extern std::mutex g_dragonfury_pause_mu;
 extern std::condition_variable g_dragonfury_pause_cv;
 
+extern std::atomic<bool> g_dragonfury_background;
+// renut/renut_glue.cpp (so com o Renut compilado).
+extern "C" __attribute__((weak)) void dragonfury_renut_background(bool background);
+
 namespace {
 std::mutex g_pause_mu;
-bool g_paused = false;
-}  // namespace
+bool g_paused = false;      // pausa aplicada: logica parada e audio parado
+bool g_menu_pause = false;  // pedida pelos menus (HelperEngine, nativeSyncPause)
+bool g_background = false;  // jogo fora da tela (GameActivity: onPause ou superficie destruida)
 
-extern "C" JNIEXPORT jboolean JNICALL
-Java_com_dfdx047_dragonfury_game_NativeGameState_nativeSyncPause(JNIEnv*, jclass, jboolean overlay_open,
-                                                                jboolean pause_quick_menu) {
-  std::lock_guard<std::mutex> lock(g_pause_mu);
+// Aplica g_menu_pause || g_background (com g_pause_mu).
+void ApplyPauseLocked() {
+  const bool want = g_menu_pause || g_background;
+  if (want == g_paused) return;
   auto* rt = rex::Runtime::instance();
-  if (!rt || !g_dragonfury_guest_base.load(std::memory_order_acquire)) return JNI_FALSE;
-  const bool want = overlay_open || (pause_quick_menu && rex::ui::QuickMenuDialog::IsOpen());
-  if (want == g_paused) return g_paused ? JNI_TRUE : JNI_FALSE;
-
   // O audio do runtime e sempre rex::audio::AudioSystem (o SDL deriva dela).
-  auto* audio = static_cast<rex::audio::AudioSystem*>(rt->audio_system());
+  auto* audio = rt ? static_cast<rex::audio::AudioSystem*>(rt->audio_system()) : nullptr;
   if (want) {
     g_dragonfury_pause.store(true, std::memory_order_release);
     if (audio) audio->Pause();
@@ -217,15 +219,51 @@ Java_com_dfdx047_dragonfury_game_NativeGameState_nativeSyncPause(JNIEnv*, jclass
     g_dragonfury_pause_cv.notify_all();
   }
   g_paused = want;
+}
+}  // namespace
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_dfdx047_dragonfury_game_NativeGameState_nativeSyncPause(JNIEnv*, jclass, jboolean overlay_open,
+                                                                jboolean pause_quick_menu) {
+  std::lock_guard<std::mutex> lock(g_pause_mu);
+  auto* rt = rex::Runtime::instance();
+  if (!rt || !g_dragonfury_guest_base.load(std::memory_order_acquire)) return JNI_FALSE;
+  g_menu_pause = overlay_open || (pause_quick_menu && rex::ui::QuickMenuDialog::IsOpen());
+  ApplyPauseLocked();
   return g_paused ? JNI_TRUE : JNI_FALSE;
+}
+
+// ---------------------------------------------------------------------------
+// Jogo fora da tela (HOME, recentes, tela desligada; como no Dragon Burst cfdffa4): a pausa dos menus ja (o
+// HelperEngine para no onPause) e alem dela a thread de render do jogo para no Swap (android_hooks.cpp) e a do Renut
+// deixa de acordar a cada 2 ms (renut/0115). Na volta o jogo continua do mesmo frame.
+// ---------------------------------------------------------------------------
+extern "C" JNIEXPORT void JNICALL
+Java_com_dfdx047_dragonfury_game_NativeGameState_nativeSetBackground(JNIEnv*, jclass, jboolean background) {
+  std::lock_guard<std::mutex> lock(g_pause_mu);
+  if (bool(background) == g_background) return;
+  g_background = background;
+  ApplyPauseLocked();
+  {
+    std::lock_guard<std::mutex> l(g_dragonfury_pause_mu);
+    g_dragonfury_background.store(g_background, std::memory_order_release);
+  }
+  g_dragonfury_pause_cv.notify_all();
+  if (dragonfury_renut_background) dragonfury_renut_background(g_background);
+  REXLOG_INFO("dragonfury: {}", g_background ? "segundo plano: jogo em pausa" : "primeiro plano");
 }
 
 /** Ao sair do jogo: nunca deixar a thread do jogo presa na pausa. */
 extern "C" JNIEXPORT void JNICALL
 Java_com_dfdx047_dragonfury_game_NativeGameState_nativeForceResume(JNIEnv*, jclass) {
   {
+    std::lock_guard<std::mutex> lock(g_pause_mu);
+    g_menu_pause = g_background = g_paused = false;
+  }
+  {
     std::lock_guard<std::mutex> l(g_dragonfury_pause_mu);
     g_dragonfury_pause.store(false, std::memory_order_release);
+    g_dragonfury_background.store(false, std::memory_order_release);
   }
   g_dragonfury_pause_cv.notify_all();
 }

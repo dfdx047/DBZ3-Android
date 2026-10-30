@@ -132,3 +132,12 @@ Base: o Renut do mgr-nx-deko (`ba1a837`) com os patches do Dragon Burst `patches
   (`ctela_1_s.png`). O FSR até 720p (`0114`) já vem na série do Dragon Burst. O boot guard do Burst (o "auto" passa
   ao Xenia sozinho) não entra: contraria a decisão do dono (só o aviso, e a pergunta depois de 2 crashes, já feitos).
 - Nota: o contador do overlay mostra "Render 1280x720" também no Renut (é o do Xenia); para o item 10.
+- Pausa fora da tela (30/10 07:50-08:15, como no Dragon Burst cfdffa4): com o jogo fora da tela (HOME, recentes,
+  tela desligada) a luta continuava a 30-60 fps desenhada e não mostrada: RP5 134% de CPU e GPU 28%. Agora
+  `NativeGameState.setBackground` (onPause/superfície destruída, numa thread própria) aplica a pausa dos menus (lógica
+  e áudio) e uma porta (`DragonFuryWaitForeground`): a thread de render do jogo para no Swap (Xenia: `rex_vdswap_hook`;
+  Renut: `renut_glue.cpp`), o render thread do Renut deixa de acordar (renut/0115) e o SDK `0079` (Dragon Burst 0189)
+  para o vsync, o ciclo ocioso e WAIT_REG_MEM do command processor e as esperas do jogo. 60 s fora da tela a meio do
+  jogo: RP5 Renut 12% de CPU (GPU 0-3%), Xenia 12% (era 37% só com a porta), Cube Renut 5,8%; o que resta é a thread
+  de timers do SDK (`rex::thread::TimerQueue`, timers periódicos do jogo). Volta: o mesmo processo, a imagem e o som
+  voltam, 60 fps, FATAL=0, nos dois jogos (`bgr2_back_s.png`, `bgx2_back_s.png`, `bgc_back_s.png`, `cmp_bg_b1.png`).

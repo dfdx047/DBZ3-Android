@@ -62,6 +62,32 @@ void DragonFuryFramePoint(uint8_t* base) {
   }
 }
 
+// Jogo fora da tela (game_state_jni.cpp, nativeSetBackground; como no Dragon Burst): alem da pausa dos menus para aqui
+// a thread de render do jogo no Swap (Xenia: VdSwap, rex_vdswap_hook; Renut: renut_glue.cpp). Mudado com
+// g_dragonfury_pause_mu tomado; acorda pelo g_dragonfury_pause_cv.
+std::atomic<bool> g_dragonfury_background{false};
+
+// Espera enquanto o jogo esta fora da tela. Devolve se esperou.
+bool DragonFuryWaitForeground() {
+  if (!g_dragonfury_background.load(std::memory_order_acquire)) return false;
+  std::unique_lock<std::mutex> lock(g_dragonfury_pause_mu);
+  g_dragonfury_pause_cv.wait(lock, [] { return !g_dragonfury_background.load(std::memory_order_acquire); });
+  return true;
+}
+
+// SDK 0079 (Dragon Burst 0189): rex_background_wait, chamado pelo vsync, pelo ciclo ocioso e WAIT_REG_MEM do command
+// processor do Xenia e pelas esperas do jogo (KeDelayExecutionThread, NtYieldExecution).
+extern "C" void (*rex_vdswap_hook)(void);
+extern "C" bool (*rex_background_wait)(void);
+namespace {
+void DragonFurySwapPoint() { DragonFuryWaitForeground(); }
+const bool g_swap_hook_set = [] {
+  rex_vdswap_hook = DragonFurySwapPoint;
+  rex_background_wait = DragonFuryWaitForeground;
+  return true;
+}();
+}  // namespace
+
 REX_HOOK_RAW(DF_CBLOCKER_CHECK) {
   using clock = std::chrono::steady_clock;
   thread_local clock::time_point last_call{};
