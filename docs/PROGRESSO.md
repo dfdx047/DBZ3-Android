@@ -163,3 +163,11 @@ Base: o Renut do mgr-nx-deko (`ba1a837`) com os patches do Dragon Burst `patches
   inclinação /16 × escala ≥ 1); lista de pipelines versão 5 (a 3 e a 4 são mantidas, com bias 0). Prova:
   `raditz_neck.png` (lisa), B3 Practice igual ao de antes (3% dos píxeis, a animação; GPU 14,3 ms igual),
   Cube B3/B1 a 60 fps (`m3_cube_b3_fight_Renut.png`, `m3_cube_b1_fight_Renut.png`).
+- Item 4, B3 campanha e B1 história Renut × Xenia (30/10 10:00-11:50, RP5 480+): gravação em vídeo dos dois
+  (`out/rec_b1.sh`: abertura e história do B1, 120-160 s; `out/rec_b3du.sh`: Dragon Universe nova história com o Goku,
+  cutscene, cartões de habilidade e entrada no mapa, 90 s) e `out/vpair.py` (2 fps; cada frame do Renut com o do
+  Xenia mais parecido; os mais diferentes numa montagem). Diferenças achadas: só a pele do Raditz (corrigida no
+  `0205`); o resto é desfasamento das animações (o Renut corre ~1 s à frente: o logótipo com raios, o cartão a
+  crescer). Fotos: luta e mapa iguais (`m3_b3_both.png`), `vp_b1intro.png`, `vp_mid.png`, `vp_logo.png`,
+  `vp_b3du.png`. Investigado e não é defeito: a linha comprida do rasto da Kinto'un no plano da ilha do Kame (B1) sai
+  igual no Xenia, frame a frame em vídeo (`isl_cmp.png`): é do jogo, nos primeiros 0,6 s do plano.
