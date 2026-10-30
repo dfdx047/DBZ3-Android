@@ -1,0 +1,333 @@
+diff --git a/app/src/renut_engine/gpu/render/draw.cpp b/app/src/renut_engine/gpu/render/draw.cpp
+index b2af042..aedb46d 100644
+--- a/app/src/renut_engine/gpu/render/draw.cpp
++++ b/app/src/renut_engine/gpu/render/draw.cpp
+@@ -2318,6 +2318,10 @@ struct Geometry {
+   // Tessellated draws: one instance per patch, the streams per instance.
+   u32 instance_count = 1;
+   bool per_instance = false;
++  // Dragon Fury (2026-10-30): a rectangle list drawn without the geometry shader (RectangleListOnCpu): BindStreams
++  // adds each rectangle's fourth corner to the converted streams and makes the triangles' indices.
++  bool rect_cpu = false;
++  u32 rect_count = 0;
+ };
+ 
+ // Reads 'count' guest indices into g_indices.
+@@ -2515,11 +2519,50 @@ void TrackIndices(const IndexKey &key, u32 lo, u32 max_index) {
+   g_stream_cache_bytes += bytes;
+ }
+ 
++// Dragon Fury (2026-10-30): rectangle lists without the geometry shader. On the Mali-G57 (RG Cube, driver r40) a
++// pipeline with rectangle_list_gs and the Budokai 3's FXAA pixel shader never finished compiling (any geometry shader,
++// even one passing the three vertices through: the game hung at its first frame), while the same shaders without it
++// built at once. There the rectangles' fourth corners are made from the converted vertices (BindRectangleStreams): a
++// rectangle's vertex shader is affine in its inputs (screen passes, clears), so the outputs of a + b - c are the GS's.
++// swordman_renut_rect_lists: auto (the CPU on Mali, the geometry shader elsewhere), gs, cpu. Indexed rectangle lists
++// keep the geometry shader.
++REXCVAR_DEFINE_STRING(swordman_renut_rect_lists, "auto", "SwordMan",
++                      "Renut: rectangle lists by the geometry shader (gs) or with their fourth corners made on the "
++                      "CPU (cpu); auto = cpu on Mali")
++    .allowed({"auto", "gs", "cpu"});
++
++// The draw being prepared is such a rectangle list (PrepareGeometry; MakeKey leaves the geometry shader out).
++bool g_rect_cpu_draw = false;
++
++bool RectangleListOnCpu(const DrawCall &call) {
++  if (call.primitive != kRectangleList || call.indexed || call.tessellation || call.count < 3 || call.count % 3)
++    return false;
++  static const int mode = [] {
++    const std::string v = REXCVAR_GET(swordman_renut_rect_lists);
++    if (v == "gs")
++      return 0;
++    if (v == "cpu")
++      return 1;
++    return uint32_t(State().device->getDescription().vendor) == 0x13B5 ? 1 : 0;  // ARM (Mali)
++  }();
++  return mode == 1 || !State().rectangle_list_gs;
++}
++
+ bool PrepareGeometry(const GuestDevice &device, const DrawCall &call, Geometry &g) {
+   g_index_reset = UINT32_MAX - 1;
++  g_rect_cpu_draw = RectangleListOnCpu(call);
++  if (g_rect_cpu_draw) {
++    if (call.count > kMaxDrawVertices)
++      return false;
++    g.first_vertex = call.start_vertex;
++    g.vertex_range = call.count;
++    g.rect_cpu = true;
++    g.rect_count = call.count / 3;
++    return true;
++  }
+   const bool expand = call.primitive == kTriangleFan || call.primitive == kQuadList;
+   static uint32_t rect_logged = 0;
+-  if (call.primitive == kRectangleList && !State().rectangle_list_gs && LogLimited(rect_logged, 1))
++  if (call.primitive == kRectangleList && !State().rectangle_list_gs && call.indexed && LogLimited(rect_logged, 1))
+     RGPU_WARN("Rectangle lists are drawn as triangle lists");
+ 
+   u32 lo = 0, max_index = 0;  // host indices are g_indices - lo, the largest max_index
+@@ -2860,9 +2903,219 @@ bool StreamDumpLog(const ShaderRecord &vs, u32 stream, const StreamSource &src,
+   return true;
+ }
+ 
++namespace {
++float HalfToFloat(uint16_t h) {
++  const u32 sign = u32(h & 0x8000) << 16, exponent = (h >> 10) & 0x1F, mantissa = h & 0x3FF;
++  u32 bits;
++  if (!exponent)
++    return (h & 0x8000 ? -1.0f : 1.0f) * float(mantissa) * 5.9604644775390625e-8f;  // 2^-24
++  if (exponent == 31)
++    bits = sign | 0x7F800000u | (mantissa << 13);
++  else
++    bits = sign | ((exponent + 112) << 23) | (mantissa << 13);
++  float f;
++  std::memcpy(&f, &bits, 4);
++  return f;
++}
++
++uint16_t FloatToHalf(float f) {
++  u32 bits;
++  std::memcpy(&bits, &f, 4);
++  const u32 sign = (bits >> 16) & 0x8000;
++  const int32_t exponent = int32_t((bits >> 23) & 0xFF) - 112;
++  if (exponent <= 0)
++    return uint16_t(sign);
++  if (exponent >= 31)
++    return uint16_t(sign | 0x7C00);
++  return uint16_t(sign | (u32(exponent) << 10) | ((bits >> 13) & 0x3FF));
++}
++
++// d = a + b - c for one host vertex element (its host format), clamped where the format is normalized.
++void OppositeElement(const HostVertexElement &e, u8 *d, const u8 *a, const u8 *b, const u8 *c) {
++  using F = plume::RenderFormat;
++  switch (e.host_format) {
++  case F::R32_FLOAT:
++  case F::R32G32_FLOAT:
++  case F::R32G32B32_FLOAT:
++  case F::R32G32B32A32_FLOAT:
++    for (u32 i = 0; i < e.host_size / 4; ++i) {
++      float x, y, z;
++      std::memcpy(&x, a + i * 4, 4);
++      std::memcpy(&y, b + i * 4, 4);
++      std::memcpy(&z, c + i * 4, 4);
++      const float r = x + y - z;
++      std::memcpy(d + i * 4, &r, 4);
++    }
++    return;
++  case F::R16G16_FLOAT:
++  case F::R16G16B16A16_FLOAT:
++    for (u32 i = 0; i < e.host_size / 2; ++i) {
++      uint16_t x, y, z;
++      std::memcpy(&x, a + i * 2, 2);
++      std::memcpy(&y, b + i * 2, 2);
++      std::memcpy(&z, c + i * 2, 2);
++      const uint16_t r = FloatToHalf(HalfToFloat(x) + HalfToFloat(y) - HalfToFloat(z));
++      std::memcpy(d + i * 2, &r, 2);
++    }
++    return;
++  case F::R8G8B8A8_UNORM:
++  case F::B8G8R8A8_UNORM:
++    for (u32 i = 0; i < e.host_size; ++i)
++      d[i] = u8(std::clamp(int32_t(a[i]) + int32_t(b[i]) - int32_t(c[i]), 0, 255));
++    return;
++  case F::R8G8B8A8_SNORM:
++    for (u32 i = 0; i < e.host_size; ++i)
++      d[i] = u8(int8_t(std::clamp(int32_t(int8_t(a[i])) + int32_t(int8_t(b[i])) - int32_t(int8_t(c[i])), -127, 127)));
++    return;
++  case F::R16G16_UNORM:
++  case F::R16G16B16A16_UNORM:
++  case F::R16G16_SNORM:
++  case F::R16G16B16A16_SNORM: {
++    const bool snorm = e.host_format == F::R16G16_SNORM || e.host_format == F::R16G16B16A16_SNORM;
++    for (u32 i = 0; i < e.host_size / 2; ++i) {
++      uint16_t x, y, z;
++      std::memcpy(&x, a + i * 2, 2);
++      std::memcpy(&y, b + i * 2, 2);
++      std::memcpy(&z, c + i * 2, 2);
++      const int32_t r = snorm ? std::clamp(int32_t(int16_t(x)) + int16_t(y) - int16_t(z), -32767, 32767)
++                              : std::clamp(int32_t(x) + int32_t(y) - int32_t(z), 0, 65535);
++      const uint16_t out = uint16_t(r);
++      std::memcpy(d + i * 2, &out, 2);
++    }
++    return;
++  }
++  default:
++    std::memcpy(d, c, e.host_size);
++    return;
++  }
++}
++
++// The rectangle's corner at the right angle (0-2) from its positions, as rectangle_list_gs finds it; 0 when the
++// position is not 32-bit float.
++u32 RightAngleCorner(const HostVertexElement *position, const u8 *const v[3]) {
++  if (!position || (position->host_format != plume::RenderFormat::R32G32_FLOAT &&
++                    position->host_format != plume::RenderFormat::R32G32B32_FLOAT &&
++                    position->host_format != plume::RenderFormat::R32G32B32A32_FLOAT))
++    return 0;
++  float p[3][2];
++  for (u32 i = 0; i < 3; ++i)
++    std::memcpy(p[i], v[i] + position->host_offset, 8);
++  auto skew = [&](u32 i, u32 j, u32 k) {
++    return std::abs((p[j][0] - p[i][0]) * (p[k][0] - p[i][0]) + (p[j][1] - p[i][1]) * (p[k][1] - p[i][1]));
++  };
++  const float s0 = skew(0, 1, 2), s1 = skew(1, 2, 0), s2 = skew(2, 0, 1);
++  if (s1 < s0 && s1 <= s2)
++    return 1;
++  if (s2 < s0 && s2 < s1)
++    return 2;
++  return 0;
++}
++}  // namespace
++
++// Dragon Fury (2026-10-30): a rectangle list's streams (RectangleListOnCpu): the guest vertices converted now, each
++// rectangle's fourth corner after them, and the two triangles of each as indices (the strip rectangle_list_gs emits:
++// the right angle c, then a, b, and d across from c).
++bool BindRectangleStreams(const GuestDevice &device, const DrawCall &call, const ShaderRecord &vs,
++                          const u32 *shader_strides, const HostVertexLayout &layout, Geometry &g) {
++  plume::RenderCommandList *cmd = State().command_list;
++  const u32 count = g.vertex_range, rects = g.rect_count;
++  struct Converted {
++    const HostVertexStream *hs = nullptr;
++    u8 *host = nullptr;
++  };
++  Converted converted[kMaxVertexStreams];
++  u32 converted_count = 0;
++  const HostVertexElement *position = nullptr;
++  const u8 *position_base = nullptr;
++  u32 position_stride = 0;
++  for (u32 left = layout.used_mask; left; left &= left - 1) {
++    const u32 stream = u32(std::countr_zero(left));
++    const HostVertexStream &hs = layout.streams[stream];
++    if (!hs.used)
++      continue;
++    const StreamSource src = GetStreamSource(device, call, vs, shader_strides, stream);
++    const bool constant = src.stride == 0;
++    const u32 first = constant ? 0 : g.first_vertex;
++    u32 have = constant ? 1 : count;
++    if (first < src.vertex_count)
++      have = std::min(have, src.vertex_count - first);
++    else
++      have = 0;
++    const u32 vertices = constant ? 1 : count + rects;
++    const u32 bytes = std::max<u32>(vertices, 1) * hs.host_stride;
++    UploadAllocation alloc = Video::UploadsLocked().Allocate(bytes, 16);
++    if (!alloc)
++      return false;
++    auto *host = static_cast<u8 *>(alloc.cpu);
++    std::memset(host, 0, bytes);
++    if (src.data && have)
++      ConvertVertices(hs, src.data + size_t(first) * src.stride, src.stride, have, src.endian, host);
++    if (!constant) {
++      converted[converted_count++] = {&hs, host};
++      for (const HostVertexElement &e : hs.elements)
++        if (e.usage == 0 && e.usage_index == 0  /* Position */ && !position) {
++          position = &e;
++          position_base = host;
++          position_stride = hs.host_stride;
++        }
++    }
++    const plume::RenderVertexBufferView view(alloc.ref, bytes);
++    const plume::RenderInputSlot slot(stream, constant ? 0 : hs.host_stride,
++                                      plume::RenderInputSlotClassification::PER_VERTEX_DATA);
++    SetVertexBuffer(cmd, view, slot);
++  }
++  const bool wide = count + rects > 0xFFFE;
++  const u32 index_bytes = rects * 6 * (wide ? 4 : 2);
++  UploadAllocation indices = Video::UploadsLocked().Allocate(index_bytes, 16);
++  if (!indices)
++    return false;
++  for (u32 r = 0; r < rects; ++r) {
++    u32 corner = 0;
++    if (position) {
++      const u8 *v[3] = {position_base + size_t(r * 3) * position_stride,
++                        position_base + size_t(r * 3 + 1) * position_stride,
++                        position_base + size_t(r * 3 + 2) * position_stride};
++      corner = RightAngleCorner(position, v);
++    }
++    const u32 c = r * 3 + corner, a = r * 3 + (corner + 1) % 3, b = r * 3 + (corner + 2) % 3, d = count + r;
++    for (u32 i = 0; i < converted_count; ++i) {
++      const HostVertexStream &hs = *converted[i].hs;
++      u8 *base = converted[i].host;
++      for (const HostVertexElement &e : hs.elements)
++        OppositeElement(e, base + size_t(d) * hs.host_stride + e.host_offset,
++                        base + size_t(a) * hs.host_stride + e.host_offset,
++                        base + size_t(b) * hs.host_stride + e.host_offset,
++                        base + size_t(c) * hs.host_stride + e.host_offset);
++    }
++    const u32 tri[6] = {c, a, b, b, a, d};
++    for (u32 k = 0; k < 6; ++k) {
++      if (wide)
++        static_cast<u32 *>(indices.cpu)[r * 6 + k] = tri[k];
++      else
++        static_cast<uint16_t *>(indices.cpu)[r * 6 + k] = uint16_t(tri[k]);
++    }
++  }
++  g.indexed = true;
++  g.index_count = rects * 6;
++  g.index_view = plume::RenderIndexBufferView(indices.ref, index_bytes,
++                                              wide ? plume::RenderFormat::R32_UINT : plume::RenderFormat::R16_UINT);
++  if (!g_bound.zero_stream) {
++    g_bound.zero_stream = Video::UploadsLocked().Allocate(kZeroStreamSize, 16);
++    if (!g_bound.zero_stream)
++      return false;
++    std::memset(g_bound.zero_stream.cpu, 0, kZeroStreamSize);
++  }
++  const plume::RenderVertexBufferView zero_view(g_bound.zero_stream.ref, kZeroStreamSize);
++  const plume::RenderInputSlot zero_slot(kZeroStreamSlot, 0);
++  SetVertexBuffer(cmd, zero_view, zero_slot);
++  return true;
++}
++
+ bool BindStreams(const GuestDevice &device, const DrawCall &call, const ShaderRecord &vs,
+                  const u32 *shader_strides, const HostVertexLayout &layout, uint64_t layout_hash,
+-                 const Geometry &g, const GpuStreams &gpu_streams) {
++                 Geometry &g, const GpuStreams &gpu_streams) {
++  if (g.rect_cpu)
++    return BindRectangleStreams(device, call, vs, shader_strides, layout, g);
+   plume::RenderCommandList *cmd = State().command_list;
+   // sa2-nx (2026-10-20, sa2_renut_stream_mask): the used streams by their mask, in the same order (16 checks a draw
+   // before, 1.3 % of the render thread in the second console run).
+@@ -3317,7 +3570,7 @@ PipelineKey MakeKey(const GuestDevice &device, const ShaderRecord *vs, const Sha
+     key.depth_control = (key.depth_control & ~0x70u) | 0x50u;
+   key.alpha_to_coverage = (u32(cp.ColorControl) >> 4) & 1;
+   if (primitive == kRectangleList) {
+-    if (State().rectangle_list_gs)
++    if (State().rectangle_list_gs && !g_rect_cpu_draw)
+       key.rectangle_list = 1;
+     // Rectangles are not culled. N&B's D3D clears through rectangles
+     // (ClearRects_D3D, 0x822043D8) whose corners run clockwise on screen, under
+diff --git a/app/src/renut_engine/gpu/render/pipeline.cpp b/app/src/renut_engine/gpu/render/pipeline.cpp
+index 55b3ce0..7542574 100644
+--- a/app/src/renut_engine/gpu/render/pipeline.cpp
++++ b/app/src/renut_engine/gpu/render/pipeline.cpp
+@@ -23,6 +23,7 @@
+ #include <vector>
+ 
+ #include <plume_render_interface_builders.h>
++#include <rex/logging.h>
+ #include <rex/cvar.h>
+ 
+ // banjo-nx (2026-10-17, deko3d renderer): every graphics pipeline's shaders and specialization constants, one line each,
+@@ -56,6 +57,8 @@ REXCVAR_DEFINE_BOOL(banjo_deko3d_variant_log, false, "Banjo/Renut",
+ #include "renut_engine/gpu/render/shader_library.h"
+ #include "renut_engine/gpu/banjo_renut_tuning.h"
+ 
++REXCVAR_DEFINE_BOOL(swordman_renut_pipeline_log, false, "SwordMan",
++                    "Renut (diagnostic): log each graphics pipeline before the driver builds it");
+ REXCVAR_DEFINE_STRING(renut_pipeline_list, "pipeline_list.bin", "Nuts&Bolts/Graphics",
+                       "The pipelines the renderer has built, which it builds ahead of use at the "
+                       "next start (delete it to start over)");
+@@ -472,6 +475,14 @@ std::unique_ptr<plume::RenderPipeline> Build(const PipelineKey &key, const Pipel
+   desc.inputElements = layout.input_elements.data();
+   desc.inputElementsCount = uint32_t(layout.input_elements.size());
+ 
++  if (REXCVAR_GET(swordman_renut_pipeline_log)) {  // Dragon Fury (diagnostic): which build a driver compiler hangs in
++    const auto *vs = static_cast<const ShaderCacheEntry *>(key.vertex_shader);
++    const auto *ps = static_cast<const ShaderCacheEntry *>(key.pixel_shader);
++    RGPU_INFO("[df-pipe] building vs {:016X} ps {:016X} targets {} format0 {} depth {:08X} blend0 {:08X} prim {}",
++              vs ? vs->hash : 0, ps ? ps->hash : 0, key.color_count, int(key.color_formats[0]), key.depth_control,
++              key.blend_control[0], int(desc.primitiveTopology));
++    rex::FlushLogging();
++  }
+   auto pipeline = s.device->createGraphicsPipeline(desc);
+   if (GraphicsPipelineCreated(pipeline.get())) {
+     // Names the guest shaders in captures.

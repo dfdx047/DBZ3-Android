@@ -101,3 +101,15 @@ Base: o Renut do mgr-nx-deko (`ba1a837`) com os patches do Dragon Burst `patches
   diante pergunta se quer o Xenia nesse jogo. Prova (RP5): aviso com 2 crashes simulados do B1 → "Usar o Xenia" mudou
   só o `dbz1_user.toml`; no menu do B3 Xenia → `swordman_renderer = "xenos"`, Auto → `"renut"`. Nota de teste: um
   `am force-stop` com o jogo à frente conta como crash (não passa pelo onPause); os scripts de teste apagam o marcador.
+- `0203` (30/10 06:20-07:15): o RG Cube (Mali-G57, driver do sistema) encravava no 1.º frame do B3 com o Renut: o
+  compilador de shaders da Mali (`cmpbe_v2_compile_multiple_shaders`) nunca acabava o pipeline do FXAA do jogo
+  (lista de retângulos → `rectangle_list_gs`). Provado com qualquer GS nesse pipeline (até um GS que só repassa os 3
+  vértices, com a interface reduzida ou completa, com índices fixos). Correção: na Mali as listas de retângulos não
+  usam GS; o 4.º canto de cada retângulo é feito no CPU a partir dos vértices convertidos (a + b − c, por formato) e
+  desenhado como 2 triângulos indexados, na mesma ordem do GS (`swordman_renut_rect_lists` = auto | gs | cpu; auto =
+  cpu na Mali). Prova: no RP5 o título do B1 com `cpu` sai igual ao do GS (a 1.ª foto com o GS em arrays saiu
+  quadriculada: o GS por membro do `0201` fica); Cube a 60 fps no título e menus do B3, save/história/Kame/Raditz do
+  B1 (60 fps, GPU 11 ms), luta do B3 a 40 fps (GPU 22 ms a 720p: para o item 10). Regressão no RP5: B1 (save,
+  abertura, Raditz), B3 (luta, mapa do Dragon Universe), FATAL=0. Fotos `out/shots/reg_0203.png`,
+  `reg_cube_b1.png`, `g3c_2_s.png`, `g3r_map_s.png`. Diagnóstico: `swordman_renut_pipeline_log` (cada pipeline
+  antes de compilar).
