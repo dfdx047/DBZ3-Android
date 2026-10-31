@@ -1,10 +1,8 @@
-// Dragon Fury: widescreen nas telas mais largas que 16:9, com o Renut (como o Dragon Burst, renut 0118). So no B3 por
-// agora: no B1 nenhuma das funcoes de frustum faz a vista da luta, e a constante 16/9 em 0x82024B2C (a unica do
-// executavel) tambem decide o modo de video (escrita com outro valor, o ecra fica preto).
+// Dragon Fury: widescreen nas telas mais largas que 16:9, com o Renut (como o Dragon Burst, renut 0118), nos dois jogos.
 //
 // O jogo continua a desenhar o seu quadro de 1280x720, mas com uma vista mais larga (Hor+): a funcao de frustum
 // em perspetiva (l, r, b, t, zn, zf em f1-f6; B3 sub_8224F768, achada pelo padrao fsubs f12,f2,f1 / fsubs f10,f5,f6)
-// recebe l e r multiplicados por aspeto / (16/9). O present do Renut mostra o quadro nesse aspeto
+// recebe l e r multiplicados por aspeto / (16/9); no B1 e a escala horizontal da camara (sub_82086F88, mais abaixo). O present do Renut mostra o quadro nesse aspeto
 // (rex::graphics::SetGuestDisplayAspect, esticado na horizontal) e o 2D do jogo volta a forma certa pela callback
 // de overlay: cada desenho 2D fica com a largura multiplicada por (16/9) / aspeto, ao centro. Por cima de uma cena
 // 3D, o que cobre a largura toda (fundos, fades) estica ate as pontas e, em luta, o HUD de cima e de baixo vai para
@@ -32,20 +30,17 @@ REXCVAR_DEFINE_DOUBLE(dbz3_widescreen_aspect, 0.0, "DBZ3/Video",
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
 
 #if defined(DF_GAME_B3)
-#define DF_FRUSTUM sub_8224F768
-#define DF_FRUSTUM_IMP __imp__sub_8224F768
+REX_EXTERN(__imp__sub_8224F768);
 #else
-#define DF_FRUSTUM sub_821DE8A8
-#define DF_FRUSTUM_IMP __imp__sub_821DE8A8
+REX_EXTERN(__imp__sub_82086F88);
 #endif
-REX_EXTERN(DF_FRUSTUM_IMP);
 
 namespace {
 constexpr float kNative = 16.0f / 9.0f;
 
 // O aspeto em que o quadro e mostrado: 0 com o widescreen desligado, no Xenia ou numa tela de 16:9 ou mais estreita.
 float WideAspect() {
-#if defined(DF_RENUT) && defined(DF_GAME_B3)
+#if defined(DF_RENUT)
   if (!REXCVAR_GET(dbz3_widescreen) || !banjo::renut_gpu::Active()) return 0.0f;
   float a = float(REXCVAR_GET(dbz3_widescreen_aspect));
   if (!(a > 0.0f)) {
@@ -61,6 +56,10 @@ float WideAspect() {
 
 // Em luta (DragonFuryWideUpdate, a cada quadro): o HUD da luta vai para as pontas.
 std::atomic<bool> g_fight{false};
+// O aspeto deste quadro (DragonFuryWideUpdate). No B1 so em luta: os menus e a historia desenham a arte 4:3 com
+// moldura pela mesma funcao de perspetiva da luta (camaras no heap, 0x7010xxxx), e alarga-la desencontra-a da
+// moldura; fora da luta o B1 fica igual ao Original 16:9.
+std::atomic<float> g_aspect{0.0f};
 // Quadros desde a ultima vista 3D (o frustum): os ecras so de 2D (titulo, menus, cartas) ficam inteiros ao centro,
 // com faixas aos lados, como no PC; os fundos e fades so esticam ate as pontas por cima de uma cena 3D.
 std::atomic<uint32_t> g_frames_2d{0};
@@ -72,6 +71,13 @@ float LoadBeF(const uint8_t* p) {
   float f;
   std::memcpy(&f, &u, 4);
   return f;
+}
+
+void StoreBeF(uint8_t* p, float f) {
+  uint32_t u;
+  std::memcpy(&u, &f, 4);
+  u = __builtin_bswap32(u);
+  std::memcpy(p, &u, 4);
 }
 
 // O 2D do jogo: posicao em pixeis (screen space) nos primeiros 8 bytes de cada vertice. Sem vertices legiveis, o
@@ -131,8 +137,13 @@ bool dbz3_select_live();  // select_ext.cpp: a roda de personagens (tem o modelo
 
 // Chamado em todos os quadros (o frustum corre a cada vista 3D) e no Swap do Renut: o aspeto do present e a callback.
 void DragonFuryWideUpdate() {
-  const float a = WideAspect();
-  g_fight.store(a > 0.0f && DragonFuryFightNow(), std::memory_order_relaxed);
+  float a = WideAspect();
+  const bool fight = a > 0.0f && DragonFuryFightNow();
+#if !defined(DF_GAME_B3)
+  if (!fight) a = 0.0f;
+#endif
+  g_aspect.store(a, std::memory_order_relaxed);
+  g_fight.store(fight, std::memory_order_relaxed);
   g_frames_2d.fetch_add(1, std::memory_order_relaxed);
 #if defined(DF_GAME_B3)
   if (dbz3_select_live()) g_frames_2d.store(1000, std::memory_order_relaxed);
@@ -142,8 +153,9 @@ void DragonFuryWideUpdate() {
   if (!g_callback_set.exchange(true)) rex::graphics::SetOverlayPlacementCallback(Place);
 }
 
-REX_HOOK_RAW(DF_FRUSTUM) {
-  const float a = WideAspect();
+#if defined(DF_GAME_B3)
+REX_HOOK_RAW(sub_8224F768) {
+  const float a = g_aspect.load(std::memory_order_relaxed);
   if (g_frames_2d.load(std::memory_order_relaxed) < 1000) g_frames_2d.store(0, std::memory_order_relaxed);
   // So a vista principal (l/t de 16:9, simetrica); sombras e outras vistas ficam como estao.
   if (a > 0.0f && ctx.f4.f64 > 0.0 && std::fabs(ctx.f1.f64 + ctx.f2.f64) < 1e-4 &&
@@ -152,5 +164,24 @@ REX_HOOK_RAW(DF_FRUSTUM) {
     ctx.f1.f64 *= k;
     ctx.f2.f64 *= k;
   }
-  DF_FRUSTUM_IMP(ctx, base);
+  __imp__sub_8224F768(ctx, base);
 }
+#else
+// B1: a vista 3D (camara em r3) passa por sub_82086F88, que escreve a projecao em 0x8231F4A0 e a consome logo (mexer
+// na matriz depois nao muda nada). O campo [16] da camara e a escala horizontal (m00 = .../[16]): dividido por
+// aspeto/(16/9), m00 cai na mesma proporcao e m11 fica igual (Hor+), com o recorte do jogo a alargar junto.
+REX_HOOK_RAW(sub_82086F88) {
+  const float a = g_aspect.load(std::memory_order_relaxed);
+  g_frames_2d.store(0, std::memory_order_relaxed);
+  const uint32_t cam = ctx.r3.u32;
+  if (a > 0.0f && cam) {
+    uint8_t* p = base + cam + 16;
+    const float sx = LoadBeF(p);
+    StoreBeF(p, sx * (kNative / a));
+    __imp__sub_82086F88(ctx, base);
+    StoreBeF(p, sx);
+    return;
+  }
+  __imp__sub_82086F88(ctx, base);
+}
+#endif

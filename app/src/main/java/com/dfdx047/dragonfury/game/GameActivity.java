@@ -750,8 +750,11 @@ public class GameActivity extends SDLActivity {
         }
         // Dragon Fury (30/10): o Renut no Turnip de um Adreno 6xx (RP5, Turnip 26.3 R6) perdia a GPU no ecra titulo
         // (kgsl "GPU hang detected", VK_ERROR_DEVICE_LOST) em todos os niveis ate ao 3; com TU_DEBUG
-        // sysmem,nolrz,noubwc,syncdraw nao (o syncdraw sozinho, ou sem o syncdraw, caem). Falta uma barreira no Renut
-        // que o driver da Qualcomm tolera; ate ser achada, esse conjunto vai sempre nesse caso.
+        // sysmem,nolrz,noubwc,syncdraw nao (o syncdraw sozinho, ou sem o syncdraw, caem). 31/10: sao dois hangs. O do
+        // arranque (0,6 s, primeira submissao) e do UBWC: so o noubwc o tira. O do menu (~25 s) pede um draw de cada
+        // vez na GPU (syncdraw, ou os marcadores de GPU por draw); nao sao os geometry shaders nem as barreiras do
+        // Renut (precise/merge/lean), e o MrPurple T19 tem o mesmo. noubwc,syncdraw chega, mas com sysmem,nolrz a
+        // GPU fica mais leve (13,2 contra 14,5 ms na luta do B3), por isso o conjunto fica.
         boolean renutSync = a6xx && rendererIsRenut();
         if (renutSync) {
             flags |= TURNIP_SYSMEM | TURNIP_NOLRZ_UBWC;

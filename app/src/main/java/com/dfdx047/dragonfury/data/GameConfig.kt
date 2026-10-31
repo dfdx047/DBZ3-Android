@@ -144,9 +144,9 @@ data class GameConfig(
         "dbz3_widescreen" to wideOn,
     )
 
-    /** O widescreen so no B3 (widescreen.cpp), com o Renut e a escolha Widescreen (que guarda letterbox = true). */
+    /** O widescreen nos dois jogos (widescreen.cpp), com o Renut e a escolha Widescreen (que guarda letterbox = true). */
     val wideOn: Boolean get() = widescreen && wideAvailable && letterbox
-    val wideAvailable: Boolean get() = useRenut && AppPaths.game == Game.B3
+    val wideAvailable: Boolean get() = useRenut
 
     /** Imagem: 0 Original 16:9, 1 Esticar, 2 Widescreen. */
     val imageMode: Int get() = when {
