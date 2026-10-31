@@ -284,3 +284,43 @@ do RP5. Testes curtos a pedido do dono (ver que funciona e seguir; a abertura sa
   título, menu principal, roda, cutscenes e cartas do Dragon Universe, mapa. B1: três tentativas sem efeito na
   vista 3D (as funções de frustum não são as da luta; a matriz da câmara em 0x8231F460 não muda nada; escrever a
   constante 0x82024B2C deixa o ecrã preto, porque também decide o modo de vídeo). Fica pendente no B1.
+
+## Terceira volta (30/10 22:20 - 31/10 00:50 Lisboa, só o RP5): drivers e widescreen no B1
+
+- Drivers no RP5 (o resto do item 5). Testes curtos com `out/drvq.sh` (driver, jogo, renderizador, `TU_DEBUG` pelo
+  `cvars.txt`) e `out/boot.sh` (só o arranque, ou até ao menu com `MENU=1`). Cuidado nas medições: cada queda sobe o
+  modo automático do Turnip (até ao 3: sincronização total e profundidade em float) e as corridas seguintes ficam mais
+  lentas; voltar ao modo 0 na aba Drivers antes de medir.
+  - Normais verde-oliva do Xenia: não aparecem em nenhum Turnip (R6, MrPurple T19, R8, Rutabaga v3.2; B3 e B1, fotos
+    `q_*_Xenia_*`). Não há nada para bissetar; ficaram corrigidas pelos patches do SDK para os A6xx. O R8 e o Rutabaga
+    perdem a GPU no Xenia no modo 0 e o app sobe-os para o modo 1, onde correm certos (45 fps).
+  - Renut no Turnip do A650: são dois hangs diferentes. (1) No arranque, na primeira submissão (0,6 s): só o `noubwc`
+    o tira (`sysmem,syncdraw` e `nolrz,syncdraw` caem). (2) No menu, ~25 s depois: kgsl `status 00E59005/00E715E5`,
+    a fase de vértices não acaba (o mesmo do Zandatsu no MGR). Só passa com um draw de cada vez na GPU (`syncdraw`, ou
+    os marcadores de GPU por draw do patch renut/0014). Sem efeito: geometry shaders desligados ou rect lists no CPU,
+    `banjo_renut_precise_barriers`/`banjo_deko3d_barrier_merge`/`_lean` = false. A causa fina pede o snapshot do kgsl
+    descodificado (XML do Mesa) e o anel de comandos no device lost do Dragon Fury (hoje só o Zandatsu o escreve).
+  - Custo (B3 Practice, modo 0): `sysmem,nolrz,noubwc,syncdraw` (o padrão) 13,2 ms; `noubwc,syncdraw` 14,5; marcadores
+    em vez do syncdraw 13,3-15,0. Fica o padrão.
+
+  | driver (Renut, padrão do app) | B3 Practice | B1 Practice | Xenia |
+  |---|---|---|---|
+  | Turnip v26.3.0 R6 | 60,0 / 13,2-14,4 ms | (tabela de 30/10: 59,8 / 15,5) | certo |
+  | **MrPurple T19** (25.1.0, o do Zandatsu) | **60,0 / 8,6-9,2 ms** | **60,0 / 7,0-7,2 ms** | certo (B1 30 fps) |
+  | Turnip v26.0.0 R8 | 60,0 / 14,3-14,4 | - | certo no modo 1 |
+  | Rutabaga v3.2 | 60,0 / 14,3-14,8 | - | certo no modo 1 |
+  | sistema (Qualcomm) | 60,0 / 13,7-14,9 | 60,0 / 10,8-11,2 | certo |
+
+  O MrPurple T19 é o mais leve no RP5 com o Renut; o app não o traz nem o recomenda (o padrão continua o driver do
+  sistema). Está na pasta do Zandatsu (`drivers/turnip_mrpurple-T19-toasted.adpkg`).
+- Widescreen no B1 (`widescreen.cpp`). Quarta abordagem: procurar na memória, em luta, uma projeção pura com
+  m11/m00 = 16/9. Está em 0x8231F4A0 (m00 1,4837, m11 2,6378), escrita por `sub_82086F88` (a gémea em perspetiva de
+  `sub_82087390`, que é o 2D) a cada quadro e consumida logo: mexer na matriz depois não muda nada (era o que falhava
+  antes, com a 0x8231F460). A câmara vem em r3; o campo `[16]` é a escala horizontal: dividido por aspeto/(16/9), m00
+  cai na mesma proporção (1,4837 -> 1,1990 a 2,2:1) e m11 fica igual, e o recorte do jogo alarga junto. O 16:9 vem
+  da flag 0x82320775 e da constante 0x820007D4, não da 0x82024B2C (essa é a escolha do modo de vídeo,
+  `sub_8213EF48`). Os menus e a história do B1 desenham a arte 4:3 com moldura pela mesma função (câmaras no heap,
+  0x7010xxxx) e alargá-la desencontra a moldura: no B1 o widescreen vale só em luta; fora dela fica igual ao Original
+  16:9. Testado no RP5 com `wm size 1080x2400` (20:9, aspeto da tela, sem forçar): B1 Practice (vista larga, barras
+  nas pontas, tabelas ao centro, 60 fps), título, menu, história; B3 Practice a 20:9. Regressão a 16:9 nos dois.
+  A opção Widescreen aparece agora nos dois jogos (launcher e menu do jogo).

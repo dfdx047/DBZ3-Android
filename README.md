@@ -26,7 +26,7 @@ and a GPU path rewritten for mobile GPUs.
 - Runs with the **system driver** on Adreno and Mali. **Turnip** also works well (optional).
 - **Tag Team** mode and **online** Duel (1P vs 2P) from the PC version, and its **Dragon HUB** (v1.5.5.5): quick battle,
   tower, survival, kumite, Hero Mode and the **Gateway** to the Budokai 2 / Infinite World stories with your own PS2 ISO.
-- **Widescreen** in Budokai 3 on screens wider than 16:9 (Renut): wider camera, fight HUD at the edges.
+- **Widescreen** on screens wider than 16:9 (Renut; Budokai 1 in fights): wider camera, fight HUD at the edges.
 - Launcher with **mods**, **HD texture packs**, **cheats**, driver manager, per-device performance
   options, touch controls editor and log export.
 - English, Portuguese (Brazil) and Spanish — picked from the phone's language automatically.
@@ -169,7 +169,7 @@ Details in [`docs/ESTADO.md`](docs/ESTADO.md).
 
 - More optimization for Mali GPUs (own shaders for the game's ~33 shaders, native renderer).
 - Fix the occasional black flash in menus on Mali.
-- More cheats (capsules, Zeni, stages) and widescreen in Budokai 1.
+- More cheats (capsules, Zeni, stages).
 
 ## Credits
 
