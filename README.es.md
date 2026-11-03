@@ -54,7 +54,8 @@ Exynos recientes) deberían ir a velocidad completa o cerca. Se agradecen report
 
 ## Instalación
 
-1. Descarga el `DragonFury-*.apk` más reciente en [Releases](../../releases) e instálalo.
+1. Descarga el `DragonFury-*.apk` más reciente en [Releases](../../releases) e instálalo. ¿Actualizas? Instálalo sobre
+   la versión antigua, sin desinstalar: partidas, opciones y el juego importado se conservan.
 2. Copia el `.iso` de tu disco Budokai HD Collection (USA) al dispositivo.
 3. Abre Dragon Fury → **Importar .iso** → elige el archivo. Solo se extraen de la imagen el
    los ejecutables de Budokai 3 y Budokai 1 y sus datos (unos 2,5 GB, unos minutos); el ejecutable se comprueba por
@@ -126,6 +127,15 @@ Los combates por equipos de la versión de PC: **TAG TEAM** aparece en el menú 
 equipo y cambia de luchador durante el combate con **Back/Select** (el botón "cambiar" de los
 controles táctiles). Se puede desactivar en **Ajustes**.
 
+## Gateway
+
+**HUB → Gateway** abre la leyenda de Mr. Satán (Budokai 1) y las historias de Budokai 2 e Infinite World, con sonido,
+usando tus discos de PS2. Importa cada `.iso` en **Ajustes → Gateway**; ningún juego de PS2 viene con la app. Probado con
+los discos USA (SLUS_205.91, SLUS_207.79, SLUS_218.42).
+
+Aún no en Android: la saga de Namek de Vegeta, la Fusión Fallida (Fat Gotenks) y las absorciones de Super Buu piden el
+`mods/_roster` del Mod Kit de PC, y los vídeos de Infinite World no se reproducen (el modo sigue con subtítulos).
+
 ## Online (1P vs 2P)
 
 1. Los dos jugadores necesitan **la misma versión del APK de Dragon Fury** (Android solo juega con
@@ -169,7 +179,8 @@ Detalles en [`docs/ESTADO.md`](docs/ESTADO.md).
 
 ## Próximos pasos
 
-- Más optimización para GPU Mali (shaders propios para los ~33 shaders del juego, renderizador nativo).
+- Más optimización para GPU Mali.
+- El resto del Gateway en Android: modos del Mod Kit de PC y vídeos de Infinite World.
 - Corregir el parpadeo negro ocasional en los menús en Mali.
 - Más trucos (cápsulas, Zeni, escenarios).
 

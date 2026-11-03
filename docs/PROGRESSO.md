@@ -324,3 +324,31 @@ do RP5. Testes curtos a pedido do dono (ver que funciona e seguir; a abertura sa
   16:9. Testado no RP5 com `wm size 1080x2400` (20:9, aspeto da tela, sem forçar): B1 Practice (vista larga, barras
   nas pontas, tabelas ao centro, 60 fps), título, menu, história; B3 Practice a 20:9. Regressão a 16:9 nos dois.
   A opção Widescreen aparece agora nos dois jogos (launcher e menu do jogo).
+
+## HUB e Gateway no RP5 e no Cube (02/11 21:15-23:00 Lisboa, ISOs USA de PS2)
+
+Teste a pedido do dono, com as ISOs USA de Budokai (SLUS_205.91), Budokai 2 (SLUS_207.79) e Infinite World (SLUS_218.42).
+O Cube ainda estava com o APK de antes do merge (sem HUB). Correções em `patches/game/0006` e `0007`, mais `dbz3_aspect`
+no `GameConfig.kt` e `aaudio` no CMake.
+
+| achado | efeito | correção |
+|---|---|---|
+| Som dos modos de PS2 só em Windows (winmm) e a mistura do B3 é calada nos modos | Dragon World e Dragon Mission mudos no Android | `TocarPcm` por AAudio em voz, ADX, música e efeitos; pausa com `g_dragonfury_pause` |
+| Leitor pede `data_en`/`data_uk`/`adx_jp`; o disco USA só traz `DATA_US`/`ADX_US` | Lenda sem imagens (`charlas -, 0 imagenes`), títulos do Dragon World em falta, ADX de 0 s | apelidos em `AfsPs2::Abrir` e em `LeerLeyendaSatan` |
+| Launcher não gravava `dbz3_aspect` e `GameArea` só tinha uma escala | Cube (1:1): HUB espremido, fila HUB sobre Options, texto fora do balão | `dbz3_aspect` no toml; `Area` com `sx`/`sy`; `GameAreaUniforme` nas telas próprias do B2 |
+| "Pulsa A e escolhe a ISO" (seletor de PC, no Android não faz nada) | jogador fica sem saída | no Android aponta para Configurações -> Gateway |
+| Textos pedem o Mod Kit de PC | sem caminho no Android | no Android dizem que ainda não há |
+
+Limitações que ficam no Android:
+
+- Saga de Namek, Fat Gotenks e absorções do Buu pedem o `mods/_roster` do Mod Kit de PC: em cinza, com a mensagem.
+- Vídeos SFD do Infinite World: o reprodutor (`video_sfd.cpp`) é só de Windows; o modo segue com legendas.
+- Vozes do B1 USA vêm do `ADX_US` com os índices do disco europeu: números de entrada não conferidos a ouvido.
+- Nave de Babidi: fechada até o desejo a Shenron no Dragon World (como em B2); não foi aberta nestes testes.
+
+Resultados finais (build `versionCode` 36, 0.7.0):
+
+- RP5 e Cube: HUB, Lenda (título, intro, luta), Dragon World (história, tabuleiro, escolha de aliado; no RP5 também andar no tabuleiro) e Dragon Mission (mapa, Training No.1, luta). Nenhuma luta do Dragon World foi aberta nestes testes.
+- Budokai 1 abre com o toml novo no RP5, 60 fps no título. O Cube abre o menu principal do B3 a 60 fps depois de instalar por cima.
+- Cube: `VK_ERROR_DEVICE_LOST` uma vez (02/11 22:46, Dueling, driver do sistema, a gravar com `screenrecord`), não repetiu em Quick Battle, Lenda, Dragon World e Dragon Mission. O launcher já tinha registado o mesmo erro em 30/10 no Cube. Causa não investigada.
+- Instalar por cima: mesmo certificado da 0.6.13 (`1a7325cf...`) e `versionCode` 36 > 29. `adb install -r` sobre a 35 nos dois aparelhos. A passagem 0.6.13 -> 0.7.0 com save foi testada em 30/10 no Cube e não foi repetida neste build.

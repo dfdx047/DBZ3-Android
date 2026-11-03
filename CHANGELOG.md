@@ -3,6 +3,56 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.7.0 — 2026-11-02
+
+Installs over 0.6.x without uninstalling: same package and signature, higher version code. Saves,
+options and the imported game stay.
+
+### Budokai 1 and the new renderer
+- **Budokai 1 HD** in the same app: one card per game on the Home tab, one disc import (`.iso` or
+  folder) brings both games. Separate saves and options.
+- **Renut**, a native renderer (the Xbox 360's Direct3D translated to Vulkan), is the default on
+  every GPU in both games. Snapdragon 865 at 720p: fights and campaign at 60 FPS with 11–14 ms of
+  GPU (33–50 FPS before). Mali-G57 (RG Cube): 60 FPS in fights and on the Dragon Universe map. The
+  old renderer (Xenia) stays as an option in Performance and in the in-game menu.
+- Game effects (bloom, depth of field, FXAA) with an option in the launcher and in the in-game menu.
+- "Screen" resolution (follows the device's screen) and FSR 1 up to 720p.
+- Frame rate (30 / 60 / 120 interpolated) in the in-game menu too; 120 only shows on 120 Hz screens.
+- **Widescreen** on Renut in both games (Budokai 1: fights only): on screens wider than 16:9 the
+  camera shows more to the sides and the fight HUD goes to the edges.
+
+### PC port v1.5.5.5 (Budokai 3)
+- **Dragon HUB** in the main menu: Tag Team with AI, Online, quick battle, tower, survival, kumite,
+  ranking, laboratory, Mission 100 and Hero Mode, plus tutorials for the new modes (both with a
+  switch in Settings).
+- **Gateway** (HUB → Gateway): Mr. Satan's legend and the Budokai 2 and Infinite World stories with
+  your own PS2 ISO, imported in Settings → Gateway.
+- **Gateway sound on Android**: voices, ADX, music and effects of the PS2 modes play through AAudio
+  and pause with the game. On the PC port they exist only on Windows, so these modes were silent.
+- **USA PS2 discs**: Budokai (SLUS_205.91) and Budokai 2 (SLUS_207.79) only carry `DATA_US.AFS` and
+  `ADX_US.AFS`. They are now read as fallbacks, which fixes the legend without images, the missing
+  Dragon World titles and the empty ADX tracks.
+- **Non-16:9 screens (RG Cube, 1:1)**: the launcher now passes the Image option to the HUB and
+  Gateway layer. The HUB is no longer squeezed, its row no longer sits on top of Options, text stays
+  in its bubble, and the Budokai 2 screens keep their proportions.
+- Gateway messages on Android point to Settings → Gateway instead of the PC's ISO picker, and say
+  when something depends on the PC Mod Kit.
+
+### Known limits of the Gateway on Android
+- Vegeta's Namek saga, Failed Fusion (Fat Gotenks) and Super Buu's absorptions need the
+  `mods/_roster` from the PC Mod Kit: greyed out, with a message.
+- Infinite World's SFD videos don't play (the player is Windows only); the mode continues with
+  subtitles.
+
+### Other
+- Touch controls switch between menus and fights by themselves in Budokai 1 too.
+- The game pauses when it's off screen (no drawing, sound or background work).
+- If the game closes on Renut: a notice with "Export logs" and the issues link; only after 2 closes
+  in a row the app asks whether to use the emulated mode.
+- Turnip on Adreno 6xx with Renut: the app turns on the mode that avoids the GPU loss on the title
+  screen.
+- Fixed: Raditz's skin and striped shadows in Budokai 1 (the Xbox 360 polygon offset on Renut).
+
 ## 0.6.18 — 2026-10-18
 
 ### Touch controls

@@ -45,7 +45,7 @@ android {
         // estao todos disponiveis no bionic.
         minSdk = 30
         targetSdk = 35
-        versionCode = 35
+        versionCode = 36
         versionName = "0.7.0"
 
         ndk {

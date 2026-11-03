@@ -54,7 +54,8 @@ Exynos) are expected to run it at or near full speed. Reports are welcome.
 
 ## Installation
 
-1. Download the latest `DragonFury-*.apk` from [Releases](../../releases) and install it.
+1. Download the latest `DragonFury-*.apk` from [Releases](../../releases) and install it. Updating? Install it over
+   the old version without uninstalling: saves, options and the imported game stay.
 2. Copy the `.iso` of your Budokai HD Collection (USA) disc to your device.
 3. Open Dragon Fury → **Import .iso** → pick the file. Only the Budokai 3 and Budokai 1 executables and their data
    are extracted from the image (about 2.5 GB, a few minutes); the executable is checked by
@@ -125,6 +126,15 @@ Team battles from the PC version: **TAG TEAM** appears in the main menu. Pick yo
 fighters during the fight with **Back/Select** (the "swap" button on the touch controls).
 Can be turned off in **Settings**.
 
+## Gateway
+
+**HUB → Gateway** plays Mr. Satan's legend (Budokai 1) and the Budokai 2 and Infinite World stories, with sound, using
+your own PS2 discs. Import each `.iso` in **Settings → Gateway**; no PS2 game comes with the app. Tested with the USA
+discs (SLUS_205.91, SLUS_207.79, SLUS_218.42).
+
+Not on Android yet: Vegeta's Namek saga, Failed Fusion (Fat Gotenks) and Super Buu's absorptions need the `mods/_roster`
+from the PC Mod Kit, and Infinite World's videos don't play (the mode continues with subtitles).
+
 ## Online (1P vs 2P)
 
 1. Both players must use **the same Dragon Fury APK version** (Android plays with Android only; it
@@ -167,7 +177,8 @@ Details in [`docs/ESTADO.md`](docs/ESTADO.md).
 
 ## Roadmap
 
-- More optimization for Mali GPUs (own shaders for the game's ~33 shaders, native renderer).
+- More optimization for Mali GPUs.
+- The rest of the Gateway on Android: PC Mod Kit modes and Infinite World's videos.
 - Fix the occasional black flash in menus on Mali.
 - More cheats (capsules, Zeni, stages).
 
