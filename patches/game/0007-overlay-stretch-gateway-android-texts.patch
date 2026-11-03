@@ -1,0 +1,205 @@
+Dragon Fury (2026-11-02): the game's overlay (HUB, Gateway, Tag Team...) with the image stretched to a non 16:9 screen (Cube, 1:1):
+one scale per axis in GameArea, and a uniform area for the Budokai 2 screens. On Android the Gateway points to Settings > Gateway
+(no file picker in the game) and says that the Mod Kit modes are not available.
+
+diff --git a/src/hub_menu.cpp b/src/hub_menu.cpp
+index 3652eaf..0f49988 100644
+--- a/src/hub_menu.cpp
++++ b/src/hub_menu.cpp
+@@ -134,11 +134,19 @@ const Texts kHelps[kEntries] = {
+     {"Explora los escenarios y elige dónde luchar.", "Browse the stages and pick where to fight.",
+      "Parcours les arènes et choisis où combattre.", "Sieh dir die Arenen an und wähle, wo du kämpfst.",
+      "Esplora le arene e scegli dove combattere."},
++#if defined(__ANDROID__)   // Dragon Fury: a ISO importa-se no launcher (Configuracoes > Gateway)
++    {"Historias y misiones de Budokai 2 e Infinite World. Algunas necesitan tu copia del juego: impórtala en la app, Ajustes > Gateway.",
++     "Stories and missions from Budokai 2 and Infinite World. Some need your copy of the game: import it in the app, Settings > Gateway.",
++     "Histoires et missions de Budokai 2 et Infinite World. Certaines demandent ta copie du jeu : importe-la dans l'appli, Réglages > Gateway.",
++     "Geschichten und Missionen aus Budokai 2 und Infinite World. Manche brauchen deine Spielkopie: importiere sie in der App, Einstellungen > Gateway.",
++     "Storie e missioni di Budokai 2 e Infinite World. Alcune richiedono la tua copia del gioco: importala nell'app, Impostazioni > Gateway."},
++#else
+     {"Historias y misiones de Budokai 2 e Infinite World. Algunas necesitan tu copia del juego: elige su ISO en la campaña (botón A) o en el lanzador (pestaña Juego).",
+      "Stories and missions from Budokai 2 and Infinite World. Some need your copy of the game: pick its ISO in the campaign (A button) or in the launcher (Game tab).",
+      "Histoires et missions de Budokai 2 et Infinite World. Certaines demandent ta copie du jeu : choisis son ISO dans la campagne (bouton A) ou dans le lanceur (onglet Jeu).",
+      "Geschichten und Missionen aus Budokai 2 und Infinite World. Manche brauchen deine Spielkopie: wähle ihre ISO in der Kampagne (A-Taste) oder im Launcher (Reiter Spiel).",
+      "Storie e missioni di Budokai 2 e Infinite World. Alcune richiedono la tua copia del gioco: scegli la sua ISO nella campagna (tasto A) o nel launcher (scheda Gioco)."},
++#endif
+     {"Pruebas cortas para jugar entre combate y combate.", "Short challenges to play between fights.",
+      "Des épreuves courtes à jouer entre deux combats.", "Kurze Aufgaben für zwischen den Kämpfen.",
+      "Prove brevi da giocare tra uno scontro e l'altro."},
+diff --git a/src/ingame/game_style.cpp b/src/ingame/game_style.cpp
+index e405bdf..3d57514 100644
+--- a/src/ingame/game_style.cpp
++++ b/src/ingame/game_style.cpp
+@@ -93,6 +93,21 @@ Imagen GuestImage(const ImGuiIO& io) {
+   return g;
+ }
+ 
++Area GameAreaUniforme(const ImGuiIO& io) {
++  const Imagen g = GuestImage(io);
++  const ImVec2 sz = g.Size();
++  float h = sz.y, w = h * 4.0f / 3.0f;
++  if (w > sz.x) {
++    w = sz.x;
++    h = w * 0.75f;
++  }
++  Area a;
++  a.p0 = ImVec2(g.p0.x + (sz.x - w) * 0.5f, g.p0.y + (sz.y - h) * 0.5f);
++  a.p1 = ImVec2(a.p0.x + w, a.p0.y + h);
++  a.s = a.sx = a.sy = h / 900.0f;
++  return a;
++}
++
+ Area GameArea(const ImGuiIO& io) {
+   // S1-F06: el area 4:3 de los menus del juego es el centro de su imagen 16:9 (3/4 del ancho, todo el alto)
+   Area a;
+@@ -103,9 +118,23 @@ Area GameArea(const ImGuiIO& io) {
+     w = sz.x;
+     h = w * 0.75f;
+   }
++  // Dragon Fury: "stretch" estica a imagem 16:9 inteira para a janela (no Cube, 1:1): as coordenadas do jogo seguem-na, com uma
++  // escala em cada eixo; o tamanho de letra e de imagens (s) fica na menor, para caber onde o jogo desenha as suas caixas.
++  static const bool baja_res = dbz3::settings::LowResEnabled();
++  if (dbz3::settings::AspectMode() == "stretch" && sz.x > 0 && sz.y > 0) {
++    w = baja_res ? sz.x : sz.x * 0.75f;
++    h = sz.y;
++    a.p0 = ImVec2(g.p0.x + (sz.x - w) * 0.5f, g.p0.y);
++    a.p1 = ImVec2(a.p0.x + w, a.p0.y + h);
++    a.sx = w / 1200.0f;
++    a.sy = h / 900.0f;
++    a.s = std::min(a.sx, a.sy);
++    return a;
++  }
+   a.p0 = ImVec2(g.p0.x + (sz.x - w) * 0.5f, g.p0.y + (sz.y - h) * 0.5f);
+   a.p1 = ImVec2(a.p0.x + w, a.p0.y + h);
+   a.s = h / 900.0f;
++  a.sx = a.sy = a.s;
+   return a;
+ }
+ 
+diff --git a/src/ingame/game_style.h b/src/ingame/game_style.h
+index 7c2f228..2c710b3 100644
+--- a/src/ingame/game_style.h
++++ b/src/ingame/game_style.h
+@@ -18,9 +18,13 @@ namespace dbz3::ingame::style {
+ struct Area {
+   ImVec2 p0, p1;
+   float s = 1.0f;   // 1.0 = area de 900 px de alto
+-  ImVec2 At(float x, float y) const { return ImVec2(p0.x + x * s, p0.y + y * s); }   // en px de 1200x900
++  float sx = 1.0f, sy = 1.0f;   // Dragon Fury: com "stretch" a imagem nao tem a mesma escala em X e Y (tela 1:1)
++  ImVec2 At(float x, float y) const { return ImVec2(p0.x + x * sx, p0.y + y * sy); }   // en px de 1200x900
+ };
+ Area GameArea(const ImGuiIO& io);
++// Dragon Fury: area 4:3 sem deformar, centrada na janela, para as telas inteiramente proprias (tabuleiro de B2): com "stretch"
++// numa janela 1:1, GameArea segue a imagem esticada do jogo, mas estas telas nao tem nada do jogo por baixo.
++Area GameAreaUniforme(const ImGuiIO& io);
+ // S1-F06: rectangulo de la imagen del juego (16:9) en la ventana, como la coloca el presentador del SDK
+ // (rexglue-sdk ui/presenter.cpp, present_letterbox = dbz3_aspect "keep"): cabe entera, con bandas arriba y abajo en
+ // una ventana mas alta que 16:9 (4:3, 16:10, Steam Deck) y a los lados en una mas ancha; con "stretch" llena la
+diff --git a/src/pasarela.cpp b/src/pasarela.cpp
+index 650f79a..9fac6f4 100644
+--- a/src/pasarela.cpp
++++ b/src/pasarela.cpp
+@@ -3461,8 +3461,13 @@ const char* Motivo() {
+   }
+   // pulsar A en la fila abre el dialogo para elegir la ISO (hub_menu.cpp Launch); el aviso sigue el proceso
+   static thread_local std::string s;
++#if defined(__ANDROID__)   // Dragon Fury: a ISO importa-se no launcher
++  s = T::T("Necesita tu copia de Dragon Ball Z Budokai (PS2). Impórtala en la app: Ajustes > Gateway.",
++           "Needs your copy of Dragon Ball Z Budokai (PS2). Import it in the app: Settings > Gateway.");
++#else
+   s = T::T("Necesita tu copia de Dragon Ball Z Budokai (PS2). Pulsa A y elige su ISO: no se copia nada.",
+            "Needs your copy of Dragon Ball Z Budokai (PS2). Press A and pick its ISO: nothing is copied.");
++#endif
+   if (const std::string av = AvisoEleccionPs2(); !av.empty()) s += "\n" + av;
+   return s.c_str();
+ }
+diff --git a/src/pasarela_misiones.cpp b/src/pasarela_misiones.cpp
+index 8ee2671..aa7c8af 100644
+--- a/src/pasarela_misiones.cpp
++++ b/src/pasarela_misiones.cpp
+@@ -515,8 +515,13 @@ bool Listo(int m, std::string* motivo) {
+                       "Needs your copy of Dragon Ball Z Budokai (PS2).");
+     if (HiloSaga(*d).empty()) return no("Tu ISO de Budokai 1 no trae la historia de Namek.", "Your Budokai 1 ISO has no Namek story.");
+     if (IdPort("b1", std::to_string(kZarbonB1)) < 0)
++#if defined(__ANDROID__)   // Dragon Fury: o Mod Kit so existe no PC
++      return no("Necesita a Zarbon del Mod Kit de PC: aún no disponible en Android.",
++                "Needs Zarbon from the PC Mod Kit: not available on Android yet.");
++#else
+       return no("Importa a Zarbon de Budokai 1 con el Mod Kit (Importar personaje > Budokai 1).",
+                 "Import Zarbon from Budokai 1 with the Mod Kit (Import character > Budokai 1).");
++#endif
+   }
+   if (m == kNave && !nave::Disponible())
+     return no("Necesita tu copia de Dragon Ball Z Budokai 2 (PS2).",
+@@ -530,8 +535,13 @@ bool Listo(int m, std::string* motivo) {
+   if (m == kBuu) {
+     for (int k = 1; k < kNAbsorciones; ++k) {
+       if (TrajeBu(k) < 0)
++#if defined(__ANDROID__)
++        return no("Necesita los trajes de Bu del Mod Kit de PC: aún no disponible en Android.",
++                  "Needs the Buu costumes from the PC Mod Kit: not available on Android yet.");
++#else
+         return no("Instala los trajes de Bu absorbido (Mod Kit: mods de mod center hd/campanas/trajes_bu).",
+                   "Install the absorbed Buu costumes (Mod Kit: mods in mod center hd/campanas/trajes_bu).");
++#endif
+     }
+   }
+   if (m == kIW && !IW()) {
+@@ -540,8 +550,13 @@ bool Listo(int m, std::string* motivo) {
+               "Needs your copy of Dragon Ball Z Infinite World (PS2).");
+   }
+   if (m == kGotenks && IdGotenksGordo() < 0)
++#if defined(__ANDROID__)
++    return no("Necesita a Gotenks gordo del Mod Kit de PC: aún no disponible en Android.",
++              "Needs Fat Gotenks from the PC Mod Kit: not available on Android yet.");
++#else
+     return no("Importa a Gotenks gordo de Budokai 2 con el Mod Kit (Importar personaje > Budokai 2).",
+               "Import Fat Gotenks from Budokai 2 with the Mod Kit (Import character > Budokai 2).");
++#endif
+   if (motivo) motivo->clear();
+   return true;
+ }
+@@ -1964,13 +1979,23 @@ class Panel : public rex::ui::ImGuiDialog {
+     if (falta >= 0) {
+       texto += "\n";
+       const std::string av = AvisoEleccionPs2();
++#if defined(__ANDROID__)   // Dragon Fury: a ISO importa-se no launcher
++      texto += T::T("Impórtala en la app: Ajustes > Gateway.", "Import it in the app: Settings > Gateway.");
++      (void)av;
++#else
+       texto += av.empty() ? T::T("Pulsa A para elegir su ISO (no se copia nada).", "Press A to pick its ISO (nothing is copied).")
+                           : av.c_str();
++#endif
+     }
+     S::Speech(dl, a.At(60, 640), a.At(1140, 840), a.s, texto.c_str(), 0.12f);
+-    Ayuda(dl, a, {{"A", falta >= 0 ? T::T("Elegir ISO", "Pick ISO") : T::T("Elegir", "Select")},
++#if defined(__ANDROID__)
++    const bool sin_selector = true;   // Dragon Fury: sem seletor de ficheiros dentro do jogo
++#else
++    const bool sin_selector = false;
++#endif
++    Ayuda(dl, a, {{"A", falta >= 0 && !sin_selector ? T::T("Elegir ISO", "Pick ISO") : T::T("Elegir", "Select")},
+                   {"B", T::T("Volver", "Back")}});
+-    if ((pressed & (kA | kStart)) && falta >= 0) ElegirIsoPs2EnSegundoPlano(falta);
++    if ((pressed & (kA | kStart)) && falta >= 0 && !sin_selector) ElegirIsoPs2EnSegundoPlano(falta);
+     if (pressed & kB) {
+       REXLOG_INFO("dbz3 misiones: fuera de la pasarela");
+       return Publicar(kNada);
+@@ -2498,7 +2523,7 @@ class Panel : public rex::ui::ImGuiDialog {
+     int c[14] = {};
+     if (dbz3::ingame::tutorial::Mostrar("dragon_world")) pressed = 0;   // F3
+     b2::Mantenidos(g_pad.load());
+-    const int r = b2::Dibujar(dl, a, t, pressed, g_auto.load(), c);
++    const int r = b2::Dibujar(dl, S::GameAreaUniforme(ImGui::GetIO()), t, pressed, g_auto.load(), c);
+     if (r == 1) return Salir();
+     if (r == 2) CombateTablero(c);
+   }
+@@ -2507,7 +2532,7 @@ class Panel : public rex::ui::ImGuiDialog {
+     int c[7] = {};   // {jugador, rival, mapa, vida, tiempo, prueba, P2 humano}
+     if (dbz3::ingame::tutorial::Mostrar("nave_babidi")) pressed = 0;   // F3
+     nave::Mandos(ent1_, ent2_, dos_mandos_);   // entrada por mando (1P/2P y rueda del 2P)
+-    const int r = nave::Dibujar(dl, a, t, pressed, g_auto.load(), c);
++    const int r = nave::Dibujar(dl, S::GameAreaUniforme(ImGui::GetIO()), t, pressed, g_auto.load(), c);
+     if (r == 1) return Salir();
+     if (r == 2) CombateNave(c);
+   }

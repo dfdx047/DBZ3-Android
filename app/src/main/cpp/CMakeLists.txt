@@ -261,6 +261,7 @@ target_link_libraries(game_b3 PRIVATE
     rex::gpu-xenos
     android
     log
+    aaudio   # som dos modos de PS2 do Gateway (pasarela_b1.cpp)
 )
 
 # Acrescenta windowed_app_main_sdl.cpp (com o SDL_main do Android) e

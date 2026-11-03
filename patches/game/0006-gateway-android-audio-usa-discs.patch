@@ -1,0 +1,151 @@
+Dragon Fury (2026-11-02): Gateway on Android: PS2 voices, ADX, music and effects through AAudio (the PC uses winmm only);
+USA discs of Budokai 1 and 2: DATA_US.AFS and ADX_US.AFS as fallbacks for the European names.
+
+diff --git a/src/pasarela_b1.cpp b/src/pasarela_b1.cpp
+index 0d3074e..be33678 100644
+--- a/src/pasarela_b1.cpp
++++ b/src/pasarela_b1.cpp
+@@ -45,9 +45,71 @@
+ #pragma comment(lib, "winmm.lib")
+ #endif
+ 
++#if defined(__ANDROID__)
++#include <aaudio/AAudio.h>
++#include <chrono>
++#include <functional>
++extern std::atomic<bool> g_dragonfury_pause;   // app/src/main/cpp/android_hooks.cpp
++#endif
++
+ namespace dbz3::pasarela {
+ namespace {
+ 
++#if defined(__ANDROID__)
++// Dragon Fury: o som dos modos de PS2 no Android. No PC e winmm (PlaySound/waveOut), uma saida por som e fora da mistura do
++// jogo; aqui e o mesmo com um stream AAudio por som. vivo() falso corta. Pausa junto com o jogo (menu ou app em segundo plano).
++void TocarPcm(const int16_t* pcm, size_t muestras, int hz, int canales, bool bucle, const std::function<bool()>& vivo) {
++  if (!pcm || !muestras || hz <= 0) return;
++  AAudioStreamBuilder* b = nullptr;
++  if (AAudio_createStreamBuilder(&b) != AAUDIO_OK) return;
++  AAudioStreamBuilder_setFormat(b, AAUDIO_FORMAT_PCM_I16);
++  AAudioStreamBuilder_setChannelCount(b, canales);
++  AAudioStreamBuilder_setSampleRate(b, hz);
++  AAudioStreamBuilder_setUsage(b, AAUDIO_USAGE_GAME);
++  AAudioStreamBuilder_setContentType(b, AAUDIO_CONTENT_TYPE_MUSIC);
++  AAudioStream* st = nullptr;
++  const aaudio_result_t r = AAudioStreamBuilder_openStream(b, &st);
++  AAudioStreamBuilder_delete(b);
++  if (r != AAUDIO_OK || !st) {
++    REXLOG_WARN("dbz3 pasarela: AAudio: {}", AAudio_convertResultToText(r));
++    return;
++  }
++  AAudioStream_requestStart(st);
++  const size_t total = muestras / size_t(canales);
++  size_t pos = 0;
++  bool parado = false, acabo = false;
++  while (vivo()) {
++    if (g_dragonfury_pause.load()) {
++      if (!parado) AAudioStream_requestPause(st);
++      parado = true;
++      std::this_thread::sleep_for(std::chrono::milliseconds(50));
++      continue;
++    }
++    if (parado) AAudioStream_requestStart(st);
++    parado = false;
++    if (pos >= total) {
++      if (!bucle) {
++        acabo = true;
++        break;
++      }
++      pos = 0;
++    }
++    const auto n = AAudioStream_write(st, pcm + pos * size_t(canales), int32_t(std::min<size_t>(total - pos, 4800)), 100000000LL);
++    if (n < 0) {   // AAUDIO_ERROR_DISCONNECTED: mudou a saida (fones); este som acaba aqui
++      REXLOG_WARN("dbz3 pasarela: AAudio: {}", AAudio_convertResultToText(n));
++      break;
++    }
++    pos += size_t(n);
++  }
++  if (acabo) {   // deixa tocar o que ficou no buffer
++    const int32_t resto = AAudioStream_getBufferSizeInFrames(st);
++    std::this_thread::sleep_for(std::chrono::milliseconds(int64_t(resto) * 1000 / hz + 20));
++  }
++  AAudioStream_requestStop(st);
++  AAudioStream_close(st);
++}
++#endif
++
+ constexpr uint32_t kSector = 2048;
+ constexpr int kSatan = 21, kModoSatan = 3, kRec = 128, kCombates = 11;
+ // B1 -> B3 (importar.B1_DONOR)
+@@ -381,6 +443,7 @@ bool LeerLeyendaSatan(const std::filesystem::path& path, const std::string& lang
+   // imagenes en el idioma del juego (o el ingles, o el primer DATA_*.AFS)
+   std::string afs_path = iso.Find(SufijoAfs(lang));
+   if (afs_path.empty()) afs_path = iso.Find("data_en.afs");
++  if (afs_path.empty()) afs_path = iso.Find("data_us.afs");   // Dragon Fury: disco USA (SLUS_205.91), so ingles
+   Afs afs;
+   if (afs_path.empty() || !afs.Open(iso, afs_path)) return true;   // combates sin imagenes: el modo usa textos propios
+   const int banco = BancoCharlas(afs);
+@@ -484,7 +547,8 @@ void OirVozB1(const std::filesystem::path& iso_path, std::vector<int> entradas,
+   std::thread([iso_path, entradas = std::move(entradas), volumen, turno] {
+     Iso iso;
+     Afs afs;
+-    const std::string p = iso.Open(iso_path) ? iso.Find("adx_jp.afs") : std::string();
++    std::string p = iso.Open(iso_path) ? iso.Find("adx_jp.afs") : std::string();
++    if (p.empty() && iso.Open(iso_path)) p = iso.Find("adx_us.afs");   // Dragon Fury: disco USA de B1 (vozes em ingles)
+     if (p.empty() || !afs.Open(iso, p)) return;
+     std::vector<int16_t> pcm;
+     int hz = 0, marca = -1;
+@@ -508,6 +572,10 @@ void OirVozB1(const std::filesystem::path& iso_path, std::vector<int> entradas,
+                 hz, volumen > 0 ? "" : " (sin sonido: silencio o volumen 0)");
+     if (pcm.empty() || volumen <= 0 || turno != g_voz_turno.load()) return;
+     for (int16_t& x : pcm) x = int16_t(std::clamp(int(float(x) * volumen), -32768, 32767));
++#if defined(__ANDROID__)
++    TocarPcm(pcm.data(), pcm.size(), hz, 1, false, [&] { return turno == g_voz_turno.load(); });
++    return;
++#endif
+     // WAV PCM 16 bits mono
+     const uint32_t datos = uint32_t(pcm.size() * 2);
+     std::vector<uint8_t> w(44 + datos);
+@@ -571,6 +639,8 @@ void OirAdxPs2(const std::filesystem::path& juego, const std::string& afs, int e
+       waveOutUnprepareHeader(wo, &h, sizeof(h));
+     }
+     waveOutClose(wo);
++#elif defined(__ANDROID__)
++    TocarPcm(pcm.data(), pcm.size(), hz, 1, false, [&] { return gen == g_adx_gen.load(); });
+ #endif
+   }).detach();
+ }
+@@ -630,6 +700,8 @@ void OirMusicaPs2(const std::filesystem::path& juego, const std::string& afs, in
+       waveOutUnprepareHeader(wo, &h, sizeof(h));
+     }
+     waveOutClose(wo);
++#elif defined(__ANDROID__)
++    TocarPcm(pcm.data(), pcm.size(), hz, 2, true, [&] { return gen == g_mus_gen.load(); });
+ #endif
+   }).detach();
+ }
+@@ -732,6 +804,14 @@ void OirSonidoPs2(const std::filesystem::path& juego, const std::string& afs, in
+       waveOutClose(wo);
+       while (periodo_ms > 0 && vivo() && int(GetTickCount() - t0) < periodo_ms) Sleep(10);
+     } while (periodo_ms > 0 && vivo());
++#elif defined(__ANDROID__)
++    auto vivo = [&] { return gen == g_snd_gen[tipo].load() && todo == g_snd_todo.load(); };
++    do {
++      const auto t0 = std::chrono::steady_clock::now();
++      TocarPcm(s.pcm.data(), s.pcm.size(), s.hz, 1, false, vivo);
++      while (periodo_ms > 0 && vivo() && std::chrono::steady_clock::now() - t0 < std::chrono::milliseconds(periodo_ms))
++        std::this_thread::sleep_for(std::chrono::milliseconds(10));
++    } while (periodo_ms > 0 && vivo());
+ #endif
+   }).detach();
+ }
+@@ -872,6 +952,9 @@ bool AfsPs2::Abrir(const std::filesystem::path& juego, const std::string& afs) {
+   // G01-iw-iso B-06: IW europeo (SLES_553.47) trae DATA_ENG/FRA/GER/ITA/SPN. Se pide el del idioma del jugador y
+   // se cae a ENG y luego a USA, sin fijar DATA_ENG. Los demas AFS (B1/B2/CMN/ADX) no pasan por aqui.
+   const std::string n = Lower(afs);
++  // Dragon Fury: B2 e B1 USA so trazem DATA_US.AFS (os europeus trazem UK/FR/SP/IT/DU).
++  if (n == "data_uk.afs") return AbrirUna(juego, afs) || AbrirUna(juego, "data_us.afs");
++  if (n == "adx_jp.afs") return AbrirUna(juego, afs) || AbrirUna(juego, "adx_us.afs");
+   if (n != "data_usa.afs" && n != "data_eng.afs") return AbrirUna(juego, afs);
+   for (const std::string& nombre : AfsIwPreferidos(afs)) {
+     if (AbrirUna(juego, nombre)) {

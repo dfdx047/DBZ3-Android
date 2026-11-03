@@ -141,6 +141,8 @@ data class GameConfig(
         "swordman_resolution_choice" to if (screenRes && resolutionScale == 1) "screen" else "",
         // A proporcao no Renut (present.cpp): a mesma escolha do present_letterbox do Xenia.
         "swordman_aspect" to if (letterbox) "original" else "stretch",
+        // O mesmo para a camada do jogo (HUB, Gateway, Tag Team...): sem isto ela assume 16:9 com barras.
+        "dbz3_aspect" to if (letterbox) "keep" else "stretch",
         "dbz3_widescreen" to wideOn,
     )
 
