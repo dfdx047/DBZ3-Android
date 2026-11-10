@@ -965,7 +965,8 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
                 "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
                 android.os.Build.VERSION.RELEASE,
                 socName,
-                if (cpu.supported) "ok" else "NO (${cpu.coresWithoutAtomics}/${cpu.cores})",
+                if (cpu.armv82) "ok" else "ARMv8.0 (${cpu.coresWithoutAtomics}/${cpu.cores}), " +
+                    if (cpu.supported) "legacy" else "NO",
                 SystemCheck.ram().let { "${it.totalMb} MB (${it.availableMb} MB / avail)" },
             )
             // O Renut fechou o jogo da ultima vez (o launcher foi aberto de novo)?

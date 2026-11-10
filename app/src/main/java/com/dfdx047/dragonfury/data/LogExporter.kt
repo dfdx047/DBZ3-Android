@@ -31,14 +31,15 @@ object LogExporter {
         "erro: ${e.message}"
     }
 
-    private fun deviceReport(): String = buildString {
+    private fun deviceReport(context: Context): String = buildString {
         appendLine("Dragon Fury ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
         appendLine("Aparelho: ${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE})")
         appendLine("Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
         appendLine("SoC: ${DriverRepository.socName()}  Adreno: ${DriverRepository.isAdreno()}")
         appendLine("Hardware: ${Build.HARDWARE}  Board: ${Build.BOARD}")
         SystemCheck.ram().let { appendLine("RAM: ${it.totalMb} MB no total, ${it.availableMb} MB disponiveis agora") }
-        SystemCheck.cpu().let { appendLine("CPU ARMv8.2 (atomics): ${if (it.supported) "sim" else "NAO (${it.coresWithoutAtomics}/${it.cores} nucleos)"}  Features: ${it.features}") }
+        SystemCheck.cpu().let { appendLine("CPU ARMv8.2 (atomics): ${if (it.armv82) "sim" else "NAO (${it.coresWithoutAtomics}/${it.cores} nucleos)"}  Features: ${it.features}") }
+        appendLine("Nativo: ${if (NativeLibs.legacy(context)) "ARMv8.0 (legacy-lib)" else "ARMv8.2 (APK)"}")
         appendLine("Driver Vulkan ativo: ${DriverRepository.activeDir() ?: "sistema"}")
         appendLine("Drivers instalados: " + DriverRepository.installed().joinToString { it.name })
         appendLine()
@@ -79,7 +80,7 @@ object LogExporter {
                 f.inputStream().use { it.copyTo(zip) }
                 zip.closeEntry()
             }
-            put("aparelho.txt", deviceReport())
+            put("aparelho.txt", deviceReport(context))
             put("logcat.txt", run("logcat", "-d", "-v", "threadtime"))
             AppPaths.logsDir.listFiles()?.forEach { putFile("logs/${it.name}", it) }
             // Capturas de frames (.dfc): so a mais recente, que pode ter dezenas de MB.

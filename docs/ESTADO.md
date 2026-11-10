@@ -99,6 +99,16 @@ com `yae3_xenon.xex` e a pasta `us/` (o launcher importa-os por SAF). O pacote m
 Só o launcher, sem o NDK (rápido para mexer na interface; o jogo não abre):
 `./gradlew assembleRelease -Pdf.uiOnly=true`
 
+APK universal (0.7.1): o `assembleRelease` compila o nativo duas vezes. O AGP faz o ARMv8.2
+(`-march=armv8.2-a`, lib/arm64-v8a + assets/libgame_*.zdat) e a tarefa `legacyNativeBuild` faz o
+ARMv8.0 num build CMake à parte (`app/.cxx/legacy`, `-march=armv8-a`, `DF_PACK_DIR` =
+build/dragonfury-assets/legacy) e põe as .so sem símbolos em assets/legacy/lib com um manifest.txt.
+No aparelho, `NativeLibs.kt` escolhe pelo "atomics" do /proc/cpuinfo: no ARMv8.0 extrai
+assets/legacy/lib para files/legacy-lib, carrega-as por caminho antes do libgame (o linker resolve
+as dependências pelo soname das já carregadas) e aponta `REX_NATIVE_LIB_DIR` para lá (plugin da GPU
+e hooks do adrenotools). Para testar o ARMv8.0 num ARMv8.2: criar `files/legacy_cpu` na pasta
+externa do app. `-Pdf.noLegacy=true` salta o ARMv8.0 (testes rápidos).
+
 ## Próximos passos
 
 - [x] Fase 1: compila, instala e joga (Snapdragon 8 Elite / Adreno 830, 2026-10-12): partida completa sem crash

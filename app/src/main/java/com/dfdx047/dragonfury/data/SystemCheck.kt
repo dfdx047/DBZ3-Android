@@ -9,16 +9,26 @@ import java.io.File
 /**
  * Verificacoes do aparelho antes e depois de jogar.
  *
- * - Processador: o port e compilado para ARMv8.2-A (atomicos LSE em linha). Nucleos ARMv8.0
- *   (Cortex-A53/A73: Snapdragon 665, 660, 835...) nao tem essas instrucoes e o jogo fecha logo
- *   ao abrir com SIGILL (Xiaomi Mi A3, 18/10). O /proc/cpuinfo diz se todos os nucleos tem
- *   "atomics".
+ * - Processador: o nativo principal e compilado para ARMv8.2-A (atomicos LSE em linha). Nucleos
+ *   ARMv8.0 (Cortex-A53/A73: Snapdragon 665, 660, 835...) nao tem essas instrucoes (SIGILL ao abrir,
+ *   Xiaomi Mi A3, 18/10): desde a 0.7.1 esses usam o conjunto ARMv8.0 que vem no mesmo APK
+ *   (NativeLibs). O /proc/cpuinfo diz se todos os nucleos tem "atomics".
  * - Como o jogo terminou: o Android guarda o motivo da saida de cada processo (API 30+). Se o
  *   processo :game morreu por um crash, por falta de memoria ou travado, o launcher mostra-o.
  */
 object SystemCheck {
 
-    data class Cpu(val supported: Boolean, val cores: Int, val coresWithoutAtomics: Int, val features: String)
+    /**
+     * armv82: todos os nucleos com "atomics" (conjunto ARMv8.2 do APK); senao o ARMv8.0 (NativeLibs). supported fica
+     * sempre true no APK universal; so falha se o APK nao trouxer o conjunto ARMv8.0 (-Pdf.noLegacy=true).
+     */
+    data class Cpu(
+        val supported: Boolean,
+        val cores: Int,
+        val coresWithoutAtomics: Int,
+        val features: String,
+        val armv82: Boolean = coresWithoutAtomics == 0,
+    )
 
     fun cpu(): Cpu {
         val lines = try {
@@ -29,7 +39,7 @@ object SystemCheck {
         val features = lines.filter { it.startsWith("Features") }.map { it.substringAfter(':').trim() }
         if (features.isEmpty()) return Cpu(true, 0, 0, "?")
         val missing = features.count { f -> "atomics" !in f.split(' ') }
-        return Cpu(missing == 0, features.size, missing, features.first())
+        return Cpu(missing == 0 || com.dfdx047.dragonfury.BuildConfig.LEGACY_SET, features.size, missing, features.first())
     }
 
     /** RAM do aparelho em MB (/proc/meminfo): total e disponivel agora. 0 se nao der para ler. */

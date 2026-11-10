@@ -3,6 +3,21 @@
 All notable changes to Dragon Fury. Release notes in three languages are in
 [`docs/releases/`](docs/releases/). Detailed engineering log (Portuguese): [`docs/ESTADO.md`](docs/ESTADO.md).
 
+## 0.7.1 — 2026-11-10
+
+Installs over 0.7.0 without uninstalling: same package and signature, higher version code. Saves,
+options and the imported game stay.
+
+### One APK for every 64-bit ARM processor
+- **ARMv8.0 processors run the game** (Cortex-A53/A73: Snapdragon 665, 660, 835 and similar). Until
+  0.7.0 they stopped at "processor not supported", because the native code is built for ARMv8.2.
+- The APK now carries the native code twice: ARMv8.2 (as before, with inline LSE atomics) and
+  ARMv8.0. The app picks the right one when it starts, from the processor's features, so ARMv8.2
+  devices lose nothing and there is no separate "legacy" APK to choose.
+- On ARMv8.0 devices the first start after installing or updating takes a few seconds longer: the
+  app unpacks its ARMv8.0 libraries once.
+- "Export logs" says which native code the device is using.
+
 ## 0.7.0 — 2026-11-02
 
 Installs over 0.6.x without uninstalling: same package and signature, higher version code. Saves,

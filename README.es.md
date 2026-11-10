@@ -36,7 +36,7 @@ online y una ruta de GPU reescrita para las GPU móviles.
 | | |
 |---|---|
 | Android | 11 o superior, 64 bits (arm64-v8a) |
-| CPU | ARMv8.2 (Cortex-A55/A75/A76 o superiores: Snapdragon 845+, Dimensity, Helio G9x, Unisoc T7xx/T8xx, Exynos 9820+, Tensor). Los chips ARMv8.0 como el Snapdragon 665/660/835 no lo ejecutan |
+| CPU | ARM de 64 bits. Recomendado ARMv8.2 o superior (Cortex-A55/A75/A76 o superiores: Snapdragon 845+, Dimensity, Helio G9x, Unisoc T7xx/T8xx, Exynos 9820+, Tensor). Los chips ARMv8.0 como el Snapdragon 665/660/835 lo ejecutan desde la 0.7.1 (el mismo APK trae código para los dos y elige solo) |
 | GPU | Vulkan 1.1 — se recomienda Adreno 6xx o superior; Mali (Valhall, p. ej. G57/G610/G710) funciona |
 | Almacenamiento | ~3 GB libres (el juego se copia a la app, ~2,5 GB) |
 | Juego | *Dragon Ball Z: Budokai HD Collection* — copia **USA** de Xbox 360 |

@@ -69,7 +69,8 @@ public class GameActivity extends SDLActivity {
         appDir.mkdirs();
 
         setEnv("REX_APP_DIR", appDir.getAbsolutePath());
-        setEnv("REX_NATIVE_LIB_DIR", getApplicationInfo().nativeLibraryDir);
+        // Plugin da GPU e hooks do adrenotools: a pasta do APK, ou a do conjunto ARMv8.0 extraido (NativeLibs).
+        setEnv("REX_NATIVE_LIB_DIR", com.dfdx047.dragonfury.data.NativeLibs.dir(this).getAbsolutePath());
         setEnv("REX_DBZ3_SKIP_LAUNCHER", "true");
         // Sem o menu rapido do PC no controle (Back + Start): o menu do app substitui-o.
         setEnv("REX_QUICK_MENU_BUTTONS", "none");
@@ -553,7 +554,10 @@ public class GameActivity extends SDLActivity {
      */
     @Override
     public void loadLibraries() {
-        super.loadLibraries();
+        // Processador ARMv8.0: libSDL3/librexruntime/librexgpu-xenos/libmain do conjunto ARMv8.0, por caminho.
+        if (!com.dfdx047.dragonfury.data.NativeLibs.loadGameDeps(this)) {
+            super.loadLibraries();
+        }
         try {
             com.dfdx047.dragonfury.data.GameLib.install(this, mGame);
         } catch (Exception e) {

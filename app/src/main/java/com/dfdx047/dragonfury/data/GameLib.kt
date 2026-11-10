@@ -24,7 +24,10 @@ object GameLib {
 
     private class Meta(val titleId: String, val xexSha1: String, val keySha256: String, val id: String, val size: Long)
 
-    private fun meta(context: Context, game: Game): Meta = context.assets.open("${game.libName}.json").use { s ->
+    /** assets/libgame_<id>.* do conjunto deste aparelho (ARMv8.0 em assets/legacy/, NativeLibs). */
+    private fun asset(context: Context, game: Game, ext: String) = NativeLibs.assetPrefix(context) + "${game.libName}.$ext"
+
+    private fun meta(context: Context, game: Game): Meta = context.assets.open(asset(context, game, "json")).use { s ->
         val j = JSONObject(s.readBytes().decodeToString())
         Meta(j.getString("title_id"), j.getString("xex_sha1"), j.getString("key_sha256"), j.getString("id"), j.getLong("size"))
     }
@@ -51,7 +54,7 @@ object GameLib {
         if (ready(context, game)) return
         val xex = AppPaths.xexFile(game)
         if (!xex.isFile) throw ImportException(ImportException.Reason.NO_XEX, game.xexName)
-        System.loadLibrary("main")
+        NativeLibs.loadMain(context)
         onProgress(ImportProgress.Reading(game.xexName))
         val title = IntArray(1)
         val error = arrayOfNulls<String>(1)
@@ -73,7 +76,7 @@ object GameLib {
         val started = System.currentTimeMillis()
         stamp(context, game).delete()
         try {
-            context.assets.open("${game.libName}.zdat").use { raw ->
+            context.assets.open(asset(context, game, "zdat")).use { raw ->
                 val input = DataInputStream(raw.buffered(1 shl 20))
                 val header = ByteArray(24).also { input.readFully(it) }
                 val hb = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN)

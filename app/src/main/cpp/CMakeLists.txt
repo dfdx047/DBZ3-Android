@@ -81,8 +81,10 @@ set(REXGLUE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 # atomicos LSE em linha substituem as chamadas __aarch64_cas*/ldadd*, que no port do
 # Raging Blast 2 (RB2-Android) custavam varios % das threads do command processor e
 # da UI. Todos os alvos (865, T820, 8 Gen x) sao ARMv8.2.
-string(APPEND CMAKE_C_FLAGS " -march=armv8.2-a")
-string(APPEND CMAKE_CXX_FLAGS " -march=armv8.2-a")
+# DF_MARCH=armv8-a: build legacy para ARMv8.0 (Snapdragon 665/660/835), sem LSE em linha.
+set(DF_MARCH "armv8.2-a" CACHE STRING "-march do port")
+string(APPEND CMAKE_C_FLAGS " -march=${DF_MARCH}")
+string(APPEND CMAKE_CXX_FLAGS " -march=${DF_MARCH}")
 add_subdirectory("${REXSDK_ROOT}" rexglue-sdk)
 
 #-----------------------------------------------------------------------------
@@ -272,7 +274,7 @@ rexglue_configure_target(game_b3 GPU_PLUGINS xenos)
 # inclui o Unisoc T820). Ganha atomicos LSE em linha (usados pelas reservas
 # lwarx/stwcx do PowerPC) e instrucoes que o armv8-a base nao tem. Fica depois
 # do rexglue_configure_target, que poe -march=armv8-a, para prevalecer.
-target_compile_options(game_b3 PRIVATE -march=armv8.2-a)
+target_compile_options(game_b3 PRIVATE -march=${DF_MARCH})
 target_compile_definitions(game_b3 PRIVATE DF_GAME_B3=1)
 # Chamadas entre funcoes do proprio libgame sem PLT (do Zandatsu/Dragon Burst): os hooks fortes continuam a ganhar as
 # definicoes fracas sub_X no link.
@@ -302,7 +304,7 @@ target_include_directories(game_b1 PRIVATE
 target_compile_options(game_b1 PRIVATE -fno-strict-aliasing -ffp-contract=off -fno-char8_t)
 target_link_libraries(game_b1 PRIVATE rex::runtime rex::gpu-xenos android log)
 rexglue_configure_target(game_b1 GPU_PLUGINS xenos)
-target_compile_options(game_b1 PRIVATE -march=armv8.2-a)
+target_compile_options(game_b1 PRIVATE -march=${DF_MARCH})
 target_link_options(game_b1 PRIVATE -Wl,-Bsymbolic-functions)
 
 #-----------------------------------------------------------------------------
@@ -324,7 +326,8 @@ endif()
 #-----------------------------------------------------------------------------
 set(DF_XEX_B3 "${DBZ3_ROOT}/yae3_xenon.xex" CACHE FILEPATH "yae3_xenon.xex do codegen (chave do libgame_b3.so)")
 set(DF_XEX_B1 "${DBZ1_ROOT}/yae1_xenon.xex" CACHE FILEPATH "yae1_xenon.xex do codegen (chave do libgame_b1.so)")
-set(DF_PACK_DIR "${DBZ3_REPO_ROOT}/app/build/dragonfury-assets")
+# O build legacy (ARMv8.0, app/build.gradle.kts: legacyNativeBuild) escreve os seus em dragonfury-assets/legacy.
+set(DF_PACK_DIR "${DBZ3_REPO_ROOT}/app/build/dragonfury-assets" CACHE PATH "pasta dos libgame_*.zdat/.json")
 foreach(G b3 b1)
     string(TOUPPER "${G}" GU)
     add_custom_command(
@@ -343,6 +346,6 @@ add_custom_target(game_pack DEPENDS
 add_library(main SHARED "${CMAKE_CURRENT_LIST_DIR}/loader/game_lib_jni.cpp" "${CMAKE_CURRENT_LIST_DIR}/loader/xex_image.cpp")
 target_include_directories(main PRIVATE "${CMAKE_CURRENT_LIST_DIR}/loader" "${REXSDK_ROOT}/thirdparty")
 target_link_libraries(main PRIVATE mspack log)
-target_compile_options(main PRIVATE -march=armv8.2-a)
+target_compile_options(main PRIVATE -march=${DF_MARCH})
 # O Gradle so compila os alvos da lista (build.gradle.kts): os libgame e os pacotes vem por aqui.
 add_dependencies(main game_pack)

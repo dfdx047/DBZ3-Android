@@ -150,7 +150,7 @@ target_include_directories(renut_gpu_${G} PRIVATE
     "${REXSDK_ROOT}/thirdparty/imgui"
     "${CMAKE_BINARY_DIR}/rexglue-sdk/include")
 target_compile_definitions(renut_gpu_${G} PRIVATE MGR_RENUT_RENDERER=1 SA2_RENUT_RENDERER=1 RENUT_RECOMP)
-target_compile_options(renut_gpu_${G} PRIVATE -march=armv8.2-a -ffp-contract=off -fno-strict-aliasing)
+target_compile_options(renut_gpu_${G} PRIVATE -march=${DF_MARCH} -ffp-contract=off -fno-strict-aliasing)
 target_link_libraries(renut_gpu_${G} PRIVATE rex::runtime plume renut_zstd renut_smolv renut_xxhash rex::o1heap)
 endforeach()
 set_source_files_properties("${SM_RENUT_OUT}/b3/shader_cache.cpp" "${SM_RENUT_OUT}/b1/shader_cache.cpp"
